@@ -17,7 +17,7 @@ notices that.
 | Workflow | Verdict | Why, and where |
 | --- | --- | --- |
 | `build.yml` | Adopted in substance | Its only trigger is `on: workflow_call`, so it is a reusable workflow the others call rather than a check of its own. What matters is that something builds, and `ci.yaml` does. |
-| `codeql.yml` | Adopted | #14. Today the shared `scan-codeql.yaml` runs the analysis; #14 replaces it with a workflow this repository owns. |
+| `codeql.yml` | Adopted, landed | `.github/workflows/codeql.yml`, by #14 |
 | `dco.yml` | Adopted, landed | `.github/workflows/dco.yml` |
 | `dependency-review.yml` | Adopted, landed | `.github/workflows/dependency-review.yml` |
 | `dotnet.yml` | Adopted, landed | `.github/workflows/ci.yaml`, by #12 |
@@ -45,8 +45,8 @@ notices that.
 It is not a list of the workflows this repository runs. Several files here have no
 row above because they came from the plugin template rather than from the gate:
 `command-dispatch.yaml`, `command-rebase.yaml`, `sync-labels.yaml`,
-`publish.yaml`, `scan-codeql.yaml`, `build.yaml` and `test.yaml`. Whether those
-stay is not a parity question and is not decided here.
+`publish.yaml`, `build.yaml` and `test.yaml`. Whether those stay is not a parity
+question and is not decided here.
 
 `package.yaml` has no row for a different reason. It is first-party, from #18, and
 no file on the listing above corresponds to it.
