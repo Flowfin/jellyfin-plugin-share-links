@@ -1,0 +1,158 @@
+# Packaging and bill of materials on the pull request path (#18). Packaging that
+# only ever happens at release time is packaging that breaks at release time, and a
+# bill of materials produced by hand is one that is wrong. Neither job publishes
+# anything; both leave an artefact behind for the pull request to be judged on.
+name: Package (JPRM)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "9.0.316"
+  # Pinned for the same reason the SDK is: what judges one pull request has to be
+  # what judges the next.
+  JPRM_VERSION: "1.1.0"
+  CYCLONEDX_VERSION: "6.2.0"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  package:
+    name: Build package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install JPRM
+        run: pip install --disable-pip-version-check "jprm==${JPRM_VERSION}"
+
+      - name: Build the plugin package
+        run: |
+          set -euo pipefail
+          mkdir -p ./artifacts
+          jprm --verbosity=debug plugin build . --output ./artifacts
+          ls -l ./artifacts
+
+      - name: Check the package is a package
+        # `jprm` exiting zero is not by itself evidence that a zip came out of it.
+        run: |
+          set -euo pipefail
+          count=$(find ./artifacts -name '*.zip' -type f | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::JPRM reported success and produced no zip."
+            exit 1
+          fi
+          echo "Packages built: ${count}"
+          unzip -l ./artifacts/*.zip
+
+      - name: Upload the package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-package
+          path: ./artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Prove JPRM refuses a manifest it cannot read
+        # The step above passing says the manifest was accepted. It does not say a
+        # broken one would have been refused, and a packaging step that accepts
+        # anything is not a check. Run the same JPRM against a copy of this tree
+        # whose build.yaml is missing a required field, and red the job if it is
+        # tolerated. The copy is the whole tree, so the manifest is the only thing
+        # that differs from the run that just passed. The manifest read happens
+        # before any build, so this costs seconds.
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/probe && mkdir -p /tmp/probe
+          cp -r . /tmp/probe
+          grep -v '^version:' ./build.yaml > /tmp/probe/build.yaml
+          cd /tmp/probe
+          if jprm --verbosity=debug plugin build . --output /tmp/probe-out > /tmp/probe.log 2>&1; then
+            echo "::error::JPRM accepted a build.yaml with no version field. The packaging step is not checking the manifest."
+            exit 1
+          fi
+          echo "JPRM refused the broken manifest, as it must. Its last words:"
+          tail -3 /tmp/probe.log
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install CycloneDX
+        # --tool-path rather than --global: the tool lands in the workspace and
+        # nothing about the runner's dotnet installation is changed.
+        run: dotnet tool install CycloneDX --version "${CYCLONEDX_VERSION}" --tool-path ./.sbom-tools
+
+      - name: Generate the bill of materials
+        run: |
+          set -euo pipefail
+          ./.sbom-tools/dotnet-CycloneDX \
+            Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj \
+            --output ./sbom --output-format Json --filename bom.json
+
+      - name: Check the bill of materials lists what it must
+        # An SBOM that named nothing would still be a file, and the artefact would
+        # still upload. Name the three things this one cannot be missing: the plugin
+        # assembly itself and the two packages the csproj references directly.
+        run: |
+          set -euo pipefail
+          bom=./sbom/bom.json
+          missing=0
+          for ref in "Jellyfin.Plugin.ShareLinks" "pkg:nuget/Jellyfin.Controller@" "pkg:nuget/Jellyfin.Model@"; do
+            if grep -qF "$ref" "$bom"; then
+              echo "ok      $ref"
+            else
+              echo "MISSING $ref"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::The SBOM does not list the plugin assembly or one of its direct dependencies."
+            exit 1
+          fi
+          echo "Components in the bill of materials:"
+          grep -o '"bom-ref" *: *"[^"]*"' "$bom" | wc -l
+
+      - name: Upload the bill of materials
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-sbom
+          path: ./sbom/bom.json
+          if-no-files-found: error
+          retention-days: 14
