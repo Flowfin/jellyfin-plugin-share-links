@@ -13,6 +13,14 @@ on:
       - '**/*.md'
   workflow_dispatch:
 
+# Read-only: the called workflow restores and builds, it publishes nothing.
+permissions:
+  contents: read
+
 jobs:
   call:
-    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
+    # Kept alongside the first-party build in ci.yaml because the `gate` ruleset
+    # requires the context this job produces, `call / build`, and a ruleset is not
+    # edited from a pull request. Pinned by commit so what a required check runs
+    # cannot change in another repository without a change here.
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@eb99033a7ff644881b014bc0b4169916c854a68b # master as of 2026-07-29

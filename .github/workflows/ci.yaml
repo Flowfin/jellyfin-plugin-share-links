@@ -1,0 +1,96 @@
+# First-party build and test (#12). The build and test checks were calls into
+# jellyfin/jellyfin-meta-plugins, so what the gate actually ran was decided in
+# another repository and could change without a pull request here. This workflow
+# runs the same two steps out of a file this repository owns and reviews.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Read-only: nothing here writes to the repository or publishes an artefact.
+permissions:
+  contents: read
+
+# Cancel a superseded run on the same ref so a new push does not queue behind an
+# obsolete check.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned rather than 9.0.x, so the SDK that judges a pull request is the SDK the
+  # next pull request is judged by. Moving it is a change somebody reviews.
+  DOTNET_VERSION: "9.0.316"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        # -warnaserror on the command line as well as in the csproj: the project
+        # property is one edit away from being dropped, and a warning that stops
+        # failing the build stops being read.
+        run: dotnet build --configuration Release --no-restore -warnaserror
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal | tee test-output.txt
+
+      - name: Report the number of tests run
+        # A suite that runs nothing reports success, which looks exactly like a
+        # suite that ran and passed. Print the count, and red the job when the
+        # summary line is missing or reads zero.
+        run: |
+          set -euo pipefail
+          if ! total=$(grep -oE '^Total tests: [0-9]+' test-output.txt | tail -1 | grep -oE '[0-9]+'); then
+            echo "::error::dotnet test printed no 'Total tests:' summary, so the number of tests run is unknown."
+            exit 1
+          fi
+          echo "Total tests run: ${total}"
+          if [ "$total" -eq 0 ]; then
+            echo "::error::The test run executed 0 tests. A green check over an empty set is not a passing suite."
+            exit 1
+          fi
