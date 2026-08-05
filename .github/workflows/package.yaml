@@ -87,7 +87,10 @@ jobs:
             exit 1
           fi
           echo "The check refused an unrecorded assembly, as it must:"
-          grep -E 'UNRECORDED|::error' /tmp/probe-deps.log
+          # The `::error::` prefix is stripped rather than echoed back: replaying it
+          # would hang a red annotation on a step that passed, and a gate that cries
+          # wolf on a green run stops being read.
+          grep -E 'UNRECORDED|::error' /tmp/probe-deps.log | sed 's/^::error:://'
 
       - name: Upload the package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
