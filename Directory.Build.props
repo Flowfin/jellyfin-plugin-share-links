@@ -3,5 +3,10 @@
         <Version>0.0.0.0</Version>
         <AssemblyVersion>0.0.0.0</AssemblyVersion>
         <FileVersion>0.0.0.0</FileVersion>
+        <!-- The server line this plugin is built for. The plugin project compiles
+             against it and excludes it at runtime, because the server supplies it;
+             the test project needs the same assemblies present to run at all. One
+             property so the two cannot drift apart. -->
+        <JellyfinVersion>10.11.11</JellyfinVersion>
     </PropertyGroup>
 </Project>
