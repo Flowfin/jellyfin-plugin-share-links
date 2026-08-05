@@ -36,10 +36,14 @@ unreleased build reports `0.0.0.0-unreleased+<commit>`, where the commit is
 appended by the SDK from the repository. `Jellyfin.Plugin.ShareLinks.Tests` holds
 the rule as a test rather than as this paragraph.
 
-One route could still write a release version into the tree. The inherited
-release-notes workflow rewrites the three properties with `sed` and commits the
-result, which is exactly the shape this scheme exists to stop. Issue #7 removes
-that workflow and until it lands nothing here prevents it.
+One route used to write a release version into the tree. The inherited
+release-notes workflow rewrote the three properties with `sed` and committed the
+result, which is exactly the shape this scheme exists to stop. Issue #7 removed
+that workflow, so no route in the tree does it today.
+
+Nothing refuses a new one. This scheme is a rule a person follows, not a check
+that fails, and the release process it depends on is still to be decided in issue
+#89.
 
 ## Two builds of one commit
 
