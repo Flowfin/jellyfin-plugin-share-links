@@ -1,0 +1,76 @@
+# CodeQL from a workflow this repository owns (#14). The previous file called a
+# reusable workflow in another repository and passed it a repository name, so both
+# the query set and the condition under which the analysis ran at all were decided
+# elsewhere and could change without a pull request here.
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Weekly, so a query set that learns something new about code nobody has touched
+    # still reports it.
+    - cron: '24 2 * * 4'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    # The check name the target gate requires is `Analyze (csharp)`, and a check
+    # name is matched literally by a ruleset, so the matrix value is part of the
+    # contract rather than an implementation detail.
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      security-events: write # the analysis result goes to the code scanning tab
+      contents: read # checkout
+      actions: read # the analyse step reads the run it belongs to
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['csharp']
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # The same pinned version the build and packaging workflows use. CodeQL
+          # analyses what the compiler produced, so analysing under a different SDK
+          # from the one that ships would be analysing a different program.
+          dotnet-version: "9.0.316"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality on top of the default set, which is what the
+          # previous shared workflow asked for; dropping to the default set here
+          # would have been a quiet weakening.
+          queries: +security-and-quality
+
+      - name: Build
+        # Not autobuild. The project has one solution and one command that builds
+        # it, and autobuild guessing right today is not a promise about the day a
+        # second project lands.
+        run: dotnet build --configuration Release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          category: "/language:${{ matrix.language }}"

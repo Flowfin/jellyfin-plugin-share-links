@@ -1,0 +1,19 @@
+# Assemblies the shipped plugin package may contain besides the plugin's own.
+#
+# The plugin has one job and the server already provides the primitives it needs:
+# a cryptographic random source, a keyed hash, a session manager, a user manager
+# and a scheduled task host. Every runtime dependency shipped on top of those is a
+# supply chain the operator inherits along with the feature, and they did not ask
+# for it.
+#
+# One filename per line. Every line names the issue that argued the exception and
+# says what the assembly does that the framework cannot. A line with no argument
+# behind it is not an exception, it is an oversight that was written down.
+#
+# Analyzer packages and test-only packages are not runtime dependencies and never
+# belong here. If one of them appears in the package, the fix is the reference,
+# not this file.
+#
+# The list below is empty. That is the state this file exists to hold, and the
+# check that reads it refuses anything that is neither the plugin's own assembly
+# nor a line here.
