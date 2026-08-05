@@ -67,6 +67,31 @@ jobs:
           echo "Packages built: ${count}"
           unzip -l ./artifacts/*.zip
 
+      - name: Refuse a runtime assembly nobody recorded
+        # The shipped package carries no runtime dependency beyond the plugin's own
+        # assembly, and an exception is a line somebody wrote down with the issue
+        # that argued it (#30). Reading the package rather than the csproj is
+        # deliberate: what an operator installs is the zip, and a reference can
+        # reach it through a transitive path no single project file shows.
+        run: unzip -Z1 ./artifacts/*.zip | bash .github/scripts/refuse-unrecorded-runtime-assemblies.sh
+
+      - name: Prove that check refuses one
+        # The step above passing means today's package is clean. It says nothing
+        # about whether a dirty one would have been caught, and the same script run
+        # over a list nobody built is what settles that.
+        run: |
+          set -euo pipefail
+          if printf 'Jellyfin.Plugin.ShareLinks.dll\nMoq.dll\nmeta.json\n' \
+              | bash .github/scripts/refuse-unrecorded-runtime-assemblies.sh > /tmp/probe-deps.log 2>&1; then
+            echo "::error::The dependency check accepted an unrecorded runtime assembly. It is not checking anything."
+            exit 1
+          fi
+          echo "The check refused an unrecorded assembly, as it must:"
+          # The `::error::` prefix is stripped rather than echoed back: replaying it
+          # would hang a red annotation on a step that passed, and a gate that cries
+          # wolf on a green run stops being read.
+          grep -E 'UNRECORDED|::error' /tmp/probe-deps.log | sed 's/^::error:://'
+
       - name: Upload the package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
