@@ -5,9 +5,22 @@ on:
     types:
       - rebase-command
 
+permissions: {}
+
 jobs:
   call:
-    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/command-rebase.yaml@master
+    # Three writes, one per step of the called workflow. peter-evans/rebase reads the
+    # pull request and force-updates its head branch, which is contents plus
+    # pull-requests; the two reaction steps write a reaction onto the comment that
+    # triggered this, and comment reactions are the issues API even on a pull
+    # request. All three run under GITHUB_TOKEN, which is what `token` is given below.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    # Pinned so what runs here cannot change in another repository without a change
+    # in this one. Renovate reads the `@<sha> # <ref>` shape and is what moves it.
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/command-rebase.yaml@eb99033a7ff644881b014bc0b4169916c854a68b # master as of 2026-07-29
     with:
       rebase-head: ${{ github.event.client_payload.pull_request.head.label }}
       repository-full-name: ${{ github.event.client_payload.github.payload.repository.full_name }}
