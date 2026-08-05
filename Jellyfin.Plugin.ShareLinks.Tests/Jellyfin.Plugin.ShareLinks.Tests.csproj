@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- The packaging step publishes the solution, so without this the test
+         assembly and its xunit and Moq dependencies are published into the same
+         directory the plugin package is built from and ship to operators. -->
+    <IsPublishable>false</IsPublishable>
   </PropertyGroup>
 
   <ItemGroup>

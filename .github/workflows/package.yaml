@@ -51,6 +51,7 @@ jobs:
       - name: Build the plugin package
         run: |
           set -euo pipefail
+          mkdir -p ./artifacts
           jprm --verbosity=debug plugin build . --output ./artifacts
           ls -l ./artifacts
 
