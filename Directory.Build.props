@@ -1,6 +1,11 @@
 <Project>
     <PropertyGroup>
-        <Version>0.0.0.0</Version>
+        <!-- 0.0.0.0 is reserved and no release carries it, so an assembly reporting
+             it was not built by the release process. A release supplies the version
+             on the build command line and the tree never holds one; docs/versioning.md
+             is where that is argued. Keep these three on one line each: the version
+             scheme is read by tools that match the element, not the XML. -->
+        <Version>0.0.0.0-unreleased</Version>
         <AssemblyVersion>0.0.0.0</AssemblyVersion>
         <FileVersion>0.0.0.0</FileVersion>
         <!-- The server line this plugin is built for. The plugin project compiles
@@ -8,5 +13,20 @@
              the test project needs the same assemblies present to run at all. One
              property so the two cannot drift apart. -->
         <JellyfinVersion>10.11.11</JellyfinVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!-- Two builds of one commit have to produce one assembly, or a published
+             artefact cannot be checked against the source it claims to come from.
+             Deterministic alone is not enough: it leaves the absolute source path in
+             the output, so the same commit built in two directories gave two hashes.
+             ContinuousIntegrationBuild is what normalises those paths, and it is on
+             everywhere rather than only in CI, because a property that holds in one
+             place is not the property. The cost is that a local debugger no longer
+             finds sources by absolute path and uses the source server instead. -->
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
     </PropertyGroup>
 </Project>
