@@ -54,6 +54,63 @@ jobs:
         # failing the build stops being read.
         run: dotnet build --configuration Release --no-restore -warnaserror
 
+  abi-floor:
+    # The build above compiles against the version the plugin develops on. That
+    # says nothing about the version build.yaml promises to load on, and a
+    # reference to a symbol added after that promise fails on a user's server at
+    # load time rather than here. This job compiles the same source against the
+    # floor, so the promise is checked by something.
+    name: abi-floor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Read the floor from build.yaml
+        # Derived, never a second number to keep in step with the first. targetAbi
+        # is four parts and a package version is three, so the last part is
+        # dropped. The shape is checked rather than assumed: an unreadable or
+        # malformed targetAbi reds this job instead of silently building against
+        # the development version and reporting a floor build that never happened.
+        run: |
+          set -euo pipefail
+          abi=$(sed -n 's/^targetAbi: *"\([0-9.]*\)".*/\1/p' build.yaml)
+          if [ -z "$abi" ]; then
+            echo "::error::build.yaml declares no quoted targetAbi, so there is no floor to build against."
+            exit 1
+          fi
+          floor=${abi%.*}
+          if ! printf '%s' "$floor" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::targetAbi '${abi}' does not reduce to a three part package version, got '${floor}'."
+            exit 1
+          fi
+          echo "Floor from targetAbi ${abi} is ${floor}"
+          echo "JELLYFIN_FLOOR=${floor}" >> "$GITHUB_ENV"
+
+      - name: Restore against the floor
+        run: dotnet restore -p:JellyfinVersion="${JELLYFIN_FLOOR}"
+
+      - name: Build against the floor
+        run: dotnet build --configuration Release --no-restore -warnaserror -p:JellyfinVersion="${JELLYFIN_FLOOR}"
+
+      - name: Say which version was actually compiled against
+        # A job named abi-floor that quietly resolved the development version
+        # would be green for the wrong reason, and the name would be the only
+        # thing saying otherwise.
+        run: |
+          set -euo pipefail
+          grep -oE 'jellyfin\.controller/[0-9][0-9.]*' Jellyfin.Plugin.ShareLinks/obj/project.assets.json | sort -u
+          grep -q "jellyfin.controller/${JELLYFIN_FLOOR}" Jellyfin.Plugin.ShareLinks/obj/project.assets.json
+
   test:
     name: test
     runs-on: ubuntu-latest
