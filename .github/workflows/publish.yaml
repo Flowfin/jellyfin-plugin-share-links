@@ -6,9 +6,19 @@ on:
       - released
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   call:
-    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/publish.yaml@master
+    # The called workflow attaches the built package to the GitHub release, and the
+    # action that does it runs under GITHUB_TOKEN, so contents has to be writable.
+    # Everything else it does reaches the repository host over ssh with the deploy
+    # secrets below and needs no GitHub permission at all.
+    permissions:
+      contents: write
+    # Pinned so what runs here cannot change in another repository without a change
+    # in this one. Renovate reads the `@<sha> # <ref>` shape and is what moves it.
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/publish.yaml@eb99033a7ff644881b014bc0b4169916c854a68b # master as of 2026-07-29
     with:
       version: ${{ github.event.release.tag_name }}
       is-unstable: ${{ github.event.release.prerelease }}

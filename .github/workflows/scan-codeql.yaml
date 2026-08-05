@@ -13,8 +13,19 @@ on:
     - cron: '24 2 * * 4'
   workflow_dispatch:
 
+# Deny by default at workflow level; the job below asks for what the called
+# workflow actually uses.
+permissions: {}
+
 jobs:
   call:
-    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/scan-codeql.yaml@master
+    permissions:
+      # The called workflow checks out, builds, and uploads a CodeQL result set.
+      security-events: write # the analysis result goes to the code scanning tab
+      contents: read # checkout
+      actions: read # the analyse step reads the run it belongs to
+    # Pinned by commit so what runs here cannot change in another repository
+    # without a change in this one.
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/scan-codeql.yaml@eb99033a7ff644881b014bc0b4169916c854a68b # master as of 2026-07-29
     with:
-      repository-name: jellyfin/jellyfin-plugin-template
+      repository-name: iderex/jellyfin-plugin-share-links
