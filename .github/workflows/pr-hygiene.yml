@@ -1,0 +1,176 @@
+# Deterministic PR-hygiene checks (#15). Mechanical properties of a pull request
+# that a person should never have to look for: whether it is linked to an issue,
+# how large it is, and whether code moved without a test moving with it. Every
+# other check here reasons about the code; this one reasons about the pull
+# request, which is a class none of them cover.
+#
+# Ported from the target gate's pr-hygiene.yml. Read that file rather than this
+# comment if you want the original:
+#
+#   gh api repos/iderex/jellyfin-plugin-sso/contents/.github/workflows/pr-hygiene.yml --jq '.content' | base64 -d
+#
+# The tiers are kept because they are the point. A FAIL check has to be one a
+# contributor can satisfy and one that is near enough certain when it fires; a
+# convention that a reasonable pull request can break belongs in WARN, where it
+# annotates and never reds.
+#
+#   FAIL, and it holds the merge:
+#     * the pull request body carries an issue reference
+#   WARN, annotation only:
+#     * the diff is large, 400 changed lines or more, generated files excluded
+#     * plugin code changed with no matching change under the test project
+#
+# The whole FAIL tier is skipped for bots and for authors from outside this
+# repository, and the two skips have different reasons. A bot cannot know the
+# convention. A person from outside can, but has no way to know which issue
+# number this board expects before they have filed anything, and often no issue
+# exists yet, so failing their contribution on it is a ritual rather than a
+# caught slip. The linkage is still wanted in that case and the check says so on
+# the pull request, where whoever picks the contribution up will read it.
+#
+# Two checks in the original are deliberately NOT here, and neither is an
+# oversight.
+#
+# The original also requires every commit subject to carry a bracketed issue
+# reference, `[#N]`. This repository has never used that convention: no commit on
+# the default branch carries it, so porting it as a FAIL check would red every
+# pull request from the first one onward, including the work that is already
+# merged. Importing a commit-message convention is a decision about how this
+# board writes commits, not a hygiene check, and it is not made here.
+#
+# The original also requires a `version:` bump in build.yaml to touch
+# CHANGELOG.md. There is no CHANGELOG.md in this tree and no release process yet,
+# which is #89. A check whose subject does not exist passes every run and reads
+# exactly like one that is working, so it comes back when the changelog does.
+name: PR Hygiene
+
+on:
+  pull_request:
+    # edited: so adding the issue reference to the body re-runs the check rather
+    # than leaving a red one that is no longer true.
+    types: [opened, edited, synchronize, reopened]
+
+# Explicit deny-all at workflow level; the job below grants only what it reads.
+permissions: {}
+
+# Cancel a superseded run on the same pull request. This is a lint, not a
+# publish, so cancelling an obsolete run is safe.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: Deterministic PR-hygiene checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read # the body, the author association, the changed-file list
+
+    steps:
+      # No checkout. Every input is read from the pull request metadata through
+      # the API, so there is no working tree here to guard. Untrusted values, the
+      # body and the file names, are only ever read from the JS objects and never
+      # interpolated into a shell `run:`, so there is no template-injection
+      # surface to begin with.
+      - name: Run PR-hygiene checks
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const warnings = [];
+            const failures = [];
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+            const changed = files.map((f) => f.filename);
+            const isBot = pr.user && pr.user.type === "Bot";
+
+            // author_association reports the author's relationship to THIS
+            // repository, so somebody added as a member later stops being exempt
+            // from that moment. COLLABORATOR is deliberately not in the inside
+            // set: the rule asks for member or owner.
+            const INSIDE = ["OWNER", "MEMBER"];
+            const isOutside = !INSIDE.includes(pr.author_association || "NONE");
+            const failTierApplies = !isBot && !isOutside;
+            if (isOutside && !isBot) {
+              warnings.push(
+                "Author is outside this repository " +
+                  `(author_association: ${pr.author_association || "NONE"}), so the ` +
+                  "FAIL-tier checks are skipped. The issue linkage is still wanted: " +
+                  "whoever picks this up supplies the reference, and files the issue " +
+                  "where none exists yet.",
+              );
+            }
+
+            // FAIL: the pull request says which issue it is for. A bare `#123`, a
+            // keyword form, or a full issue URL all satisfy it. Lenient on
+            // purpose, so a genuinely linked pull request is never failed on
+            // phrasing.
+            const body = pr.body || "";
+            const hasIssueRef =
+              /(^|[^\w])#\d+\b/.test(body) ||
+              /github\.com\/[^\/\s]+\/[^\/\s]+\/issues\/\d+/i.test(body);
+            if (failTierApplies && !hasIssueRef) {
+              failures.push(
+                "The pull request body has no issue reference. Link the issue it " +
+                  "addresses, for example `Closes #123` or `Refs #123`.",
+              );
+            }
+
+            // WARN: size. Large is not wrong. A feature, a document, or a rename
+            // legitimately exceeds any cap, so this annotates and never reds.
+            const isGenerated = (name) =>
+              name.endsWith("packages.lock.json") ||
+              name.endsWith(".min.js") ||
+              name.endsWith(".min.css");
+            const churn = files
+              .filter((f) => !isGenerated(f.filename))
+              .reduce((sum, f) => sum + f.additions + f.deletions, 0);
+            const WARN_AT = 400;
+            if (churn >= WARN_AT) {
+              warnings.push(
+                `This pull request changes ${churn} lines, generated files excluded. ` +
+                  `Reviews degrade past about ${WARN_AT} lines, so this one wants a ` +
+                  "closer look, or splitting.",
+              );
+            }
+
+            // WARN: code without a test. A comment-only edit, a pure refactor or a
+            // project-file tweak legitimately touches no test, and failing those
+            // would be exactly the false positive the tiers exist to avoid.
+            const codeChanged = changed.some(
+              (n) => n.startsWith("Jellyfin.Plugin.ShareLinks/") && n.endsWith(".cs"),
+            );
+            const testsChanged = changed.some((n) =>
+              n.startsWith("Jellyfin.Plugin.ShareLinks.Tests/"),
+            );
+            if (codeChanged && !testsChanged) {
+              warnings.push(
+                "Jellyfin.Plugin.ShareLinks/*.cs changed with no change under " +
+                  "Jellyfin.Plugin.ShareLinks.Tests/. Add a test, or confirm the change " +
+                  "is genuinely untestable.",
+              );
+            }
+
+            for (const w of warnings) core.warning(w);
+            const summary = core.summary.addHeading("PR-hygiene checks", 2);
+            if (failures.length === 0 && warnings.length === 0) {
+              summary.addRaw("All deterministic PR-hygiene checks passed.");
+            } else {
+              if (failures.length) {
+                summary.addHeading("Failures", 3).addList(failures);
+              }
+              if (warnings.length) {
+                summary.addHeading("Warnings, non-blocking", 3).addList(warnings);
+              }
+            }
+            await summary.write();
+
+            if (failures.length) {
+              core.setFailed(failures.join(" | "));
+            }
