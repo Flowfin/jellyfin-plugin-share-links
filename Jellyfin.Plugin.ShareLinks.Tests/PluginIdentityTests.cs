@@ -64,7 +64,14 @@ public class PluginIdentityTests
     public void ArtifactInBuildManifestNamesTheBuiltAssembly()
     {
         var manifest = Path.Combine(AppContext.BaseDirectory, "build.yaml");
-        var artifacts = Regex.Match(File.ReadAllText(manifest), "^artifacts:\\s*\\n-\\s*\"([^\"]*)\"", RegexOptions.Multiline);
+
+        // The item may be indented under its key or sit at column zero. YAML reads
+        // those as the same list, and this pattern used to accept only the second:
+        // the formatter adopted in #17 indents block sequences, and a test that
+        // reads one layout of a file it does not own is a test that reddens for a
+        // change of whitespace. What is still required is the whole of what this
+        // test is about - the key, one quoted item under it, and the name in it.
+        var artifacts = Regex.Match(File.ReadAllText(manifest), "^artifacts:[^\\S\\n]*\\n\\s*-\\s*\"([^\"]*)\"", RegexOptions.Multiline);
         Assert.True(artifacts.Success, "build.yaml declares no quoted artifact");
 
         var assembly = typeof(Plugin).Assembly.GetName().Name + ".dll";
