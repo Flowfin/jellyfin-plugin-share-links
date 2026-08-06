@@ -13,6 +13,13 @@ invariant is removed; and the near miss is accepted. It also refuses an invarian
 that has no directory here, because an invariant nothing proved would otherwise
 be skipped in silence.
 
+An invariant that refuses for more than one reason splits `violation/` into one
+subdirectory per reason, and the workflow runs a fourth leg over each of them: on
+its own, that subdirectory has to be refused by this invariant and by no other,
+and to go clean when the invariant is removed. Without it the first three legs
+pass on the whole directory while one reason quietly stops refusing anything,
+because the other reasons keep the fixture red and nothing says which one did it.
+
 A fixture is worth what its near miss is worth. A violation that could not have
 been missed proves less than one somebody would actually write, and a near miss
 that is nothing like the violation proves nothing at all.

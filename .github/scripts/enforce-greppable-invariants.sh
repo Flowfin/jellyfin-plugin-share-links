@@ -75,6 +75,66 @@ check() {
   esac
 }
 
+# The line a file carries to say that it is the routine token bytes come from.
+# The exemption is a marker rather than a path written here, because the paths
+# this lint is handed include the fixture directories, and a fixture that draws
+# bytes on purpose has to be able to say so without the lint knowing its name. A
+# marker is also a line somebody sees in a diff, which a name buried in a script
+# is not.
+one_routine_marker='draws token bytes: this file is the one routine (#120)'
+
+# Runs an invariant that is about how many files do a thing rather than about
+# whether any file does it, so it cannot be a pattern the way the checks above
+# are. $1 id, $2 the PCRE that finds a call into the generator, $3 the sentence a
+# reader gets when it bites.
+#
+# Two arms, because a second caller arrives in two ways. It draws bytes without
+# declaring itself, or it declares itself as well and there are then two routines
+# where the rule allows one. A marker nothing draws behind is refused too, so a
+# marker cannot be laid down in one change and used in the next.
+#
+# What this cannot see: a call made through reflection, a helper in a compiled
+# dependency, or an alias the source gives the type. It reads the text of the
+# tree, like every other invariant here.
+check_sole_caller() {
+  local id="$1" pattern="$2" message="$3" rc=0 hits callers declared undeclared unused count
+
+  if skipped "$id"; then
+    echo "skipped   ${id} (INVARIANT_SKIP)"
+    return 0
+  fi
+
+  hits=$(grep -rnP --include='*.cs' "$pattern" -- "${paths[@]}") || rc=$?
+  if [ "$rc" -gt 1 ]; then
+    echo "::error::${id}: grep exited ${rc}. The scanner is broken, so the tree is not being judged and this fails closed."
+    exit 1
+  fi
+
+  callers=$(printf '%s\n' "$hits" | sed -n 's/^\([^:]*\):[0-9][0-9]*:.*/\1/p' | sort -u)
+  declared=$( { grep -rlF --include='*.cs' -- "$one_routine_marker" "${paths[@]}" || true; } | sort -u)
+
+  undeclared=$(comm -23 <(printf '%s\n' "$callers" | sed '/^$/d') <(printf '%s\n' "$declared" | sed '/^$/d'))
+  unused=$(comm -13 <(printf '%s\n' "$callers" | sed '/^$/d') <(printf '%s\n' "$declared" | sed '/^$/d'))
+  count=$(printf '%s\n' "$declared" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+
+  if [ -n "$undeclared" ] || [ -n "$unused" ] || [ "$count" -gt 1 ]; then
+    echo "REFUSED   ${id}"
+    if [ -n "$undeclared" ]; then
+      printf '%s\n' "$undeclared" | sed 's|^|    draws token bytes and does not declare itself: |'
+    fi
+    if [ "$count" -gt 1 ]; then
+      printf '%s\n' "$declared" | sed '/^$/d' | sed 's|^|    declares itself the one routine: |'
+    fi
+    if [ -n "$unused" ]; then
+      printf '%s\n' "$unused" | sed 's|^|    declares itself the one routine and draws nothing: |'
+    fi
+    echo "::error::${id}: ${message}"
+    violations=1
+  else
+    echo "ok        ${id}"
+  fi
+}
+
 echo "Scanning: ${paths[*]}"
 
 # A token in a log line is a token in a log file, a log shipper and whatever
@@ -127,6 +187,16 @@ check "route-is-not-anonymous" \
 check "clock-comes-from-the-seam" \
   '((DateTime|DateTimeOffset)\s*\.\s*(Now|UtcNow|Today)|TimeProvider\s*\.\s*System)' \
   "the machine clock is read directly. Take TimeProvider and call GetUtcNow, so a test can stand on either side of an expiry boundary without sleeping."
+
+# Token material comes from one routine, and one routine is a property of the
+# whole tree rather than of any single line in it (#120). A second type drawing
+# its own bytes is not wrong the way the invariants above are wrong: each call is
+# correct on its own, and what is lost is the single place where the length, the
+# encoding and the source are decided and can be changed once. The check counts
+# rather than matches, which is why it is not written as a pattern above.
+check_sole_caller "token-bytes-come-from-one-routine" \
+  '\bRandomNumberGenerator\s*\.' \
+  "the cryptographic generator is drawn from outside the one routine that owns it, or more than one file claims to be that routine. Call ShareTokens.Mint, or argue the second routine in an issue and move the marker."
 
 if [ "$violations" -ne 0 ]; then
   echo "::error::One or more invariants were violated. Each is a rule this tree decided on; changing one is a change to the rule, not to the lint."
