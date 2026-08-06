@@ -114,6 +114,20 @@ check "route-is-not-anonymous" \
   '\[\s*AllowAnonymous\s*(\(\s*\))?\s*\]' \
   "a route is marked AllowAnonymous. Every route this plugin serves is reached by a caller the server has already identified."
 
+# Expiry is the core behaviour and it is a function of time, so a type that reads
+# the machine clock directly can only be tested by sleeping or by not testing the
+# boundary, which is where the bugs are (#36). The clock arrives as TimeProvider,
+# and TimeProvider.System is refused for the same reason the raw property is: it
+# is the machine clock wearing the seam's name.
+#
+# The refusal has no exemption for a composition root today, because nothing in
+# the tree reads a clock at all and an exemption with no user is a hole nobody is
+# watching. The day the root genuinely needs one, widening this pattern is a
+# change to the rule, argued in the issue that needs it.
+check "clock-comes-from-the-seam" \
+  '((DateTime|DateTimeOffset)\s*\.\s*(Now|UtcNow|Today)|TimeProvider\s*\.\s*System)' \
+  "the machine clock is read directly. Take TimeProvider and call GetUtcNow, so a test can stand on either side of an expiry boundary without sleeping."
+
 if [ "$violations" -ne 0 ]; then
   echo "::error::One or more invariants were violated. Each is a rule this tree decided on; changing one is a change to the rule, not to the lint."
   exit 1
