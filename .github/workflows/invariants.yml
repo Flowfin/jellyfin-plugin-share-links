@@ -1,0 +1,164 @@
+name: invariants
+
+on:
+  # Every branch and every pull request: the lint is a read-only grep over the
+  # tracked sources and costs seconds, and an invariant that only runs on some
+  # branches is an invariant somebody can land around.
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Read-only: the lint greps the checked-out tree and writes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    name: Enforce greppable invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - name: Enforce the invariants over the plugin sources
+        run: bash .github/scripts/enforce-greppable-invariants.sh
+
+      - name: Prove every invariant bites, for the reason it names
+        # The step above passing means today's sources are clean. It says nothing
+        # about whether a violation would have been caught, and a lint whose
+        # patterns silently stopped matching passes exactly the same way.
+        #
+        # Three legs per invariant, and all three have to hold:
+        #
+        #   1. its violation fixture is refused, and refused by EXACTLY that
+        #      invariant, so a pattern that reddens everything cannot pass as a
+        #      pattern that reddens the right thing
+        #   2. the same fixture goes green the moment that invariant is removed,
+        #      which is what says leg 1 was that invariant's doing and not
+        #      another's
+        #   3. its near-miss fixture stays green - the file that carries the same
+        #      names, the same words and the correct code. A pattern that cannot
+        #      tell those apart is a pattern somebody turns off.
+        run: |
+          set -euo pipefail
+          fixtures=.github/invariant-fixtures
+          failed=0
+
+          for dir in "$fixtures"/*/; do
+            id=$(basename "$dir")
+            echo "=== ${id} ==="
+
+            # Leg 1. Expect a refusal, and expect it to name this invariant and
+            # no other.
+            if out=$(bash .github/scripts/enforce-greppable-invariants.sh "${dir}violation" 2>&1); then
+              echo "::error::${id}: its violation fixture was accepted. The invariant does not bite."
+              printf '%s\n' "$out" | sed 's/^/    /'
+              failed=1
+              continue
+            fi
+            refused=$(printf '%s\n' "$out" | grep -c '^REFUSED ' || true)
+            if [ "$refused" -ne 1 ] || ! printf '%s\n' "$out" | grep -q "^REFUSED   ${id}\$"; then
+              echo "::error::${id}: its violation fixture was refused by ${refused} invariant(s), not by ${id} alone."
+              printf '%s\n' "$out" | sed 's/^/    /'
+              failed=1
+              continue
+            fi
+            echo "  leg 1  refused by ${id} and by nothing else"
+
+            # Leg 2. Remove the invariant and the same bytes are clean.
+            if ! INVARIANT_SKIP="$id" bash .github/scripts/enforce-greppable-invariants.sh "${dir}violation" > /dev/null 2>&1; then
+              echo "::error::${id}: its violation fixture is still refused with ${id} removed, so leg 1 proved somebody else's invariant."
+              failed=1
+              continue
+            fi
+            echo "  leg 2  clean with ${id} removed"
+
+            # Leg 3. The near miss stays green.
+            if ! out=$(bash .github/scripts/enforce-greppable-invariants.sh "${dir}near-miss" 2>&1); then
+              echo "::error::${id}: its near-miss fixture was refused. The pattern cannot tell the mistake from the correct code next to it."
+              printf '%s\n' "$out" | sed 's/^/    /'
+              failed=1
+              continue
+            fi
+            echo "  leg 3  near miss accepted"
+
+            # Leg 4, and only where there is something for it to judge. An
+            # invariant that refuses for more than one reason has a violation
+            # directory split into one subdirectory per reason, and the three
+            # legs above would pass on the whole directory while one of those
+            # reasons quietly stopped refusing anything - the other reasons keep
+            # the fixture red and nothing says which one did it. So each
+            # subdirectory is run on its own and has to be refused by this
+            # invariant alone, and to go clean when this invariant is removed.
+            arms=$(find "${dir}violation" -mindepth 1 -maxdepth 1 -type d | sort)
+            for arm in $arms; do
+              if out=$(bash .github/scripts/enforce-greppable-invariants.sh "$arm" 2>&1); then
+                echo "::error::${id}: the arm $(basename "$arm") was accepted on its own. That reason for refusing has stopped refusing."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              refused=$(printf '%s\n' "$out" | grep -c '^REFUSED ' || true)
+              if [ "$refused" -ne 1 ] || ! printf '%s\n' "$out" | grep -q "^REFUSED   ${id}\$"; then
+                echo "::error::${id}: the arm $(basename "$arm") was refused by ${refused} invariant(s), not by ${id} alone."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              if ! INVARIANT_SKIP="$id" bash .github/scripts/enforce-greppable-invariants.sh "$arm" > /dev/null 2>&1; then
+                echo "::error::${id}: the arm $(basename "$arm") is still refused with ${id} removed."
+                failed=1
+                continue
+              fi
+              echo "  leg 4  arm $(basename "$arm") refused on its own by ${id}"
+            done
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Every invariant was shown to bite, to bite alone, to leave its near miss alone, and where it refuses for more than one reason, to bite on each reason by itself."
+
+      - name: Refuse an invariant that has no fixtures
+        # An invariant with no fixture directory is an invariant nothing proved,
+        # and the loop above would skip it in silence. Compare the two lists
+        # rather than trusting that whoever added a pattern also added a fixture.
+        run: |
+          set -euo pipefail
+          # Every invariant is declared by a call at column zero whose first
+          # argument is its id. The name of the function that runs it is not
+          # fixed: an invariant that counts callers cannot be a pattern and has
+          # its own runner, and a list derived from one runner's name would have
+          # silently stopped covering the other.
+          declared=$(grep -oP '^check[a-z_]* "\K[^"]+' .github/scripts/enforce-greppable-invariants.sh | sort)
+          fixtured=$(find .github/invariant-fixtures -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+
+          echo "declared:"; printf '%s\n' "$declared" | sed 's/^/  /'
+          echo "fixtured:"; printf '%s\n' "$fixtured" | sed 's/^/  /'
+
+          if [ "$declared" != "$fixtured" ]; then
+            echo "::error::The invariants the lint declares and the invariants that have fixtures are not the same set."
+            diff <(printf '%s\n' "$declared") <(printf '%s\n' "$fixtured") || true
+            exit 1
+          fi
+
+          for dir in .github/invariant-fixtures/*/; do
+            for leg in violation near-miss; do
+              if [ -z "$(find "${dir}${leg}" -name '*.cs' -print -quit 2>/dev/null)" ]; then
+                echo "::error::$(basename "$dir") has no ${leg} fixture."
+                exit 1
+              fi
+            done
+          done
+
+          echo "Every declared invariant has a violation fixture and a near miss."
