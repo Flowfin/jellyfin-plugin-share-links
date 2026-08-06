@@ -90,13 +90,44 @@ jobs:
               continue
             fi
             echo "  leg 3  near miss accepted"
+
+            # Leg 4, and only where there is something for it to judge. An
+            # invariant that refuses for more than one reason has a violation
+            # directory split into one subdirectory per reason, and the three
+            # legs above would pass on the whole directory while one of those
+            # reasons quietly stopped refusing anything - the other reasons keep
+            # the fixture red and nothing says which one did it. So each
+            # subdirectory is run on its own and has to be refused by this
+            # invariant alone, and to go clean when this invariant is removed.
+            arms=$(find "${dir}violation" -mindepth 1 -maxdepth 1 -type d | sort)
+            for arm in $arms; do
+              if out=$(bash .github/scripts/enforce-greppable-invariants.sh "$arm" 2>&1); then
+                echo "::error::${id}: the arm $(basename "$arm") was accepted on its own. That reason for refusing has stopped refusing."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              refused=$(printf '%s\n' "$out" | grep -c '^REFUSED ' || true)
+              if [ "$refused" -ne 1 ] || ! printf '%s\n' "$out" | grep -q "^REFUSED   ${id}\$"; then
+                echo "::error::${id}: the arm $(basename "$arm") was refused by ${refused} invariant(s), not by ${id} alone."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              if ! INVARIANT_SKIP="$id" bash .github/scripts/enforce-greppable-invariants.sh "$arm" > /dev/null 2>&1; then
+                echo "::error::${id}: the arm $(basename "$arm") is still refused with ${id} removed."
+                failed=1
+                continue
+              fi
+              echo "  leg 4  arm $(basename "$arm") refused on its own by ${id}"
+            done
           done
 
           if [ "$failed" -ne 0 ]; then
             exit 1
           fi
 
-          echo "Every invariant was shown to bite, to bite alone, and to leave its near miss alone."
+          echo "Every invariant was shown to bite, to bite alone, to leave its near miss alone, and where it refuses for more than one reason, to bite on each reason by itself."
 
       - name: Refuse an invariant that has no fixtures
         # An invariant with no fixture directory is an invariant nothing proved,
@@ -104,7 +135,12 @@ jobs:
         # rather than trusting that whoever added a pattern also added a fixture.
         run: |
           set -euo pipefail
-          declared=$(grep -oP '^check "\K[^"]+' .github/scripts/enforce-greppable-invariants.sh | sort)
+          # Every invariant is declared by a call at column zero whose first
+          # argument is its id. The name of the function that runs it is not
+          # fixed: an invariant that counts callers cannot be a pattern and has
+          # its own runner, and a list derived from one runner's name would have
+          # silently stopped covering the other.
+          declared=$(grep -oP '^check[a-z_]* "\K[^"]+' .github/scripts/enforce-greppable-invariants.sh | sort)
           fixtured=$(find .github/invariant-fixtures -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 
           echo "declared:"; printf '%s\n' "$declared" | sed 's/^/  /'

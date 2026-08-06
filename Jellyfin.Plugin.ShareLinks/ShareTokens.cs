@@ -4,6 +4,11 @@ using System.Security.Cryptography;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
+// The marker the invariant lint reads. It sits outside the documentation comment
+// because the compiler wants that comment against the declaration it describes.
+//
+// draws token bytes: this file is the one routine (#120)
+
 /// <summary>
 /// Mints the token a share link carries (#42).
 /// </summary>
@@ -31,13 +36,17 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// reads the padding to know where the token ends.
 /// </para>
 /// <para>
-/// PROSE, NOT ENFORCEMENT for one property, issue #120. That this routine is the
-/// only caller of the cryptographic generator in the plugin is measured at each
-/// commit rather than refused by a check. The greppable invariant lint cannot
-/// carry it: an invariant refusing the generator outside one file also refuses
-/// the near-miss fixture of <c>token-randomness-is-cryptographic</c>, which calls
-/// the generator on purpose under another name, and that fixture has to stay
-/// green for its own invariant to be proved.
+/// That this routine is the only caller of the cryptographic generator is
+/// refused by <c>token-bytes-come-from-one-routine</c> in the greppable
+/// invariant lint (#120), and the marker above this comment is how the file
+/// declares itself that routine. A second file drawing bytes is refused whether
+/// it carries the marker or not, so the exemption cannot be taken by the change
+/// that needs exempting.
+/// </para>
+/// <para>
+/// What the check does not reach is the text it cannot see: a call made through
+/// reflection, a helper inside a compiled dependency, or an alias the source
+/// gives the type. It reads the tree, like every invariant beside it.
 /// </para>
 /// </remarks>
 public static class ShareTokens
