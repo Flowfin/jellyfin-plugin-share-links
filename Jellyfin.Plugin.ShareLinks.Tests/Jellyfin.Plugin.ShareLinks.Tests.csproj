@@ -31,6 +31,7 @@
   <ItemGroup>
     <None Include="..\build.yaml" Link="build.yaml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\threat-model.md" Link="threat-model.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
