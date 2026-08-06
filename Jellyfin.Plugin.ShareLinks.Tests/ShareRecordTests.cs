@@ -143,11 +143,40 @@ public class ShareRecordTests
 
             Assert.DoesNotContain(token, written, StringComparison.Ordinal);
 
-            // The hash is derived from the token, so a serialised form that holds
-            // the hash and nothing else still has to be there for the assertion
-            // above to have been about the right document.
-            Assert.Contains(StandInHashOf(token), written, StringComparison.Ordinal);
+            // The assertion above is about a document, so the document has to be
+            // the right one. This reads the hash back as a value rather than
+            // searching the text for it. The serialiser escapes some characters a
+            // base64 hash can carry, so a substring search here would be a search
+            // for whichever spelling that particular run produced, and it would
+            // fail on the runs where the hash happened to contain one of them.
+            Assert.Equal(StandInHashOf(token), JsonSerializer.Deserialize<ShareRecord>(written)!.TokenHash);
         }
+    }
+
+    [Fact]
+    public void ASearchOfTheSerialisedFormWouldFindARawToken()
+    {
+        // The test above proves an absence by searching serialised text for the
+        // token as it was minted, which proves nothing unless the serialiser
+        // writes a token in exactly that spelling. Escaping is the way that goes
+        // wrong quietly, so it is checked rather than assumed: a record carrying
+        // a token in a text field is found by the same search.
+        var token = ShareTokens.Mint();
+
+        var carrying = new ShareRecord
+        {
+            SchemaVersion = ShareRecord.CurrentSchemaVersion,
+            Id = new Guid("77777777-7777-7777-7777-777777777777"),
+            ItemId = ItemId,
+            InvitedUserIds = [FirstGuest],
+            CreatedByUserId = Operator,
+            CreatedAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2026, 1, 9, 3, 4, 5, TimeSpan.Zero),
+            RevocationReason = token,
+            TokenHash = StandInHashOf(token),
+        };
+
+        Assert.Contains(token, JsonSerializer.Serialize(carrying), StringComparison.Ordinal);
     }
 
     [Fact]
