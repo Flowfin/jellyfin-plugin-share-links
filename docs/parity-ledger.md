@@ -25,9 +25,9 @@ notices that.
 | `fuzz.yml` | Adopted | #19. The token in a share link is the one attacker-controlled input worth fuzzing, and it does not exist yet. |
 | `manifest-freshness.yml` | Deferred to M11 | There is nothing published to keep fresh until the release milestone. |
 | `nightly-betas.yml` | Deferred to M11 | Same reason. |
-| `opengrep.yml` | Adopted | #16, which ports the invariant lint and seeds it with this plugin's invariants. |
+| `opengrep.yml` | Adopted, landed | `.github/workflows/invariants.yml`. #16 is open at this commit and holds what is left of the seeding, so the file existing is not the issue being done. |
 | `prettier.yml` | Adopted | #17. Nothing here covers HTML, JavaScript, YAML, JSON or Markdown today. |
-| `pr-hygiene.yml` | Adopted | #15 |
+| `pr-hygiene.yml` | Adopted, landed | `.github/workflows/pr-hygiene.yml`, by #15 |
 | `publish.yml` | Deferred to M11 | Nothing is published before that milestone. |
 | `publish-beta.yml` | Deferred to M11 | Same reason. |
 | `publish-failure-alert.yml` | Deferred to M11 | Nothing to alert about until something publishes. |
@@ -48,8 +48,12 @@ row above because they came from the plugin template rather than from the gate:
 `publish.yaml`, `build.yaml` and `test.yaml`. Whether those stay is not a parity
 question and is not decided here.
 
-`package.yaml` has no row for a different reason. It is first-party, from #18, and
-no file on the listing above corresponds to it.
+`package.yaml` and `headless.yml` have no row for a different reason. Both are
+first-party, from #18 and #74, and no file on the listing above corresponds to
+either. Between the template list and these two, every workflow file in this
+repository at this commit is either in a row or accounted for here:
+
+    ls .github/workflows
 
 It also does not say a row marked adopted has landed unless the row names the
 file. Adopted with an issue number means owed, not done.
