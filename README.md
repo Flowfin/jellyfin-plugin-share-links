@@ -93,6 +93,10 @@ way a revoked one does.
 
 - `docs/share-store.md`, where share records are kept and why the other two
   candidates were refused.
+- `docs/leaked-link.md`, what a leaked link is worth and where the token sits in
+  the URL.
+- `docs/plugin-lifecycle.md`, what disabling and uninstalling do, and what is
+  left on disk.
 - `docs/versioning.md`, the version scheme and what a build from the tree
   carries.
 - `docs/testing.md`, the conditions the test suite runs under.
