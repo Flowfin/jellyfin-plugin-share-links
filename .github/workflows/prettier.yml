@@ -1,0 +1,87 @@
+name: prettier
+
+on:
+  # Every branch and every pull request, for the same reason the invariant lint
+  # runs everywhere: the check is a read-only pass over tracked text and costs
+  # seconds, and a formatting rule that only runs on some branches is a rule
+  # somebody lands around.
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Read-only. Nothing here writes to the tree, and in particular nothing pushes a
+# reformatting commit back: a check that repairs what it judges is a check that
+# can never be seen to fail.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prettier:
+    name: Formatting of the non-C# files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Pinned to a patch rather than to a line. The formatter is the thing
+          # being pinned, and a runtime that moves under it is the other half of
+          # the same reproducibility.
+          node-version: "24.18.0"
+
+      # `npm ci` and not `npm install`: it installs the lockfile and refuses a
+      # package.json that has drifted from it, so the version this job runs is
+      # the version the tree recorded. A formatter that upgrades itself is a
+      # formatter that reddens a pull request nobody changed.
+      - name: Install the pinned formatter
+        run: npm ci
+
+      - name: Report the version that is about to judge the tree
+        run: npx prettier --version
+
+      - name: Check the formatting of every file prettier owns
+        run: npx prettier --check .
+
+      - name: Prove the check refuses an unformatted file
+        # The step above passing means the tree is clean today. It says nothing
+        # about whether an unformatted file would have been caught, and a check
+        # pointed at an empty set, or at a configuration that ignores everything,
+        # passes in exactly the same way.
+        #
+        # So write the mistake and require the real command - the same one the
+        # step above runs, over the same tree - to refuse it. Then remove it and
+        # require the tree to be clean again, which is what says the refusal was
+        # this file's doing and not something already wrong.
+        run: |
+          set -euo pipefail
+          probe=formatting-bite-probe.json
+          trap 'rm -f "$probe"' EXIT
+
+          printf '{"unformatted":   true,\n     "spacing": "wrong"}\n' > "$probe"
+
+          if npx prettier --check . > probe.log 2>&1; then
+            echo "::error::An unformatted file was accepted. The formatting check does not bite."
+            cat probe.log
+            exit 1
+          fi
+
+          if ! grep -qF "$probe" probe.log; then
+            echo "::error::The check failed while the probe was present, but not on the probe. Something else in the tree is unformatted, so this proves nothing about the probe."
+            cat probe.log
+            exit 1
+          fi
+          echo "refused the probe: $(grep -F "$probe" probe.log)"
+
+          rm -f "$probe"
+          npx prettier --check .
+          echo "clean again once the probe was removed"

@@ -1,0 +1,12 @@
+{
+    "name": "jellyfin-plugin-share-links",
+    "private": true,
+    "description": "Formatting toolchain for the files the C# analyzers do not reach.",
+    "scripts": {
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devDependencies": {
+        "prettier": "3.6.2"
+    }
+}
