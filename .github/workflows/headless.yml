@@ -1,0 +1,129 @@
+# Proves the suite obeys the headless rule (#74). docs/testing.md states the rule
+# and says which of its clauses this job can hold and which it cannot.
+#
+# The suite already passes in ci.yaml on an ordinary runner, which says nothing
+# about whether it would pass without a network, without root and without a
+# display. This job puts those conditions in force and then runs the same tests.
+name: headless
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+# Read-only: nothing here writes to the repository or publishes an artefact.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The same SDK ci.yaml pins, and the container below is the same version, so
+  # the tests run against one .NET rather than two.
+  DOTNET_VERSION: "9.0.316"
+  # Pinned by digest, not by tag: what judges one pull request has to be what
+  # judges the next, and a tag is a name somebody else can repoint.
+  SDK_IMAGE: "mcr.microsoft.com/dotnet/sdk:9.0.316-noble-amd64@sha256:0ce9e6f0022d9db72e7077f1999fa68f689d7ba75fd548110a816d942295f1d7"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  headless:
+    name: Suite runs headless, unprivileged and offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore and build outside the container
+        # A restore is a network operation by definition, so it is not the thing
+        # under test. What has to hold with the network off is the test run.
+        run: |
+          set -euo pipefail
+          dotnet restore
+          dotnet build --configuration Release --no-restore -warnaserror
+
+      - name: Prove the container's conditions are actually in force
+        # A container that quietly had a network, or a root user, would let a
+        # suite that quietly relied on either pass here and fail everywhere the
+        # rule is real. Each leg has to FAIL inside the container, and a leg that
+        # succeeds reds this job before a single test runs.
+        run: |
+          set -euo pipefail
+          run_probe() {
+            docker run --rm --network none --user "$(id -u):$(id -g)" \
+              --cap-drop ALL --security-opt no-new-privileges \
+              -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
+              --entrypoint /bin/bash \
+              "$SDK_IMAGE" -c "$1"
+          }
+
+          if run_probe 'timeout 10 bash -c "exec 3<>/dev/tcp/1.1.1.1/443"' 2>/dev/null; then
+            echo "::error::A TCP connection succeeded out of a --network none container. The offline condition is not in force, so the run below would prove nothing."
+            exit 1
+          fi
+          echo "ok  no route out of the container"
+
+          uid=$(run_probe 'id -u')
+          if [ "$uid" = "0" ]; then
+            echo "::error::The container runs as uid 0. The unprivileged condition is not in force."
+            exit 1
+          fi
+          echo "ok  container uid is ${uid}, not 0"
+
+          if run_probe 'touch /proof-of-root' 2>/dev/null; then
+            echo "::error::A write to a root-owned path succeeded. The unprivileged condition is not in force."
+            exit 1
+          fi
+          echo "ok  a root-owned path refuses a write"
+
+      - name: Run the suite offline as an unprivileged user
+        # The workspace and the package cache are mounted at their own paths so
+        # the absolute paths the build wrote are the paths that exist here. The
+        # cache is read-only: --no-build must not restore, and if it tries, this
+        # is where that is noticed rather than in a release.
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -e HOME=/tmp \
+            -e DOTNET_CLI_HOME=/tmp \
+            -e DOTNET_NOLOGO=1 \
+            -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            -v "$PWD":"$PWD" \
+            -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
+            -w "$PWD" \
+            "$SDK_IMAGE" \
+            dotnet test --configuration Release --no-build --verbosity normal | tee headless-output.txt
+
+      - name: Report the number of tests run
+        # A suite that runs nothing reports success, which looks exactly like a
+        # suite that ran and passed - and under these conditions a suite that
+        # failed to start is the likeliest way to get there.
+        run: |
+          set -euo pipefail
+          if ! total=$(grep -oE '^Total tests: [0-9]+' headless-output.txt | tail -1 | grep -oE '[0-9]+'); then
+            echo "::error::dotnet test printed no 'Total tests:' summary, so the number of tests run offline is unknown."
+            exit 1
+          fi
+          echo "Total tests run offline and unprivileged: ${total}"
+          if [ "$total" -eq 0 ]; then
+            echo "::error::The offline run executed 0 tests. A green check over an empty set is not a passing suite."
+            exit 1
+          fi
