@@ -1,16 +1,42 @@
 ---
-name: "Template"
+name: "Share Links"
 guid: "a3703f07-f83d-49a0-a09f-50b890a2baac"
-version: "1.0.0.0"
+# 0.0.0.0 is reserved and no release carries it, so a package built from the tree
+# without a version on the command line is recognisable as one that did not come
+# from the release process. docs/versioning.md is where that is argued, and
+# Directory.Build.props holds the same number for the assembly.
+version: "0.0.0.0"
+# The oldest server line this plugin claims to load on. Directory.Build.props
+# compiles against a newer 10.11.x, and the abi-floor job builds against this
+# number as well, so every API the plugin calls is proven to exist here too.
 targetAbi: "10.11.0.0"
 framework: "net9.0"
-overview: "Short description about your plugin"
+owner: "iderex"
+# The sentence a user reads in the catalogue list before opening anything. It
+# names the one feature and says who a share is for, because the difference
+# between an invited guest and an anonymous public link is the whole posture and
+# nobody should have to install the plugin to find it out.
+overview: "Share a single library item with invited guests of your server, through a link that expires and can be revoked."
 description: >
-  This is a longer description that can span more than one
-  line and include details about your plugin.
-category: "General"
-owner: "jellyfin"
+  Share Links does one thing: an operator picks one item out of the library and
+  gets a link to it for a guest they have invited.
+
+  Sharing is designed for invited guests of the server operator. There are no
+  anonymous public links. A guest signs in to the server, and the share reaches
+  only the one item it names. A share expires, and an operator can revoke it
+  before it does.
+
+  Shares are created, listed and revoked from the plugin's page in the server
+  dashboard. Nothing is added to the web client and no mail is sent, so the
+  operator passes the link to the guest themselves.
+# The operator is the only person who opens this plugin's page, and what they do
+# there is administer access to the library. Administration is one of the
+# categories the published catalogue actually carries:
+#   curl -sSL https://repo.jellyfin.org/files/plugin/manifest.json \
+#     | grep -o '"category": *"[^"]*"' | sort -u
+category: "Administration"
 artifacts:
 - "Jellyfin.Plugin.ShareLinks.dll"
 changelog: >
-  changelog
+  No version of this plugin has been published yet, so there is nothing here to
+  read. A released version carries its own entry.
