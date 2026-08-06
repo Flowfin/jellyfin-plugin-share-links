@@ -6,11 +6,13 @@ on:
       - master
     paths-ignore:
       - '**/*.md'
+  # No paths filter on this trigger. The `gate` ruleset requires the context this
+  # workflow produces, `call / test`, and a required context that declines to run
+  # is recorded as missing rather than as passed, which blocks the merge with no
+  # rerun that clears it. A documentation change therefore pays for a test run.
   pull_request:
     branches:
       - master
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
 
 # Read-only: the called workflow restores, builds and tests, it publishes nothing.
