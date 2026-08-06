@@ -112,7 +112,7 @@ can never be mistaken for an oversight.
 | T14 | A route ships reachable by anybody, by an attribute somebody forgot | The invariant lint refuses an anonymous route, and the fixture that proves it bites is in the tree | #69 |
 | T15 | A stream that is playing continues after the operator revokes the share | Revocation reaches the session and not only the record | #55 |
 | T16 | One share becomes a household's worth of concurrent streams | A bound on sessions and devices per share | #56 |
-| T17 | The link is built from what the request says the host is, so a forged header makes a link pointing elsewhere | The link is built from configuration the operator set, never from a request header | #49 |
+| T17 | The link is built from what the request says the host is, so a forged header makes a link pointing elsewhere | The link is built from a base the plugin holds rather than from anything the request supplied. Where that base comes from is #49's to decide and is not assumed here | #49 |
 | T18 | An operator action, or a script driving one, fills the store | A bound on what one action creates and on what the store grows into | #29 |
 | T19 | A crash or two concurrent writes truncates the store, taking every live share with it | Write through a temporary file and rename, with writers serialised | #35 |
 | T20 | An upgrade meets records written by an older version and loses them, or a downgrade guesses at newer ones | A schema version in the store, a forward migration, and a refusal rather than a guess when the store is newer | #37 |
@@ -121,7 +121,7 @@ can never be mistaken for an oversight.
 | T23 | A record points at an item or an account that is gone, and the failure is a null reference rather than a refusal | Each case has a defined outcome, and the administrator view shows a share that can no longer resolve as such | #39 |
 | T24 | The plugin holds more about an invited guest than the feature needs, for longer than it needs | What personal data is held, and for how long, stated rather than accumulated | #31 |
 | T25 | Expiry is wrong at the boundary, and nobody notices because the tests sleep | The clock comes from a seam, refused by the invariant lint when it does not, and boundaries are covered without waiting | #36, #79 |
-| T26 | The bitrate ceiling is enforced somewhere a guest can step around | The ceiling is enforced where the server decides the stream, not where the plugin would prefer | #61 |
+| T26 | The bitrate ceiling is enforced somewhere a guest can step around | The ceiling is enforced at the point where the stream is actually decided, which #61 settles by measurement rather than by preference | #61 |
 
 ## Accepted, and why
 
