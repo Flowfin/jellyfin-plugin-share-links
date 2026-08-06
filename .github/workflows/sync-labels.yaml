@@ -1,8 +1,8 @@
-name: '🏷️ Sync labels'
+name: "🏷️ Sync labels"
 
 on:
   schedule:
-    - cron: '0 0 1 * *'
+    - cron: "0 0 1 * *"
   workflow_dispatch:
 
 permissions: {}
