@@ -5,6 +5,11 @@ that one item for a guest they have invited. The link expires, an operator can
 revoke it before it expires, and a share can carry a ceiling on the bitrate the
 guest streams at.
 
+> [!NOTE]
+>
+> **Part of [Flowfin](https://github.com/Flowfin).** It works with any Jellyfin
+> server, and with the Flowfin clients.
+
 Sharing is designed for invited guests of the server operator. There are no
 anonymous public links. A guest signs in to the server with an account, and the
 link resolves for the account the share names and for nobody else. A link that
