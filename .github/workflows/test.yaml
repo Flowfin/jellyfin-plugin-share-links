@@ -1,11 +1,11 @@
-name: '🧪 Test Plugin'
+name: "🧪 Test Plugin"
 
 on:
   push:
     branches:
       - master
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
   # No paths filter on this trigger. The `gate` ruleset requires the context this
   # workflow produces, `call / test`, and a required context that declines to run
   # is recorded as missing rather than as passed, which blocks the merge with no

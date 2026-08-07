@@ -36,7 +36,7 @@ description: >
 #     | grep -o '"category": *"[^"]*"' | sort -u
 category: "Administration"
 artifacts:
-- "Jellyfin.Plugin.ShareLinks.dll"
+  - "Jellyfin.Plugin.ShareLinks.dll"
 changelog: >
   No version of this plugin has been published yet, so there is nothing here to
   read. A released version carries its own entry.

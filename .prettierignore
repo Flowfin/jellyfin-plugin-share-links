@@ -1,0 +1,11 @@
+# Build output and restored packages. Nothing here is written by hand, and the
+# check would be reporting on whatever the last build left behind rather than on
+# the tree.
+node_modules/
+**/bin/
+**/obj/
+artifacts/
+
+# The lockfile is npm's to write. Reformatting it puts prettier and `npm ci` in
+# disagreement over a file only one of them owns.
+package-lock.json

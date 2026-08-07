@@ -12,7 +12,7 @@ on:
   schedule:
     # Weekly, so a query set that learns something new about code nobody has touched
     # still reports it.
-    - cron: '24 2 * * 4'
+    - cron: "24 2 * * 4"
   workflow_dispatch:
 
 permissions: {}
@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ['csharp']
+        language: ["csharp"]
 
     steps:
       - name: Checkout Repository
