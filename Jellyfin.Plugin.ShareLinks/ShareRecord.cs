@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
@@ -40,16 +41,27 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// </remarks>
 public sealed class ShareRecord
 {
+    private readonly IReadOnlyList<Guid> _pluginCreatedUserIds = Array.Empty<Guid>();
+
     /// <summary>
     /// The schema version a record written by this code carries.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// It is here so that the first release already stamps its records, rather
     /// than a later release meeting a directory of records that say nothing about
     /// what wrote them. What reads an older number, and what refuses a newer one,
     /// is #37.
+    /// </para>
+    /// <para>
+    /// Version 2 added <see cref="PluginCreatedUserIds"/> (#144). A record at
+    /// version 1 carries no provenance for its invited accounts at all, and the
+    /// only safe reading of that silence is that this plugin created none of
+    /// them, because the other reading hands an account somebody else made to
+    /// whatever eventually deletes one.
+    /// </para>
     /// </remarks>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     /// <summary>
     /// Gets the version of this record's shape.
@@ -93,6 +105,40 @@ public sealed class ShareRecord
     /// consulting anything the request supplied.
     /// </remarks>
     public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
+
+    /// <summary>
+    /// Gets the invited accounts this plugin brought into existence itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A subset of <see cref="InvitedUserIds"/>, and the field that separates an
+    /// account this plugin made from an account it was merely pointed at. Without
+    /// it the list of invited accounts is a list of identifiers with nothing
+    /// beside them, and anything that removes an account has no way to tell the
+    /// two apart. The consequence is not an untidy store: it is this plugin
+    /// deleting a person's real account because an identifier reached the list
+    /// through a store carried forward from before the decision, a record edited
+    /// by hand, or a route that let an operator invite an account of their own.
+    /// </para>
+    /// <para>
+    /// Not <c>required</c>, and empty when it is not written. That is what makes
+    /// the silence of a version 1 record readable: absent means this plugin
+    /// created none of these accounts, which is the reading that removes nothing
+    /// rather than the reading that removes everything. An explicit null in the
+    /// serialised form is taken the same way, because a file that has been edited
+    /// is exactly the case this field exists for.
+    /// </para>
+    /// <para>
+    /// It is provenance and not permission. What may then be done with an account
+    /// this plugin created, and when the last record naming it releases it, is
+    /// #51 and #58; this record answers only which accounts it can claim.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Guid> PluginCreatedUserIds
+    {
+        get => _pluginCreatedUserIds;
+        init => _pluginCreatedUserIds = value ?? Array.Empty<Guid>();
+    }
 
     /// <summary>
     /// Gets the account that made this share.
@@ -172,4 +218,35 @@ public sealed class ShareRecord
     /// during support, which is the same reason the store is a file at all.
     /// </remarks>
     public required string TokenHash { get; init; }
+
+    /// <summary>
+    /// Answers whether this record claims that the plugin created the account
+    /// named, which is the question anything removing an account has to ask
+    /// first.
+    /// </summary>
+    /// <param name="userId">The account being considered for removal.</param>
+    /// <returns>
+    /// <c>true</c> only where this record both invites the account and claims to
+    /// have created it.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Both halves are load bearing, and the second is the one that is easy to
+    /// leave out. An identifier that appears only in
+    /// <see cref="PluginCreatedUserIds"/> is a claim about an account this share
+    /// is not for, and a record can arrive in that shape from a file somebody
+    /// edited. Reading the claim on its own would let such a file nominate any
+    /// account on the server for deletion; requiring the invitation as well
+    /// bounds the damage of an edited record to the accounts the share already
+    /// names.
+    /// </para>
+    /// <para>
+    /// There is nothing in this tree that deletes an account yet. This is the
+    /// routine such a call has to go through when it is written, put here rather
+    /// than beside it so that the answer comes from the record instead of from
+    /// whatever the caller happened to have to hand.
+    /// </para>
+    /// </remarks>
+    public bool WasCreatedByThisPlugin(Guid userId) =>
+        InvitedUserIds.Contains(userId) && PluginCreatedUserIds.Contains(userId);
 }
