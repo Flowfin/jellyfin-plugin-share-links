@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Serialization;
@@ -41,12 +42,36 @@ public class PackagingMetadataTests
         return File.ReadAllText(ManifestPath);
     }
 
+    private static string ReadmePath => Path.Combine(AppContext.BaseDirectory, "README.md");
+
     private static string ReadQuotedField(string field)
     {
         var pattern = string.Format(CultureInfo.InvariantCulture, "^{0}:\\s*\"([^\"]*)\"\\s*$", Regex.Escape(field));
         var match = Regex.Match(ReadManifest(), pattern, RegexOptions.Multiline);
         Assert.True(match.Success, $"build.yaml declares no quoted '{field}' field");
         return match.Groups[1].Value;
+    }
+
+    // The GitHub account the readme links to, taken from every link in it that
+    // addresses an account page rather than a repository. A link carrying a second
+    // path segment is a repository and is left alone, so a readme that comes to
+    // point at the server project's own sources does not red the test below.
+    private static string AccountTheReadmeLinksTo()
+    {
+        Assert.True(File.Exists(ReadmePath), $"README.md was not copied next to the test assembly: {ReadmePath}");
+
+        // A GitHub account name is alphanumeric with interior hyphens, and the
+        // trailing guard is what makes the segment the whole path: a URL followed by
+        // a slash addresses something inside the account and is skipped.
+        var named = Regex.Matches(File.ReadAllText(ReadmePath), "https://github\\.com/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)(?![A-Za-z0-9-/])")
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(named.Count > 0, "README.md links to no GitHub account, so there is nothing to hold the manifest's owner against");
+        Assert.Single(named);
+
+        return named[0];
     }
 
     [Fact]
@@ -82,9 +107,17 @@ public class PackagingMetadataTests
     }
 
     [Fact]
-    public void OwnerNamesThisRepositoryOwner()
+    public void OwnerIsTheAccountTheReadmeNames()
     {
-        Assert.Equal("iderex", ReadQuotedField("owner"));
+        // The owner is rendered next to the plugin in the catalogue, and the readme
+        // is what a reader meets in the repository. Two documents naming two parties
+        // leave nobody a way to tell which one the plugin belongs to.
+        //
+        // The account is read out of the readme rather than written down here. A
+        // literal in this file is a third place that has to move when the account
+        // does, and it is the one nobody remembers: this test held the previous
+        // account name and refused the manifest for carrying the current one.
+        Assert.Equal(AccountTheReadmeLinksTo(), ReadQuotedField("owner"));
     }
 
     [Fact]
