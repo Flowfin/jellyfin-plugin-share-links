@@ -97,20 +97,28 @@ one_routine_marker='draws token bytes: this file is the one routine (#120)'
 # dependency, or an alias the source gives the type. It reads the text of the
 # tree, like every other invariant here.
 check_sole_caller() {
-  local id="$1" pattern="$2" message="$3" rc=0 hits callers declared undeclared unused count
+  local id="$1" pattern="$2" message="$3" rc=0 callers declared undeclared unused count
 
   if skipped "$id"; then
     echo "skipped   ${id} (INVARIANT_SKIP)"
     return 0
   fi
 
-  hits=$(grep -rnP --include='*.cs' "$pattern" -- "${paths[@]}") || rc=$?
+  # Both sides of this comparison are lists of file names, so both are asked for
+  # as file names. Taking them off numbered lines instead means cutting a name
+  # out of "path:line:text", and no expression does that safely: a colon is legal
+  # in a path and is the first character of a Windows drive prefix, so the cut
+  # lands in the wrong place and yields nothing. An empty caller list then agrees
+  # with an empty declared list and this invariant reports a clean run over a
+  # file it had just matched, which is the failure the lint exists against turned
+  # on the lint itself.
+  callers=$(grep -rlP --include='*.cs' "$pattern" -- "${paths[@]}") || rc=$?
   if [ "$rc" -gt 1 ]; then
     echo "::error::${id}: grep exited ${rc}. The scanner is broken, so the tree is not being judged and this fails closed."
     exit 1
   fi
 
-  callers=$(printf '%s\n' "$hits" | sed -n 's/^\([^:]*\):[0-9][0-9]*:.*/\1/p' | sort -u)
+  callers=$(printf '%s\n' "$callers" | sort -u)
   declared=$( { grep -rlF --include='*.cs' -- "$one_routine_marker" "${paths[@]}" || true; } | sort -u)
 
   undeclared=$(comm -23 <(printf '%s\n' "$callers" | sed '/^$/d') <(printf '%s\n' "$declared" | sed '/^$/d'))

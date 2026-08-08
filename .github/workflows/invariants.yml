@@ -48,6 +48,10 @@ jobs:
         #   3. its near-miss fixture stays green - the file that carries the same
         #      names, the same words and the correct code. A pattern that cannot
         #      tell those apart is a pattern somebody turns off.
+        #
+        # Two further legs are conditional and are argued where they are written:
+        # one per reason where an invariant refuses for more than one, and one
+        # over a path of a shape the default arguments never produce.
         run: |
           set -euo pipefail
           fixtures=.github/invariant-fixtures
@@ -121,13 +125,51 @@ jobs:
               fi
               echo "  leg 4  arm $(basename "$arm") refused on its own by ${id}"
             done
+
+            # Leg 5. The same bytes, handed to the lint by a path of a shape the
+            # legs above never produce. Every route in CI runs the lint over the
+            # two relative paths it defaults to, so a defect that only appears
+            # when the path looks like something else survives every leg above
+            # and is met by the person running the lint on their own machine
+            # before pushing - who is told the tree is clean by a check that
+            # judged nothing.
+            #
+            # A colon is the character that does it, because the invariant that
+            # counts callers had been taking file names off "path:line:text" and
+            # a colon inside the path moved the cut. A directory named for a
+            # Windows drive prefix reproduces on Linux exactly what a Windows
+            # absolute path did.
+            # It runs over each arm as well as over the whole fixture, for leg
+            # 4's reason and because the defect that prompted it lived in one
+            # arm: the other two kept the directory red on their own, so a leg
+            # that only ever saw the directory would have reported it green.
+            rm -rf "${RUNNER_TEMP:-/tmp}/invariant-path-shape/${id}"
+            for subject in "${dir}violation" $arms; do
+              probe="${RUNNER_TEMP:-/tmp}/invariant-path-shape/${id}/$(basename "$subject")/C:/violation"
+              mkdir -p "$probe"
+              cp -R "${subject}/." "$probe/"
+              if out=$(bash .github/scripts/enforce-greppable-invariants.sh "$probe" 2>&1); then
+                echo "::error::${id}: $(basename "$subject") was accepted when the path carrying it contains a colon, so the lint reported a clean run over bytes it refuses."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              refused=$(printf '%s\n' "$out" | grep -c '^REFUSED ' || true)
+              if [ "$refused" -ne 1 ] || ! printf '%s\n' "$out" | grep -q "^REFUSED   ${id}\$"; then
+                echo "::error::${id}: through a path containing a colon, $(basename "$subject") was refused by ${refused} invariant(s), not by ${id} alone."
+                printf '%s\n' "$out" | sed 's/^/    /'
+                failed=1
+                continue
+              fi
+              echo "  leg 5  $(basename "$subject") refused by ${id} through a path containing a colon"
+            done
           done
 
           if [ "$failed" -ne 0 ]; then
             exit 1
           fi
 
-          echo "Every invariant was shown to bite, to bite alone, to leave its near miss alone, and where it refuses for more than one reason, to bite on each reason by itself."
+          echo "Every invariant was shown to bite, to bite alone, to leave its near miss alone, to keep biting through a path shape the default arguments never produce, and where it refuses for more than one reason, to bite on each reason by itself."
 
       - name: Refuse an invariant that has no fixtures
         # An invariant with no fixture directory is an invariant nothing proved,
