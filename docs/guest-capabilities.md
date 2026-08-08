@@ -11,16 +11,16 @@ next to it rather than left out.
 
 ## The capabilities the issue names
 
-| Capability | Default | How it is set |
-| --- | --- | --- |
-| Play the shared item | allowed | `EnableMediaPlayback` true |
-| Resume where they stopped | allowed | no account switch exists |
-| Seek within the item | allowed | no account switch exists |
-| Mark it watched | allowed | no account switch exists |
-| Rate it | allowed | no account switch exists |
-| Download it | refused | `EnableContentDownloading` false |
-| Cast to another device | refused | `EnableSharedDeviceControl` false |
-| Remote control another session | refused | `EnableRemoteControlOfOtherUsers` false |
+| Capability                         | Default | How it is set                               |
+| ---------------------------------- | ------- | ------------------------------------------- |
+| Play the shared item               | allowed | `EnableMediaPlayback` true                  |
+| Resume where they stopped          | allowed | no account switch exists                    |
+| Seek within the item               | allowed | no account switch exists                    |
+| Mark it watched                    | allowed | no account switch exists                    |
+| Rate it                            | allowed | no account switch exists                    |
+| Download it                        | refused | `EnableContentDownloading` false            |
+| Cast to another device             | refused | `EnableSharedDeviceControl` false           |
+| Remote control another session     | refused | `EnableRemoteControlOfOtherUsers` false     |
 | Join a synchronised playback group | refused | `SyncPlayAccess` set to its narrowest value |
 
 Downloading is refused because the shared item leaves the server permanently and
