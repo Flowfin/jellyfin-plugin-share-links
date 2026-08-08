@@ -53,6 +53,7 @@ public class ShareRecordTests
         Id = new Guid("55555555-5555-5555-5555-555555555555"),
         ItemId = ItemId,
         InvitedUserIds = [FirstGuest, SecondGuest],
+        PluginCreatedUserIds = [SecondGuest],
         CreatedByUserId = Operator,
         CreatedAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.FromHours(2)),
         ExpiresAt = new DateTimeOffset(2026, 1, 9, 3, 4, 5, TimeSpan.FromHours(2)),
