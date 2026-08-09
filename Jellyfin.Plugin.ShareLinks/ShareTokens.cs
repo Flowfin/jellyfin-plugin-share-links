@@ -67,6 +67,17 @@ public static class ShareTokens
     public const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
     /// <summary>
+    /// The number of random bytes in an install's keyed-hash key (#28).
+    /// </summary>
+    /// <remarks>
+    /// The same width as a token, and at least what <see cref="ShareTokenHash"/>
+    /// refuses to work below. A key wider than the digest it keys buys nothing
+    /// the hash can carry, and a narrower one makes the key the weaker half of a
+    /// pair for a saving nobody sees.
+    /// </remarks>
+    public const int KeyBytes = 32;
+
+    /// <summary>
     /// Mints one token.
     /// </summary>
     /// <returns>The encoded token, <see cref="EncodedLength"/> characters drawn from <see cref="Alphabet"/>.</returns>
@@ -75,5 +86,32 @@ public static class ShareTokens
         Span<byte> bytes = stackalloc byte[EntropyBytes];
         RandomNumberGenerator.Fill(bytes);
         return Base64Url.EncodeToString(bytes);
+    }
+
+    /// <summary>
+    /// Draws the bytes of an install's keyed-hash key (#28).
+    /// </summary>
+    /// <returns>Fresh key material, <see cref="KeyBytes"/> bytes long.</returns>
+    /// <remarks>
+    /// <para>
+    /// The key is not a token and this routine is not minting one. It is here
+    /// because the rule this file carries is about where bytes are drawn from
+    /// rather than about what they are used for, and a key generator with its own
+    /// call into the generator would be a second routine deciding a length and a
+    /// source. The alternative the invariant offers, arguing a second routine and
+    /// moving the marker, buys a file and costs the single place where both
+    /// lengths are decided together.
+    /// </para>
+    /// <para>
+    /// The bytes are returned raw rather than encoded. A key is read by
+    /// <see cref="ShareTokenHash"/> as bytes, and an encoding here would be a
+    /// second representation to get wrong on the way back.
+    /// </para>
+    /// </remarks>
+    public static byte[] MintKeyBytes()
+    {
+        var key = new byte[KeyBytes];
+        RandomNumberGenerator.Fill(key);
+        return key;
     }
 }

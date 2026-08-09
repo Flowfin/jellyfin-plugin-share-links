@@ -72,6 +72,62 @@ namespace Jellyfin.Plugin.ShareLinks;
 public static class ShareResolution
 {
     /// <summary>
+    /// Decides whether a presented token resolves a share for this caller, taking
+    /// the install's key from the file that holds it (#28).
+    /// </summary>
+    /// <param name="records">Every record in the store, as the route read them.</param>
+    /// <param name="keyFile">The file the install's key is kept in.</param>
+    /// <param name="presentedToken">The token out of the request, or <c>null</c> when the request carried none.</param>
+    /// <param name="callerUserId">The account the server identified the caller as, or <c>null</c> when it identified nobody.</param>
+    /// <param name="pluginStatus">The plugin's own status, as the server holds it.</param>
+    /// <param name="clock">The clock expiry is judged against.</param>
+    /// <returns>The share, or the reason there is not one.</returns>
+    /// <remarks>
+    /// <para>
+    /// A key that cannot be read is a refusal here rather than an exception out of
+    /// the route, and it is the same shape of refusal as every other: the caller
+    /// is told nothing, and the reason survives for the operator. That is what
+    /// makes an unreadable key fail closed instead of failing loudly in a place
+    /// somebody has to remember to catch.
+    /// </para>
+    /// <para>
+    /// The key is read on the request rather than held, so an operator who
+    /// rotates it does not have to restart the server for the new one to be in
+    /// force. What that costs is a file read per request, which is the same file
+    /// the store is read from beside it.
+    /// </para>
+    /// </remarks>
+    public static ShareResolutionResult Resolve(
+        IReadOnlyList<ShareRecord> records,
+        ShareKeyFile keyFile,
+        string? presentedToken,
+        Guid? callerUserId,
+        PluginStatus pluginStatus,
+        TimeProvider clock)
+    {
+        ArgumentNullException.ThrowIfNull(keyFile);
+
+        // Before the key, because a plugin that is not active answers for nothing
+        // and has no business reading a credential to say so.
+        if (pluginStatus != PluginStatus.Active)
+        {
+            return new ShareResolutionResult(null, ShareRefusal.PluginNotActive);
+        }
+
+        byte[] key;
+        try
+        {
+            key = keyFile.Read();
+        }
+        catch (ShareKeyUnavailableException)
+        {
+            return new ShareResolutionResult(null, ShareRefusal.KeyUnavailable);
+        }
+
+        return Resolve(records, key, presentedToken, callerUserId, pluginStatus, clock);
+    }
+
+    /// <summary>
     /// Decides whether a presented token resolves a share for this caller.
     /// </summary>
     /// <param name="records">Every record in the store, as the route read them.</param>
