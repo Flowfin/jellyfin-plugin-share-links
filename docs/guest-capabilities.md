@@ -31,7 +31,7 @@ writes to the server's own user data, and the account policy offers nothing that
 turns them off. Refusing them would mean this plugin standing in the path of every
 playback request and every user-data write, which is a larger surface than the
 thing being refused is worth. They are allowed, and what that means for who can
-see a guest's viewing is #59.
+see a guest's viewing is `docs/playback-visibility.md`.
 
 ## The switches the issue does not name and this plugin still has to set
 
@@ -87,5 +87,5 @@ Which items the account can see at all is confinement, which is #52, and it is a
 different question from what may be done with the one item a share names.
 
 Whether a guest's playback progress is visible to the operator, and what reaches
-the server's activity log, is #59. This document says the writes happen; it does
-not say who reads them.
+the server's activity log, is `docs/playback-visibility.md`. This document says the
+writes happen; it does not say who reads them.
