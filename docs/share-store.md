@@ -110,15 +110,58 @@ creates the file rather than receiving it.
 
 The permissions on that file are not evaluated here. The plugin can set a POSIX
 mode on a file it creates; what a Windows server gives it by inheritance was not
-measured, and no claim about it is made in either direction. Issue #28 owns the
-key's storage and permissions and is where that measurement belongs, because the
-key is the part where getting it wrong is worst.
+measured, and no claim about it is made in either direction. `docs/share-key.md`
+is where the key's own storage and permissions are written down, and the Windows
+measurement is still owed there.
 
 How the file is written so that a crash or a concurrent request cannot leave it
 half-written is #35, and this choice does not answer it. It only makes it
 answerable, which the configuration file did not.
 
-The format and the schema version in the file are #37. Nothing here fixes either.
+The format and the two version numbers in the file are #37, and the section below
+is where they are written down. This choice fixed neither.
+
+## The format, and the two numbers in it
+
+The file is one JSON object. It carries the layout version first and the records
+after it.
+
+| What                    | Where                                   | What it says                               |
+| ----------------------- | --------------------------------------- | ------------------------------------------ |
+| The layout of the file  | `StoreVersion` at the top of the object | The shape of the file around the records.  |
+| The shape of one record | `SchemaVersion` on each record          | Which fields that record was written with. |
+
+Two numbers rather than one, because they answer different questions. A directory
+of records each stamped with their own version says nothing about whether the file
+holding them moved, and a file stamped once says nothing about a record inside it
+that a newer plugin wrote. Both are checked on load and each has its own refusal.
+
+The layout before the stamp was a bare JSON array of records. It is read as store
+version 0 and migrated forward rather than refused, because a store written by a
+version that predates the stamp is an ordinary upgrade and refusing it would lose
+every share an early operator made. A JSON object with no `StoreVersion` is a
+different thing and is refused: it is a file this code cannot place, and placing it
+by assumption is the guess the refusal exists against.
+
+Older is migrated, newer is refused. A store or a record from a version this code
+does not understand is a downgrade, and the refusal names the number found and the
+number understood, because an operator who has rolled a plugin back needs to know
+which way to go. Reading it as far as it happens to parse would let a share resolve
+under rules nobody in this version wrote.
+
+The migration is in memory. A read returns records in the current shape and does
+not rewrite the file, so a plugin that starts, reads and is stopped again leaves
+the store exactly as it found it, and the new shape lands on the next write. The
+cost of that is a store that is read many times and written never stays in the old
+layout, which is the state the migration is written to keep readable anyway.
+
+What a record's upgrade does is copy it and stamp it. Every field a later schema
+added has a documented reading for its absence, and that reading is what the
+property already does when nothing sets it, so there is no computation to get
+wrong. The one hazard is a field added to the record and forgotten in the copy,
+which would silently drop it from every migrated record, and what refuses that is a
+test comparing a migrated record against its source field by field rather than a
+list in this document.
 
 What happens to that folder when the plugin is disabled, upgraded or uninstalled
 is #38. The base class has a hook to reason about:
@@ -134,8 +177,29 @@ measured here.
 What happens when the folder comes back from a backup while the key has moved on
 is #40.
 
-The last clause of #34, an interface narrow enough that this decision could be
-revisited without touching the callers, is not in this document and not in the
-tree. The interface is over a record whose fields are #33's, and writing those
-fields here would land another issue's deliverable under this number. So #34 stays
-open on that clause, with this document as its first two.
+## The choice is not welded to the callers
+
+`IShareStore` is what a caller sees, and a file is one answer to it. Two members:
+read everything, and change what is there without another writer landing in the
+middle. Nothing on it names a file, a path, JSON or a rename.
+
+Narrow on purpose. A store offering a query language, a delete or a way to write
+one record is a store that a second implementation has to reproduce feature for
+feature before anything compiles, and a decision that expensive to revisit is a
+decision nobody revisits. The ceiling and the sweep are written over the interface
+rather than inside the file store, in `ShareStoreExtensions.AddAsync`, so a second
+implementation inherits the bound instead of restating a copy of it that can drift.
+
+What proves this is not the interface. It is a second implementation that keeps
+records in a list and shares no line of storage code with the file, put through
+the same calls, required to answer the same way, and held to the same ceiling and
+the same sweep. It is in `ShareStoreInterfaceTests` and it is not a store anybody
+should ship: it holds nothing across a restart, which is exactly the point, since
+every property the callers keep against it is a property that came from the
+callers rather than from the file.
+
+The bound on that claim, stated rather than left to be assumed. It says the
+callers do not depend on storage. It does not say a second implementation would be
+correct: durability across a crash, and a write two requests cannot interleave,
+are properties of an implementation, and they are what the rest of this document
+and `ShareStoreTests` are about.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
@@ -40,16 +41,34 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// </remarks>
 public sealed class ShareRecord
 {
+    private readonly IReadOnlyList<Guid> _pluginCreatedUserIds = Array.Empty<Guid>();
+
     /// <summary>
     /// The schema version a record written by this code carries.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// It is here so that the first release already stamps its records, rather
     /// than a later release meeting a directory of records that say nothing about
     /// what wrote them. What reads an older number, and what refuses a newer one,
     /// is #37.
+    /// </para>
+    /// <para>
+    /// Version 2 added <see cref="PluginCreatedUserIds"/> (#144). A record at
+    /// version 1 carries no provenance for its invited accounts at all, and the
+    /// only safe reading of that silence is that this plugin created none of
+    /// them, because the other reading hands an account somebody else made to
+    /// whatever eventually deletes one.
+    /// </para>
+    /// <para>
+    /// Version 3 added <see cref="RevokedByUserId"/> (#46). A record at version 2
+    /// that was revoked says when and why and not by whom, and the reading of that
+    /// silence is that the revoker was not written down rather than that nobody
+    /// revoked it. <see cref="RevokedAt"/> is what says whether a share was
+    /// revoked, in both shapes, so nothing about the decision moved.
+    /// </para>
     /// </remarks>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>
     /// Gets the version of this record's shape.
@@ -93,6 +112,40 @@ public sealed class ShareRecord
     /// consulting anything the request supplied.
     /// </remarks>
     public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
+
+    /// <summary>
+    /// Gets the invited accounts this plugin brought into existence itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A subset of <see cref="InvitedUserIds"/>, and the field that separates an
+    /// account this plugin made from an account it was merely pointed at. Without
+    /// it the list of invited accounts is a list of identifiers with nothing
+    /// beside them, and anything that removes an account has no way to tell the
+    /// two apart. The consequence is not an untidy store: it is this plugin
+    /// deleting a person's real account because an identifier reached the list
+    /// through a store carried forward from before the decision, a record edited
+    /// by hand, or a route that let an operator invite an account of their own.
+    /// </para>
+    /// <para>
+    /// Not <c>required</c>, and empty when it is not written. That is what makes
+    /// the silence of a version 1 record readable: absent means this plugin
+    /// created none of these accounts, which is the reading that removes nothing
+    /// rather than the reading that removes everything. An explicit null in the
+    /// serialised form is taken the same way, because a file that has been edited
+    /// is exactly the case this field exists for.
+    /// </para>
+    /// <para>
+    /// It is provenance and not permission. What may then be done with an account
+    /// this plugin created, and when the last record naming it releases it, is
+    /// #51 and #58; this record answers only which accounts it can claim.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Guid> PluginCreatedUserIds
+    {
+        get => _pluginCreatedUserIds;
+        init => _pluginCreatedUserIds = value ?? Array.Empty<Guid>();
+    }
 
     /// <summary>
     /// Gets the account that made this share.
@@ -149,6 +202,29 @@ public sealed class ShareRecord
     public string? RevocationReason { get; init; }
 
     /// <summary>
+    /// Gets the account that revoked this share, or null where no revoker was
+    /// written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null is two different situations and neither is "still live", which is
+    /// <see cref="RevokedAt"/>'s question and not this one's. A live share has no
+    /// revoker because nothing revoked it. A record written before version 3 has
+    /// none because the field did not exist when it was revoked. Reading this
+    /// field to decide whether a share works would answer the same for both and
+    /// for a third case as well, which is why the decision reads
+    /// <see cref="RevokedAt"/> instead.
+    /// </para>
+    /// <para>
+    /// It is here because an operator asking why a link stopped working needs the
+    /// person as well as the reason, and by the time they ask, the person who
+    /// pressed it has often forgotten. Nothing is derived from it and no
+    /// permission depends on it.
+    /// </para>
+    /// </remarks>
+    public Guid? RevokedByUserId { get; init; }
+
+    /// <summary>
     /// Gets the ceiling on the bitrate the guest may stream this item at, in bits
     /// per second, or null for no ceiling of this share's own.
     /// </summary>
@@ -172,4 +248,81 @@ public sealed class ShareRecord
     /// during support, which is the same reason the store is a file at all.
     /// </remarks>
     public required string TokenHash { get; init; }
+
+    /// <summary>
+    /// Returns this record in the current schema, for a record read at an older
+    /// one.
+    /// </summary>
+    /// <param name="record">The record as it was read.</param>
+    /// <returns>A record carrying the same facts, stamped with <see cref="CurrentSchemaVersion"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Every field a later schema added has a documented reading for its absence,
+    /// and that reading is what the property does when nothing sets it, so the
+    /// upgrade is a copy rather than a computation. <see cref="PluginCreatedUserIds"/>
+    /// is one: absent means this plugin created none of the invited accounts,
+    /// which is the reading that deletes nothing. <see cref="RevokedByUserId"/> is
+    /// the other: absent means the revoker was not written down, which changes
+    /// nothing about whether the share resolves.
+    /// </para>
+    /// <para>
+    /// It is here rather than in the store because it is a fact about this shape.
+    /// The hazard it carries is a field added to this type and forgotten in this
+    /// copy, which would silently drop that field from every migrated record, so
+    /// the suite compares a migrated record against its source field by field
+    /// rather than trusting the list below to stay complete.
+    /// </para>
+    /// </remarks>
+    public static ShareRecord Upgraded(ShareRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        return new ShareRecord
+        {
+            SchemaVersion = CurrentSchemaVersion,
+            Id = record.Id,
+            ItemId = record.ItemId,
+            InvitedUserIds = record.InvitedUserIds,
+            PluginCreatedUserIds = record.PluginCreatedUserIds,
+            CreatedByUserId = record.CreatedByUserId,
+            CreatedAt = record.CreatedAt,
+            ExpiresAt = record.ExpiresAt,
+            RevokedAt = record.RevokedAt,
+            RevocationReason = record.RevocationReason,
+            RevokedByUserId = record.RevokedByUserId,
+            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+            TokenHash = record.TokenHash,
+        };
+    }
+
+    /// <summary>
+    /// Answers whether this record claims that the plugin created the account
+    /// named, which is the question anything removing an account has to ask
+    /// first.
+    /// </summary>
+    /// <param name="userId">The account being considered for removal.</param>
+    /// <returns>
+    /// <c>true</c> only where this record both invites the account and claims to
+    /// have created it.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Both halves are load bearing, and the second is the one that is easy to
+    /// leave out. An identifier that appears only in
+    /// <see cref="PluginCreatedUserIds"/> is a claim about an account this share
+    /// is not for, and a record can arrive in that shape from a file somebody
+    /// edited. Reading the claim on its own would let such a file nominate any
+    /// account on the server for deletion; requiring the invitation as well
+    /// bounds the damage of an edited record to the accounts the share already
+    /// names.
+    /// </para>
+    /// <para>
+    /// There is nothing in this tree that deletes an account yet. This is the
+    /// routine such a call has to go through when it is written, put here rather
+    /// than beside it so that the answer comes from the record instead of from
+    /// whatever the caller happened to have to hand.
+    /// </para>
+    /// </remarks>
+    public bool WasCreatedByThisPlugin(Guid userId) =>
+        InvitedUserIds.Contains(userId) && PluginCreatedUserIds.Contains(userId);
 }

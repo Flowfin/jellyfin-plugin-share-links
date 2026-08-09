@@ -53,11 +53,13 @@ public class ShareRecordTests
         Id = new Guid("55555555-5555-5555-5555-555555555555"),
         ItemId = ItemId,
         InvitedUserIds = [FirstGuest, SecondGuest],
+        PluginCreatedUserIds = [SecondGuest],
         CreatedByUserId = Operator,
         CreatedAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.FromHours(2)),
         ExpiresAt = new DateTimeOffset(2026, 1, 9, 3, 4, 5, TimeSpan.FromHours(2)),
         RevokedAt = new DateTimeOffset(2026, 1, 3, 6, 7, 8, TimeSpan.FromHours(-5)),
         RevocationReason = "the guest asked for it to be taken down",
+        RevokedByUserId = Operator,
         MaxBitrateBitsPerSecond = 4_000_000,
         TokenHash = StandInHashOf(token),
     };
@@ -137,10 +139,13 @@ public class ShareRecordTests
     {
         var token = ShareTokens.Mint();
 
-        foreach (var record in new[] { Everything(token), OnlyWhatIsRequired(token) })
-        {
-            var written = JsonSerializer.Serialize(record);
+        // The loop is about the serialised documents rather than the records, so
+        // the serialisation is in the sequence it iterates and not in its body.
+        var documents = new[] { Everything(token), OnlyWhatIsRequired(token) }
+            .Select(record => JsonSerializer.Serialize(record));
 
+        foreach (var written in documents)
+        {
             Assert.DoesNotContain(token, written, StringComparison.Ordinal);
 
             // The assertion above is about a document, so the document has to be
