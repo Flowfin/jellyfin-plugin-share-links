@@ -64,7 +64,8 @@ Information, the level an operator reads without asking for it:
   fixed code rather than a sentence assembled from the request.
 
 The invited accounts are not named in any of those lines. The association between
-a person and a title is what the administrator view holds and what #31 accounts
+a person and a title is what the administrator view holds and what
+`docs/personal-data.md` accounts
 for; a log line repeating it makes a second copy of it with a different lifetime
 and a different reader.
 
