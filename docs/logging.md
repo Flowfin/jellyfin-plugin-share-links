@@ -117,7 +117,8 @@ person, in review.
 ## What this does not settle
 
 The server's own activity log, and whether a guest's playback appears in it, is
-#59. This document is about the lines this plugin writes.
+`docs/playback-visibility.md`. This document is about the lines this plugin
+writes.
 
 Log files belong to the server. Their location, their rotation and how long they
 survive are the server's, and this plugin deletes none of them, so the retention

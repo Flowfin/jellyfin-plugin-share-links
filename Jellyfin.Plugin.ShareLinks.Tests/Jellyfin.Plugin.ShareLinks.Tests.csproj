@@ -33,6 +33,7 @@
     <None Include="..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\threat-model.md" Link="threat-model.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\configuration.md" Link="configuration.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\playback-visibility.md" Link="playback-visibility.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
