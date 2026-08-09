@@ -33,6 +33,7 @@ share one.
 | `ExpiresAt`               | No on its own. It is what starts the retention clock.                               | With the record.                                        |
 | `RevokedAt`               | No on its own. Beside the invited accounts it is when their access was withdrawn.   | With the record.                                        |
 | `RevocationReason`        | Possibly. Free text an operator writes, which can name anybody they choose to name. | With the record.                                        |
+| `RevokedByUserId`         | Yes. The operator who revoked the share.                                            | With the record.                                        |
 | `MaxBitrateBitsPerSecond` | No. A ceiling on a stream.                                                          | With the record.                                        |
 | `TokenHash`               | No. A keyed hash of a value that was never about a person.                          | With the record.                                        |
 
@@ -70,10 +71,10 @@ own, so there is one answer in this tree and not two.
 
 What that means per case.
 
-Revoked. The record stays, with `RevokedAt` and `RevocationReason` set. Revocation
-is immediate for access and is not a deletion: an operator who revokes a share
-still needs to be able to say what they revoked and when. The retention clock runs
-from the end of the share either way.
+Revoked. The record stays, with `RevokedAt`, `RevocationReason` and
+`RevokedByUserId` set. Revocation is immediate for access and is not a deletion: an
+operator who revokes a share still needs to be able to say what they revoked, when,
+and who pressed it. The retention clock runs from the end of the share either way.
 
 Expired. The record stays until the sweep deletes it, ninety days after it ended.
 Expiry is an instant rather than an event, which is `docs/expiry.md`, so nothing

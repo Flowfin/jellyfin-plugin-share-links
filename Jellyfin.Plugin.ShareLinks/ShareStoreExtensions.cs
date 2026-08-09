@@ -85,4 +85,118 @@ public static class ShareStoreExtensions
             },
             cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Revokes a share, immediately, repeatably, and without deleting anything (#46).
+    /// </summary>
+    /// <param name="store">The store holding the share.</param>
+    /// <param name="shareId">The share to revoke.</param>
+    /// <param name="revokedByUserId">The account pressing revoke.</param>
+    /// <param name="revokedAt">The instant the revocation happens at, which is also the instant the share's state is judged against.</param>
+    /// <param name="reason">Free text for another operator to read later, or <c>null</c>.</param>
+    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <returns>The record as it stands after the call, or <c>null</c> where the store holds no share with that identifier.</returns>
+    /// <remarks>
+    /// <para>
+    /// Immediate means the record is changed rather than queued. There is no
+    /// sweep here and none is needed: the resolution decision reads
+    /// <see cref="ShareRecord.RevokedAt"/> on every request, so the next request
+    /// after this call is refused by the record it reads. Deleting the record
+    /// would refuse the same request and lose the reason an operator wrote and
+    /// the fact that anything was ever shared, which is the audit trail this
+    /// keeps.
+    /// </para>
+    /// <para>
+    /// Repeatable means the second call succeeds and changes nothing. It does not
+    /// mean the second call rewrites the same values: a revocation already
+    /// recorded keeps its instant, its reason and its revoker, because the first
+    /// press is the one that stopped the share and the second press did not stop
+    /// anything. A share that has already expired is the same case for the same
+    /// reason, and it is what this issue asks for in those words.
+    /// </para>
+    /// <para>
+    /// The record is replaced rather than mutated. Every member of
+    /// <see cref="ShareRecord"/> is init-only, so a revocation is a new record
+    /// written over the old one, which is what stops a request that is holding
+    /// the old object from seeing a field change under it mid-decision.
+    /// </para>
+    /// <para>
+    /// The read and the write are one act, because they are done inside
+    /// <see cref="IShareStore.MutateAsync"/>. Two administrators revoking two
+    /// shares in the same moment cannot lose each other's work, which is the
+    /// property a read followed by a plain write does not have.
+    /// </para>
+    /// </remarks>
+    public static async Task<ShareRecord?> RevokeAsync(
+        this IShareStore store,
+        Guid shareId,
+        Guid revokedByUserId,
+        DateTimeOffset revokedAt,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+
+        ShareRecord? outcome = null;
+
+        await store.MutateAsync(
+            current =>
+            {
+                var next = new List<ShareRecord>(current.Count);
+                for (var index = 0; index < current.Count; index++)
+                {
+                    var record = current[index];
+                    if (record.Id != shareId)
+                    {
+                        next.Add(record);
+                        continue;
+                    }
+
+                    if (record.RevokedAt is not null || !ShareBounds.IsLive(record, revokedAt))
+                    {
+                        // Already stopped, by revocation or by its own instant.
+                        // Nothing to change, and the call still succeeds.
+                        outcome = record;
+                        next.Add(record);
+                        continue;
+                    }
+
+                    outcome = Revoked(record, revokedByUserId, revokedAt, reason);
+                    next.Add(outcome);
+                }
+
+                return next;
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return outcome;
+    }
+
+    // The same record with the revocation written on it. Field by field rather
+    // than by a copy helper, for the reason ShareRecord.Upgraded gives about
+    // itself: a field added to the type and forgotten here would be dropped from
+    // every record anybody revokes, and the suite compares the two sides rather
+    // than trusting this list.
+    private static ShareRecord Revoked(ShareRecord record, Guid revokedByUserId, DateTimeOffset revokedAt, string? reason) => new ShareRecord
+    {
+        // Stamped current rather than carried over. The revoker is a field the
+        // current shape has, so a record written with one and stamped with an
+        // older number would claim a shape it does not have. A store that
+        // migrates on read hands this method a current record anyway; a store
+        // that does not is where the difference would show, and there it is this
+        // line that keeps the number and the fields agreeing.
+        SchemaVersion = ShareRecord.CurrentSchemaVersion,
+        Id = record.Id,
+        ItemId = record.ItemId,
+        InvitedUserIds = record.InvitedUserIds,
+        PluginCreatedUserIds = record.PluginCreatedUserIds,
+        CreatedByUserId = record.CreatedByUserId,
+        CreatedAt = record.CreatedAt,
+        ExpiresAt = record.ExpiresAt,
+        RevokedAt = revokedAt,
+        RevocationReason = reason,
+        RevokedByUserId = revokedByUserId,
+        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+        TokenHash = record.TokenHash,
+    };
 }
