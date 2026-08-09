@@ -103,7 +103,7 @@ removing the account it belongs to, which `docs/guest-accounts.md` decides for a
 account this plugin created.
 
 What this plugin holds about a person is a different list and a different retention
-answer, and it is #31 rather than this page. Nothing here sets a retention length,
+answer, and it is `docs/personal-data.md` rather than this page. Nothing here sets a retention length,
 because writing a second number next to that one would be two answers in the tree.
 
 ## What is checked, and what is not

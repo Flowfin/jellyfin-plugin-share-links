@@ -160,7 +160,8 @@ that moment, which is the property revocation actually needs.
 Deletion follows the record. When the last record naming the account is deleted
 under the retention rule, the account goes with it. The retention length is
 ninety days by decision 8 of #94 and is a setting rather than a constant, which
-is #29, and what a record holds about a person until then is #31.
+is #29, and what a record holds about a person until then is
+`docs/personal-data.md`.
 
 The last live share matters and not the first. An account named by two shares
 stays live while either does, or revoking one share would quietly break the
