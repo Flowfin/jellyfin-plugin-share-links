@@ -1,0 +1,61 @@
+namespace Jellyfin.Plugin.ShareLinks;
+
+/// <summary>
+/// Why a share was not resolved (#48).
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is for the server's own use and never for the caller. A guest who is told
+/// which of these happened can tell a token that names no share from a token that
+/// names one they are not invited to, and telling those two apart is how a person
+/// with a list of guesses learns which guesses were close. Every one of these is
+/// the same answer on the wire, which is #26, and the reason survives only where
+/// the operator can see it.
+/// </para>
+/// <para>
+/// The order they are declared in is the order they are decided in, and
+/// <see cref="ShareResolution"/> is where that order is argued.
+/// </para>
+/// </remarks>
+public enum ShareRefusal
+{
+    /// <summary>
+    /// Nothing was refused. The share resolved.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The plugin is not active, so it answers for nothing.
+    /// </summary>
+    PluginNotActive = 1,
+
+    /// <summary>
+    /// The request carried no token.
+    /// </summary>
+    NoTokenPresented = 2,
+
+    /// <summary>
+    /// No record in the store answers for the presented token.
+    /// </summary>
+    NoSuchShare = 3,
+
+    /// <summary>
+    /// The share was revoked.
+    /// </summary>
+    Revoked = 4,
+
+    /// <summary>
+    /// The share has reached or passed the instant it stops working at.
+    /// </summary>
+    Expired = 5,
+
+    /// <summary>
+    /// The caller is not somebody the server has identified.
+    /// </summary>
+    CallerNotSignedIn = 6,
+
+    /// <summary>
+    /// The caller is signed in and is not one of the accounts the share names.
+    /// </summary>
+    CallerNotInvited = 7,
+}
