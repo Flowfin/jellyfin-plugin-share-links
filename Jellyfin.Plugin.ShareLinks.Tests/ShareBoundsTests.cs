@@ -110,7 +110,7 @@ public sealed class ShareBoundsTests : IDisposable
         // operator raises once and finds back at its default after a restart,
         // which is a refusal they cannot explain.
         var serialiser = new XmlSerializer(typeof(PluginConfiguration));
-        var written = new StringWriter(CultureInfo.InvariantCulture);
+        using var written = new StringWriter(CultureInfo.InvariantCulture);
         serialiser.Serialize(
             written,
             new PluginConfiguration

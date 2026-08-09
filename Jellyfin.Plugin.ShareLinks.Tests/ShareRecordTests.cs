@@ -139,10 +139,13 @@ public class ShareRecordTests
     {
         var token = ShareTokens.Mint();
 
-        foreach (var record in new[] { Everything(token), OnlyWhatIsRequired(token) })
-        {
-            var written = JsonSerializer.Serialize(record);
+        // The loop is about the serialised documents rather than the records, so
+        // the serialisation is in the sequence it iterates and not in its body.
+        var documents = new[] { Everything(token), OnlyWhatIsRequired(token) }
+            .Select(record => JsonSerializer.Serialize(record));
 
+        foreach (var written in documents)
+        {
             Assert.DoesNotContain(token, written, StringComparison.Ordinal);
 
             // The assertion above is about a document, so the document has to be

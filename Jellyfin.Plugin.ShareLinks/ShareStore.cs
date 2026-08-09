@@ -428,6 +428,12 @@ public class ShareStore : IShareStore, IDisposable
         }
         catch (UnauthorizedAccessException)
         {
+            // The clause above, for the case where the file is there and this
+            // process may not remove it: a read-only attribute, or a directory
+            // whose permissions changed under a running server. Left behind
+            // rather than thrown for the same reason, because the destination is
+            // still what it was and the caller's own failure is the one worth
+            // reporting.
         }
     }
 
