@@ -177,8 +177,29 @@ measured here.
 What happens when the folder comes back from a backup while the key has moved on
 is #40.
 
-The last clause of #34, an interface narrow enough that this decision could be
-revisited without touching the callers, is not in this document and not in the
-tree. The interface is over a record whose fields are #33's, and writing those
-fields here would land another issue's deliverable under this number. So #34 stays
-open on that clause, with this document as its first two.
+## The choice is not welded to the callers
+
+`IShareStore` is what a caller sees, and a file is one answer to it. Two members:
+read everything, and change what is there without another writer landing in the
+middle. Nothing on it names a file, a path, JSON or a rename.
+
+Narrow on purpose. A store offering a query language, a delete or a way to write
+one record is a store that a second implementation has to reproduce feature for
+feature before anything compiles, and a decision that expensive to revisit is a
+decision nobody revisits. The ceiling and the sweep are written over the interface
+rather than inside the file store, in `ShareStoreExtensions.AddAsync`, so a second
+implementation inherits the bound instead of restating a copy of it that can drift.
+
+What proves this is not the interface. It is a second implementation that keeps
+records in a list and shares no line of storage code with the file, put through
+the same calls, required to answer the same way, and held to the same ceiling and
+the same sweep. It is in `ShareStoreInterfaceTests` and it is not a store anybody
+should ship: it holds nothing across a restart, which is exactly the point, since
+every property the callers keep against it is a property that came from the
+callers rather than from the file.
+
+The bound on that claim, stated rather than left to be assumed. It says the
+callers do not depend on storage. It does not say a second implementation would be
+correct: durability across a crash, and a write two requests cannot interleave,
+are properties of an implementation, and they are what the rest of this document
+and `ShareStoreTests` are about.
