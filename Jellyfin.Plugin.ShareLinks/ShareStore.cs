@@ -61,14 +61,60 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// nothing here detects it. A filesystem that reorders a rename ahead of the data
 /// it renames can still present a truncated file after a power cut, which is why
 /// the flush is a flush to the device and not to the operating system's cache,
-/// and beyond that it is the filesystem's guarantee rather than this code's. And
-/// the format written here is a plain array: the schema version each record
-/// carries is #33's, and what reads an older store or refuses a newer one is #37,
-/// which this type takes no position on beyond needing bytes to write.
+/// and beyond that it is the filesystem's guarantee rather than this code's.
+/// </para>
+/// <para>
+/// The file carries a version of its own, separate from the schema version on each
+/// record (#37). Two numbers rather than one, because they answer different
+/// questions: <see cref="CurrentStoreVersion"/> is the shape of the file around the
+/// records, and <see cref="ShareRecord.CurrentSchemaVersion"/> is the shape of a
+/// record inside it. A directory of records each stamped with their own version
+/// still says nothing about whether the layout holding them moved.
+/// </para>
+/// <para>
+/// Older is migrated on load and newer is refused. The migration is in memory: a
+/// read returns records in the current shape and does not rewrite the file, so a
+/// plugin that starts, reads and is stopped again leaves the operator's store
+/// exactly as it found it, and the new shape lands on the next write. The refusal
+/// names both the number found and the number understood, because an operator who
+/// has rolled a plugin back needs to know which way to go, and it is a refusal
+/// rather than a best effort because guessing at a field a newer version added is
+/// how a share resolves under rules nobody wrote. <c>docs/share-store.md</c> is
+/// where the layout and both numbers are written down.
 /// </para>
 /// </remarks>
 public class ShareStore : IDisposable
 {
+    /// <summary>
+    /// The version of the file layout this code writes and understands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Version 1 is an object carrying this number and the records. The layout
+    /// before it was the bare array of records that shipped without a stamp, which
+    /// is read as version 0 and migrated forward rather than refused: a store
+    /// written by a version that predates the stamp is an ordinary upgrade, and
+    /// refusing it would lose every share an early operator made.
+    /// </para>
+    /// <para>
+    /// Nothing derives this number from the records. A version the file states is
+    /// the only thing a reader can check before it has understood the file, which
+    /// is the whole point of the stamp being outside the records rather than
+    /// counted across them.
+    /// </para>
+    /// </remarks>
+    public const int CurrentStoreVersion = 1;
+
+    /// <summary>
+    /// The version a store written before the layout carried a stamp is read as.
+    /// </summary>
+    /// <remarks>
+    /// It is a real version rather than a marker for absence, so that the migration
+    /// is one comparison against a number instead of a special case that has to be
+    /// remembered at every reader.
+    /// </remarks>
+    public const int UnstampedStoreVersion = 0;
+
     private readonly SemaphoreSlim _writers = new SemaphoreSlim(1, 1);
     private readonly string _path;
     private bool _disposed;
@@ -148,13 +194,8 @@ public class ShareStore : IDisposable
         {
             try
             {
-                var records = await JsonSerializer.DeserializeAsync<List<ShareRecord>>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
-                if (records is null)
-                {
-                    throw new ShareStoreUnreadableException(_path, "the file holds a JSON null rather than a list of records");
-                }
-
-                return new ReadOnlyCollection<ShareRecord>(records);
+                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                return new ReadOnlyCollection<ShareRecord>(Migrate(ReadLayout(document.RootElement)));
             }
             catch (JsonException error)
             {
@@ -211,7 +252,13 @@ public class ShareStore : IDisposable
     /// </remarks>
     protected virtual async Task WriteRecordsAsync(Stream destination, IReadOnlyList<ShareRecord> records, CancellationToken cancellationToken)
     {
-        await JsonSerializer.SerializeAsync(destination, records, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        var file = new StoreFile
+        {
+            StoreVersion = CurrentStoreVersion,
+            Shares = records as List<ShareRecord> ?? new List<ShareRecord>(records),
+        };
+
+        await JsonSerializer.SerializeAsync(destination, file, SerializerOptions, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -231,6 +278,74 @@ public class ShareStore : IDisposable
         }
 
         _disposed = true;
+    }
+
+    // Which layout the file is in, and the records out of it. The version is read
+    // before anything else is believed about the bytes, because a file from a
+    // version this code does not understand must be refused rather than read as far
+    // as it happens to parse.
+    private List<ShareRecord> ReadLayout(JsonElement root)
+    {
+        switch (root.ValueKind)
+        {
+            case JsonValueKind.Array:
+                // The layout that shipped before the stamp. Version 0, migrated.
+                return root.Deserialize<List<ShareRecord>>(SerializerOptions)
+                    ?? throw new ShareStoreUnreadableException(_path, "the file holds a JSON null rather than a list of records");
+
+            case JsonValueKind.Object:
+                var file = root.Deserialize<StoreFile>(SerializerOptions)
+                    ?? throw new ShareStoreUnreadableException(_path, "the file holds a JSON null rather than a store");
+
+                if (file.StoreVersion == UnstampedStoreVersion)
+                {
+                    // An object with no version is not the unstamped layout, which
+                    // is an array. It is a file this code cannot place, and placing
+                    // it by assumption is the guess this refusal exists against.
+                    throw new ShareStoreUnreadableException(
+                        _path,
+                        string.Create(CultureInfo.InvariantCulture, $"the file states no store version, and this plugin writes version {CurrentStoreVersion}"));
+                }
+
+                if (file.StoreVersion > CurrentStoreVersion)
+                {
+                    throw new ShareStoreUnreadableException(
+                        _path,
+                        string.Create(CultureInfo.InvariantCulture, $"the store is at version {file.StoreVersion} and this plugin understands version {CurrentStoreVersion}, so it was written by a newer version of this plugin"));
+                }
+
+                return file.Shares ?? new List<ShareRecord>();
+
+            case JsonValueKind.Null:
+                throw new ShareStoreUnreadableException(_path, "the file holds a JSON null rather than a list of records");
+
+            default:
+                throw new ShareStoreUnreadableException(
+                    _path,
+                    string.Create(CultureInfo.InvariantCulture, $"the file holds a JSON {root.ValueKind} rather than a store"));
+        }
+    }
+
+    // Every record in the shape this code understands, or a refusal. The store's
+    // version says nothing about the records inside it: a file at layout 1 can hold
+    // a record from a newer plugin, and that record is the same downgrade as a newer
+    // file.
+    private List<ShareRecord> Migrate(List<ShareRecord> records)
+    {
+        var migrated = new List<ShareRecord>(records.Count);
+        foreach (var record in records)
+        {
+            if (record.SchemaVersion > ShareRecord.CurrentSchemaVersion)
+            {
+                throw new ShareStoreUnreadableException(
+                    _path,
+                    string.Create(CultureInfo.InvariantCulture, $"a record is at schema version {record.SchemaVersion} and this plugin understands version {ShareRecord.CurrentSchemaVersion}, so it was written by a newer version of this plugin"));
+            }
+
+            migrated.Add(record.SchemaVersion == ShareRecord.CurrentSchemaVersion ? record : ShareRecord.Upgraded(record));
+        }
+
+        return migrated;
     }
 
     private async Task WriteAsync(IReadOnlyList<ShareRecord> records, CancellationToken cancellationToken)
@@ -308,5 +423,20 @@ public class ShareStore : IDisposable
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    /// <summary>
+    /// The file as it is written: the layout version, then the records.
+    /// </summary>
+    /// <remarks>
+    /// The version is first in the file because it is first in the reading. A
+    /// reader that has to scan past every record to learn whether it understands
+    /// them has already read them.
+    /// </remarks>
+    private sealed class StoreFile
+    {
+        public int StoreVersion { get; set; }
+
+        public List<ShareRecord>? Shares { get; set; }
     }
 }

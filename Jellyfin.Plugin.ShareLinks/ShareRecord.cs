@@ -220,6 +220,49 @@ public sealed class ShareRecord
     public required string TokenHash { get; init; }
 
     /// <summary>
+    /// Returns this record in the current schema, for a record read at an older
+    /// one.
+    /// </summary>
+    /// <param name="record">The record as it was read.</param>
+    /// <returns>A record carrying the same facts, stamped with <see cref="CurrentSchemaVersion"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Every field a later schema added has a documented reading for its absence,
+    /// and that reading is what the property does when nothing sets it, so the
+    /// upgrade is a copy rather than a computation. <see cref="PluginCreatedUserIds"/>
+    /// is the whole of it today: absent means this plugin created none of the
+    /// invited accounts, which is the reading that deletes nothing.
+    /// </para>
+    /// <para>
+    /// It is here rather than in the store because it is a fact about this shape.
+    /// The hazard it carries is a field added to this type and forgotten in this
+    /// copy, which would silently drop that field from every migrated record, so
+    /// the suite compares a migrated record against its source field by field
+    /// rather than trusting the list below to stay complete.
+    /// </para>
+    /// </remarks>
+    public static ShareRecord Upgraded(ShareRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        return new ShareRecord
+        {
+            SchemaVersion = CurrentSchemaVersion,
+            Id = record.Id,
+            ItemId = record.ItemId,
+            InvitedUserIds = record.InvitedUserIds,
+            PluginCreatedUserIds = record.PluginCreatedUserIds,
+            CreatedByUserId = record.CreatedByUserId,
+            CreatedAt = record.CreatedAt,
+            ExpiresAt = record.ExpiresAt,
+            RevokedAt = record.RevokedAt,
+            RevocationReason = record.RevocationReason,
+            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+            TokenHash = record.TokenHash,
+        };
+    }
+
+    /// <summary>
     /// Answers whether this record claims that the plugin created the account
     /// named, which is the question anything removing an account has to ask
     /// first.

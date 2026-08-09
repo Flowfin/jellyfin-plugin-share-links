@@ -118,7 +118,50 @@ How the file is written so that a crash or a concurrent request cannot leave it
 half-written is #35, and this choice does not answer it. It only makes it
 answerable, which the configuration file did not.
 
-The format and the schema version in the file are #37. Nothing here fixes either.
+The format and the two version numbers in the file are #37, and the section below
+is where they are written down. This choice fixed neither.
+
+## The format, and the two numbers in it
+
+The file is one JSON object. It carries the layout version first and the records
+after it.
+
+| What                    | Where                                   | What it says                               |
+| ----------------------- | --------------------------------------- | ------------------------------------------ |
+| The layout of the file  | `StoreVersion` at the top of the object | The shape of the file around the records.  |
+| The shape of one record | `SchemaVersion` on each record          | Which fields that record was written with. |
+
+Two numbers rather than one, because they answer different questions. A directory
+of records each stamped with their own version says nothing about whether the file
+holding them moved, and a file stamped once says nothing about a record inside it
+that a newer plugin wrote. Both are checked on load and each has its own refusal.
+
+The layout before the stamp was a bare JSON array of records. It is read as store
+version 0 and migrated forward rather than refused, because a store written by a
+version that predates the stamp is an ordinary upgrade and refusing it would lose
+every share an early operator made. A JSON object with no `StoreVersion` is a
+different thing and is refused: it is a file this code cannot place, and placing it
+by assumption is the guess the refusal exists against.
+
+Older is migrated, newer is refused. A store or a record from a version this code
+does not understand is a downgrade, and the refusal names the number found and the
+number understood, because an operator who has rolled a plugin back needs to know
+which way to go. Reading it as far as it happens to parse would let a share resolve
+under rules nobody in this version wrote.
+
+The migration is in memory. A read returns records in the current shape and does
+not rewrite the file, so a plugin that starts, reads and is stopped again leaves
+the store exactly as it found it, and the new shape lands on the next write. The
+cost of that is a store that is read many times and written never stays in the old
+layout, which is the state the migration is written to keep readable anyway.
+
+What a record's upgrade does is copy it and stamp it. Every field a later schema
+added has a documented reading for its absence, and that reading is what the
+property already does when nothing sets it, so there is no computation to get
+wrong. The one hazard is a field added to the record and forgotten in the copy,
+which would silently drop it from every migrated record, and what refuses that is a
+test comparing a migrated record against its source field by field rather than a
+list in this document.
 
 What happens to that folder when the plugin is disabled, upgraded or uninstalled
 is #38. The base class has a hook to reason about:
