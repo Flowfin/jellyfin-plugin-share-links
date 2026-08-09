@@ -59,6 +59,7 @@ public class ShareRecordTests
         ExpiresAt = new DateTimeOffset(2026, 1, 9, 3, 4, 5, TimeSpan.FromHours(2)),
         RevokedAt = new DateTimeOffset(2026, 1, 3, 6, 7, 8, TimeSpan.FromHours(-5)),
         RevocationReason = "the guest asked for it to be taken down",
+        RevokedByUserId = Operator,
         MaxBitrateBitsPerSecond = 4_000_000,
         TokenHash = StandInHashOf(token),
     };

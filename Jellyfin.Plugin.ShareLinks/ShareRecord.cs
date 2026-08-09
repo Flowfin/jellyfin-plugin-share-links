@@ -60,8 +60,15 @@ public sealed class ShareRecord
     /// them, because the other reading hands an account somebody else made to
     /// whatever eventually deletes one.
     /// </para>
+    /// <para>
+    /// Version 3 added <see cref="RevokedByUserId"/> (#46). A record at version 2
+    /// that was revoked says when and why and not by whom, and the reading of that
+    /// silence is that the revoker was not written down rather than that nobody
+    /// revoked it. <see cref="RevokedAt"/> is what says whether a share was
+    /// revoked, in both shapes, so nothing about the decision moved.
+    /// </para>
     /// </remarks>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>
     /// Gets the version of this record's shape.
@@ -195,6 +202,29 @@ public sealed class ShareRecord
     public string? RevocationReason { get; init; }
 
     /// <summary>
+    /// Gets the account that revoked this share, or null where no revoker was
+    /// written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null is two different situations and neither is "still live", which is
+    /// <see cref="RevokedAt"/>'s question and not this one's. A live share has no
+    /// revoker because nothing revoked it. A record written before version 3 has
+    /// none because the field did not exist when it was revoked. Reading this
+    /// field to decide whether a share works would answer the same for both and
+    /// for a third case as well, which is why the decision reads
+    /// <see cref="RevokedAt"/> instead.
+    /// </para>
+    /// <para>
+    /// It is here because an operator asking why a link stopped working needs the
+    /// person as well as the reason, and by the time they ask, the person who
+    /// pressed it has often forgotten. Nothing is derived from it and no
+    /// permission depends on it.
+    /// </para>
+    /// </remarks>
+    public Guid? RevokedByUserId { get; init; }
+
+    /// <summary>
     /// Gets the ceiling on the bitrate the guest may stream this item at, in bits
     /// per second, or null for no ceiling of this share's own.
     /// </summary>
@@ -230,8 +260,10 @@ public sealed class ShareRecord
     /// Every field a later schema added has a documented reading for its absence,
     /// and that reading is what the property does when nothing sets it, so the
     /// upgrade is a copy rather than a computation. <see cref="PluginCreatedUserIds"/>
-    /// is the whole of it today: absent means this plugin created none of the
-    /// invited accounts, which is the reading that deletes nothing.
+    /// is one: absent means this plugin created none of the invited accounts,
+    /// which is the reading that deletes nothing. <see cref="RevokedByUserId"/> is
+    /// the other: absent means the revoker was not written down, which changes
+    /// nothing about whether the share resolves.
     /// </para>
     /// <para>
     /// It is here rather than in the store because it is a fact about this shape.
@@ -257,6 +289,7 @@ public sealed class ShareRecord
             ExpiresAt = record.ExpiresAt,
             RevokedAt = record.RevokedAt,
             RevocationReason = record.RevocationReason,
+            RevokedByUserId = record.RevokedByUserId,
             MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
             TokenHash = record.TokenHash,
         };
