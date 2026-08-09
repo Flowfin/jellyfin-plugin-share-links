@@ -237,6 +237,65 @@ public class ShareStore : IDisposable
     }
 
     /// <summary>
+    /// Adds a record, sweeping what retention no longer keeps and refusing a create that would pass a ceiling (#29).
+    /// </summary>
+    /// <param name="record">The record to add.</param>
+    /// <param name="bounds">The ceilings and the retention rule.</param>
+    /// <param name="now">The instant the create is happening at.</param>
+    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <returns>The records that were written.</returns>
+    /// <exception cref="ShareBoundExceededException">The create would pass a ceiling. The store is left as it was, so the refusal costs nothing.</exception>
+    /// <remarks>
+    /// <para>
+    /// The check is here rather than only in the route because this is where the
+    /// file grows. A ceiling enforced at the route alone is a ceiling that holds
+    /// for the callers somebody remembered, and the failure being defended against
+    /// is a caller nobody thought about.
+    /// </para>
+    /// <para>
+    /// The sweep runs before the ceiling is counted and on the way to every write
+    /// rather than on a timer. That is deliberate and it is not free: a server
+    /// nobody creates a share on never sweeps, so retention bounds what a write
+    /// leaves behind rather than what a quiet server holds. A share cannot be
+    /// created without a sweep happening first, which is the direction that
+    /// matters for the ceiling; the timer that would make deletion prompt belongs
+    /// with the scheduled task, and there is none in this tree.
+    /// </para>
+    /// <para>
+    /// <see cref="MutateAsync"/> is the general seam and is not bounded. Nothing
+    /// refuses a future caller that appends through it, and the invariant lint
+    /// reads text rather than call graphs, so this is a rule the review holds.
+    /// </para>
+    /// </remarks>
+    public async Task<IReadOnlyList<ShareRecord>> AddAsync(
+        ShareRecord record,
+        ShareBounds bounds,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(bounds);
+
+        return await MutateAsync(
+            current =>
+            {
+                var kept = bounds.Retained(current, now);
+
+                var refusal = bounds.Refuse(kept, record, now);
+                if (refusal is not null)
+                {
+                    throw new ShareBoundExceededException(refusal);
+                }
+
+                var next = new List<ShareRecord>(kept.Count + 1);
+                next.AddRange(kept);
+                next.Add(record);
+                return next;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Writes the records to an open stream.
     /// </summary>
     /// <param name="destination">The temporary file the records are written to before it is renamed over the store.</param>
