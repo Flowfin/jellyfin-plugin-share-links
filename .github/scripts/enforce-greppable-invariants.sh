@@ -75,29 +75,38 @@ check() {
   esac
 }
 
-# The line a file carries to say that it is the routine token bytes come from.
-# The exemption is a marker rather than a path written here, because the paths
-# this lint is handed include the fixture directories, and a fixture that draws
-# bytes on purpose has to be able to say so without the lint knowing its name. A
+# The lines a file carries to say that it is the one routine for something. The
+# exemption is a marker rather than a path written here, because the paths this
+# lint is handed include the fixture directories, and a fixture that does the
+# thing on purpose has to be able to say so without the lint knowing its name. A
 # marker is also a line somebody sees in a diff, which a name buried in a script
 # is not.
-one_routine_marker='draws token bytes: this file is the one routine (#120)'
+#
+# One marker per invariant of this kind, and never one marker for all of them. A
+# shared marker would let a file that declared itself the token routine walk past
+# the count for the resolution decision as well, which is two rules held by one
+# sentence and is how a rule stops being about what it says.
+token_routine_marker='draws token bytes: this file is the one routine (#120)'
+decision_routine_marker='decides whether a share resolves: this file is the one routine (#48)'
 
 # Runs an invariant that is about how many files do a thing rather than about
 # whether any file does it, so it cannot be a pattern the way the checks above
-# are. $1 id, $2 the PCRE that finds a call into the generator, $3 the sentence a
-# reader gets when it bites.
+# are. $1 id, $2 the PCRE that finds the thing, $3 the sentence a reader gets
+# when it bites, $4 the marker a file declares itself with, $5 what a file that
+# matched is doing and $6 what a file that declared itself and matched nothing is
+# not doing. The last two are only wording, and they are parameters because a
+# refusal that names the wrong activity sends the reader to the wrong rule.
 #
-# Two arms, because a second caller arrives in two ways. It draws bytes without
-# declaring itself, or it declares itself as well and there are then two routines
-# where the rule allows one. A marker nothing draws behind is refused too, so a
-# marker cannot be laid down in one change and used in the next.
+# Two arms, because a second one arrives in two ways. A file does the thing
+# without declaring itself, or it declares itself as well and there are then two
+# routines where the rule allows one. A marker nothing does the thing behind is
+# refused too, so a marker cannot be laid down in one change and used in the next.
 #
 # What this cannot see: a call made through reflection, a helper in a compiled
 # dependency, or an alias the source gives the type. It reads the text of the
 # tree, like every other invariant here.
 check_sole_caller() {
-  local id="$1" pattern="$2" message="$3" rc=0 callers declared undeclared unused count
+  local id="$1" pattern="$2" message="$3" one_routine_marker="$4" doing="$5" doing_nothing="$6" rc=0 callers declared undeclared unused count
 
   if skipped "$id"; then
     echo "skipped   ${id} (INVARIANT_SKIP)"
@@ -128,13 +137,13 @@ check_sole_caller() {
   if [ -n "$undeclared" ] || [ -n "$unused" ] || [ "$count" -gt 1 ]; then
     echo "REFUSED   ${id}"
     if [ -n "$undeclared" ]; then
-      printf '%s\n' "$undeclared" | sed 's|^|    draws token bytes and does not declare itself: |'
+      printf '%s\n' "$undeclared" | sed "s|^|    ${doing} and does not declare itself: |"
     fi
     if [ "$count" -gt 1 ]; then
       printf '%s\n' "$declared" | sed '/^$/d' | sed 's|^|    declares itself the one routine: |'
     fi
     if [ -n "$unused" ]; then
-      printf '%s\n' "$unused" | sed 's|^|    declares itself the one routine and draws nothing: |'
+      printf '%s\n' "$unused" | sed "s|^|    declares itself the one routine and ${doing_nothing}: |"
     fi
     echo "::error::${id}: ${message}"
     violations=1
@@ -204,7 +213,32 @@ check "clock-comes-from-the-seam" \
 # rather than matches, which is why it is not written as a pattern above.
 check_sole_caller "token-bytes-come-from-one-routine" \
   '\bRandomNumberGenerator\s*\.' \
-  "the cryptographic generator is drawn from outside the one routine that owns it, or more than one file claims to be that routine. Call ShareTokens.Mint, or argue the second routine in an issue and move the marker."
+  "the cryptographic generator is drawn from outside the one routine that owns it, or more than one file claims to be that routine. Call ShareTokens.Mint, or argue the second routine in an issue and move the marker." \
+  "$token_routine_marker" \
+  "draws token bytes" \
+  "draws nothing"
+
+# Whether a presented token resolves a share is one decision, and a second copy
+# of it is not wrong on the day it is written: it agrees with the first until
+# somebody edits one of them, and what is served afterwards is a revoked share on
+# the route nobody remembered (#48). So the count is the invariant, the same
+# shape as the one above.
+#
+# What counts as deciding is manufacturing a verdict. Reading one is not
+# deciding, which is what lets every route, every test and every future caller
+# name the type freely while only one file may produce a value of it.
+#
+# The bound, stated rather than left to be found. A route that refuses a caller
+# on its own without ever producing a verdict is not seen by this, because the
+# pattern reads text and a refusal can be spelled a hundred ways. What it does
+# catch is the shape somebody actually writes, which is a second routine that
+# answers the same question and hands back the same answer.
+check_sole_caller "share-decision-comes-from-one-routine" \
+  '\bnew\s+ShareResolutionResult\b' \
+  "a resolution verdict is produced outside the one routine that owns the decision, or more than one file claims to be that routine. Call ShareResolution.Resolve, or argue the second routine in an issue and move the marker." \
+  "$decision_routine_marker" \
+  "produces a resolution verdict" \
+  "produces none"
 
 if [ "$violations" -ne 0 ]; then
   echo "::error::One or more invariants were violated. Each is a rule this tree decided on; changing one is a change to the rule, not to the lint."
