@@ -263,7 +263,17 @@ public sealed class ShareKeyTests : IDisposable
             _mode = mode;
         }
 
-        public void Dispose() => File.SetUnixFileMode(_path, _mode);
+        public void Dispose()
+        {
+            // The guard is repeated here rather than assumed from the branch that
+            // built this object. The analyzer reads call sites and not intent,
+            // and it is right to: nothing stops a later caller constructing one
+            // of these on a platform with no modes.
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(_path, _mode);
+            }
+        }
     }
 
     private static ShareRecord ARecord(string tokenHash) => new ShareRecord
