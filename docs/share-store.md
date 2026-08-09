@@ -110,9 +110,9 @@ creates the file rather than receiving it.
 
 The permissions on that file are not evaluated here. The plugin can set a POSIX
 mode on a file it creates; what a Windows server gives it by inheritance was not
-measured, and no claim about it is made in either direction. Issue #28 owns the
-key's storage and permissions and is where that measurement belongs, because the
-key is the part where getting it wrong is worst.
+measured, and no claim about it is made in either direction. `docs/share-key.md`
+is where the key's own storage and permissions are written down, and the Windows
+measurement is still owed there.
 
 How the file is written so that a crash or a concurrent request cannot leave it
 half-written is #35, and this choice does not answer it. It only makes it

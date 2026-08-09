@@ -35,6 +35,16 @@ public enum ShareRefusal
     NoTokenPresented = 2,
 
     /// <summary>
+    /// The install's key could not be read, so no stored hash can be checked (#28).
+    /// </summary>
+    /// <remarks>
+    /// It is a refusal rather than a fresh key. Replacing a key that could not be
+    /// read would stop every live share on the server, which is safe and silent,
+    /// and the silence is the part that is not acceptable.
+    /// </remarks>
+    KeyUnavailable = 8,
+
+    /// <summary>
     /// No record in the store answers for the presented token.
     /// </summary>
     NoSuchShare = 3,
