@@ -7,9 +7,13 @@ naming a setting that no longer exists.
 
 ## The settings
 
-| Setting         | Meaning                                                                                                     | Unit                                            | Default | Bounds                                                                                                     | When it is empty                                                                                                                             |
-| --------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PublicBaseUrl` | The address this server is reached at from outside. It is the host the link an operator copies is built on. | An absolute URL, written with no trailing slash | `""`    | Absolute, and `http` or `https`. A value that is anything else is refused and no link is produced from it. | The link is built from what the request claimed. That is text a caller supplies, so a forged header produces a link pointing somewhere else. |
+| Setting                     | Meaning                                                                                                      | Unit                                            | Default | Bounds                                                                                                                                   | When it is empty                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PublicBaseUrl`             | The address this server is reached at from outside. It is the host the link an operator copies is built on.  | An absolute URL, written with no trailing slash | `""`    | Absolute, and `http` or `https`. A value that is anything else is refused and no link is produced from it.                               | The link is built from what the request claimed. That is text a caller supplies, so a forged header produces a link pointing somewhere else. |
+| `MaxLiveShares`             | How many shares may be live across the whole server at once. Live means neither revoked nor past its expiry. | A count of shares                               | `100`   | At least 1. A create that would pass the ceiling is refused by `ShareBounds`, and a value below 1 is refused when the bounds are read.   | Not applicable; the value is a number and is never empty.                                                                                    |
+| `MaxLiveSharesPerItem`      | How many live shares may name one item.                                                                      | A count of shares                               | `10`    | At least 1, refused in the same place and in the same way as the ceiling above.                                                          | Not applicable; the value is a number and is never empty.                                                                                    |
+| `MaxShareLifetimeDays`      | The longest lifetime a link may be given, measured from when the share is created.                           | Days                                            | `30`    | At least 1. Checked when a share is created and never when one is resolved, so lowering it leaves links already handed out alone.        | Not applicable; the value is a number and is never empty.                                                                                    |
+| `ExpiredShareRetentionDays` | How long a share that has stopped working is kept before it is deleted, counted from the instant it stopped. | Days                                            | `90`    | At least 0. Zero deletes it at the first write after it stopped working, which is how an operator empties the store of what has expired. | Not applicable; the value is a number and is never empty.                                                                                    |
 
 ## What is checked and what is not
 
@@ -34,8 +38,13 @@ when it is written.
 
 ## Where the settings still to come are decided
 
-This table has one row because the class has one property. The settings the earlier
-milestones decide arrive in #71, which collects the maximum and default lifetime,
-the bitrate ceilings, the live share ceiling, the retention rule and the session
-ceiling into the same class. Each of them gets a row here when it lands, and the
-test is what refuses one that does not.
+The four bounds arrived with #29, which is where each number is argued and where
+the refusal that reads them lives. `docs/bounds.md` is the longer version of that
+argument.
+
+The rest are still owed. #71 collects the default lifetime, the default and
+maximum bitrate ceilings and the session ceiling into the same class, and it is
+also where refusal on save arrives: today an invalid value is refused by the
+routine that reads it, which is a later moment than the operator typing it. Each
+of those settings gets a row here when it lands, and the test is what refuses one
+that does not.

@@ -36,7 +36,15 @@ public class PluginConfigurationTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["PublicBaseUrl"], declared);
+        Assert.Equal(
+            [
+                "ExpiredShareRetentionDays",
+                "MaxLiveShares",
+                "MaxLiveSharesPerItem",
+                "MaxShareLifetimeDays",
+                "PublicBaseUrl"
+            ],
+            declared);
     }
 
     [Fact]

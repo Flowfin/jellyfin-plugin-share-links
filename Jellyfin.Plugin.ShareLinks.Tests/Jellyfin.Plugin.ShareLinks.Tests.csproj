@@ -35,6 +35,7 @@
     <None Include="..\docs\configuration.md" Link="configuration.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\playback-visibility.md" Link="playback-visibility.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\personal-data.md" Link="personal-data.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\bounds.md" Link="bounds.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

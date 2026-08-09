@@ -6,10 +6,18 @@ namespace Jellyfin.Plugin.ShareLinks.Configuration;
 /// Plugin configuration.
 /// </summary>
 /// <remarks>
-/// One setting so far. The milestone that defines the next one adds it here
-/// together with the control that edits it and the validation that bounds it; a
-/// setting that means nothing is a setting somebody eventually wires to
-/// something.
+/// <para>
+/// A setting arrives here together with the routine that reads it and the
+/// refusal that bounds it; a setting that means nothing is a setting somebody
+/// eventually wires to something.
+/// </para>
+/// <para>
+/// The four bounds below are read by <see cref="ShareBounds"/>, which refuses a
+/// value outside what the setting admits rather than serving under a rule nobody
+/// wrote. Refusal on save, and the controls an operator edits these with, are
+/// #71 and #70 and are not here yet, so a value edited into the file by hand is
+/// refused when a share is created and not when it is written.
+/// </para>
 /// </remarks>
 public class PluginConfiguration : BasePluginConfiguration
 {
@@ -32,4 +40,45 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </para>
     /// </remarks>
     public string PublicBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the ceiling on how many shares may be live across the server at once.
+    /// </summary>
+    /// <remarks>
+    /// Live means neither revoked nor past its expiry. Revoking or letting a share
+    /// expire frees a place; deleting the record is retention's job and not this
+    /// one's. <c>docs/bounds.md</c> is where the number is argued.
+    /// </remarks>
+    public int MaxLiveShares { get; set; } = ShareBounds.DefaultMaxLiveShares;
+
+    /// <summary>
+    /// Gets or sets the ceiling on how many live shares may name one item.
+    /// </summary>
+    /// <remarks>
+    /// A share is one item handed to one invited guest, so several live shares on
+    /// one item is the ordinary case of a film lent to several people. This is the
+    /// bound that keeps a loop pointed at one item from consuming the whole
+    /// server ceiling.
+    /// </remarks>
+    public int MaxLiveSharesPerItem { get; set; } = ShareBounds.DefaultMaxLiveSharesPerItem;
+
+    /// <summary>
+    /// Gets or sets the longest lifetime, in days, a link may be given.
+    /// </summary>
+    /// <remarks>
+    /// Checked when a share is created and never when one is resolved, so lowering
+    /// this does not shorten links an operator has already handed out.
+    /// <c>docs/expiry.md</c> is where that is argued.
+    /// </remarks>
+    public int MaxShareLifetimeDays { get; set; } = ShareBounds.DefaultMaxShareLifetimeDays;
+
+    /// <summary>
+    /// Gets or sets how many days a share that has stopped working is kept before it is deleted.
+    /// </summary>
+    /// <remarks>
+    /// Counted from the instant the share stopped answering rather than from when
+    /// it was created. Zero deletes it at the first write after that instant,
+    /// which is how an operator empties the store of what has expired.
+    /// </remarks>
+    public int ExpiredShareRetentionDays { get; set; } = ShareBounds.DefaultExpiredShareRetentionDays;
 }
