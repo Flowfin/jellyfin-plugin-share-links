@@ -106,12 +106,11 @@ public class PlaybackVisibilityTests
     public void TheMemberTheDocumentNamesExistsWithTheTypeItStates(string carrier, string member, string statedType)
     {
         Assert.True(
-            Carriers.ContainsKey(carrier),
+            Carriers.TryGetValue(carrier, out var owner),
             $"docs/playback-visibility.md names {carrier}.{member} and this test knows no type called {carrier}. "
             + "Add it to Carriers, because a row nothing resolves is a claim nothing checks.");
 
-        var owner = Carriers[carrier];
-        var property = owner.GetProperty(member);
+        var property = owner!.GetProperty(member);
 
         Assert.True(
             property is not null,

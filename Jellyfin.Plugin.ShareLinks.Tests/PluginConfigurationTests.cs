@@ -56,7 +56,7 @@ public class PluginConfigurationTests
         // the base class member that does it; this is the property that member needs
         // to hold.
         var serialiser = new XmlSerializer(typeof(PluginConfiguration));
-        var written = new StringWriter(CultureInfo.InvariantCulture);
+        using var written = new StringWriter(CultureInfo.InvariantCulture);
         serialiser.Serialize(written, new PluginConfiguration { PublicBaseUrl = "https://media.example.org" });
 
         using var read = new StringReader(written.ToString());
