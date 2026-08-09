@@ -63,6 +63,15 @@ jobs:
           # previous shared workflow asked for; dropping to the default set here
           # would have been a quiet weakening.
           queries: +security-and-quality
+          # Path filtering for the ANALYSIS. The paths-ignore under `on:` above
+          # decides when this workflow runs, not what CodeQL reads, so without
+          # this block the generated sources under obj/ are analysed too. They
+          # are not in the tree, nobody can change them, and the source
+          # generator that writes them does not follow these rules.
+          config: |
+            paths-ignore:
+              - "**/obj/**"
+              - "**/bin/**"
 
       - name: Build
         # Not autobuild. The project has one solution and one command that builds
