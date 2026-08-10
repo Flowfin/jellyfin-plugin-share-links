@@ -100,8 +100,8 @@ no longer contains it.
 
 What that does not reach is a copy somebody else made. A backup taken while the
 share was live still holds it, and what restoring such a backup does to shares that
-have since been revoked or expired is #40. This plugin deletes nothing outside its
-own file.
+have since been revoked or expired is `docs/backup-restore.md`. This plugin deletes
+nothing outside its own file.
 
 ## What is checked, and what is not
 
