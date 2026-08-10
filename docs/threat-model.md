@@ -103,7 +103,7 @@ can never be mistaken for an oversight.
 | T5  | A stolen store is brute-forced offline into working tokens                                                       | The hash is keyed, and the key is not in the store                                                                                                                   | #28                                                                                                                          |
 | T6  | The comparison of a presented token against the store leaks which prefix was right                               | Constant-time comparison, with the invariant lint refusing an equality or `Equals` comparison against anything named token, secret or hash                           | #43                                                                                                                          |
 | T7  | A token that is revoked or expired still resolves                                                                | Revocation and expiry are read on every resolution rather than at redemption, in one routine that makes the whole decision                                           | #46, #45, #48                                                                                                                |
-| T8  | The same token is presented again, from a second device or a second address                                      | The reuse rule, written down and tested for one session, two sessions, and after revocation                                                                          | #25                                                                                                                          |
+| T8  | The same token is presented again, from a second device or a second address                                      | A token works as often as it is presented until it expires or is revoked, and a presentation is bound to neither a device nor a session                              | `TheSameTokenResolvesEveryTimeItIsPresented`, `ATokenThatHasWorkedStopsWorkingOnceTheShareIsRevoked`, #25                    |
 | T9  | A token reaches a log, a crash dump or an audit line, and the log becomes a working link                         | The never-log list, and the invariant lint refusing a logging call that names a token or a secret                                                                    | #27                                                                                                                          |
 | T10 | The scope of a share widens, so a token reaches a second item                                                    | A token is bound to one item at mint time and the binding is not re-derived from the request                                                                         | #44, #47                                                                                                                     |
 | T11 | A guest reaches past the shared item into the rest of the library                                                | Confinement chosen deliberately rather than inherited, and the list of what a token can never reach, with a test per line                                            | #52, #47                                                                                                                     |
@@ -123,6 +123,46 @@ can never be mistaken for an oversight.
 | T25 | Expiry is wrong at the boundary, and nobody notices because the tests sleep                                      | The clock comes from a seam, refused by the invariant lint when it does not, and boundaries are covered without waiting                                              | #36, #79                                                                                                                     |
 | T26 | The bitrate ceiling is enforced somewhere a guest can step around                                                | The ceiling is enforced at the point where the stream is actually decided, which #61 settles by measurement rather than by preference                                | #61                                                                                                                          |
 
+## The reuse rule
+
+A token works as often as it is presented, until the instant the record names or
+until the share is revoked, whichever comes first. It is not burned on first use.
+
+Burning it would break the ordinary case rather than an attack. An invited guest
+opens the link on a phone, pauses, and opens it again on a television. That is one
+guest doing the thing the share was created for, and a token that stopped after
+the phone would read to them as a broken link. `docs/expiry.md` reaches the same
+case from the other side when it refuses a lifetime measured from first use.
+
+A presentation is bound to neither a device nor a session. Nothing about either is
+an input to the decision: `ShareResolution.Resolve` takes the records, the key, the
+token, the account the server identified the caller as, the plugin's status and the
+clock, and that is the whole of it. So the same token twice in one session and the
+same token twice in two sessions are one case here, and they are one case by
+construction rather than by a check that treats them alike.
+
+Nothing is written when a token is presented. Every property of a share record is
+set at construction and never after, so a resolution has nowhere to record that one
+happened. Reuse is allowed by the shape of the record as well as by the decision,
+and burning a token on first use would be a change to both rather than a line
+somebody could add to the routine alone.
+
+The same token arriving from two addresses at once resolves for both, where both
+callers are accounts the record names. The plugin never sees an address and never
+compares one. A share names a set of accounts, which is decision 5 in #94, so two
+people in one household watching at once is the feature rather than a case to be
+caught; what bounds how many of them there may be is #56 and not this rule.
+
+Revocation is what stops a token that has been working, on the next presentation
+rather than at the next restart, and expiry does the same at the instant the record
+names. Neither depends on how often the token worked before.
+
+What an operator sees when a token is presented again is nothing today. The plugin
+writes no log line at all yet, and `docs/logging.md` is where the counts and the
+share identifier that would show one are decided (#27). Until that lands an operator
+cannot tell one guest who opened the link twice from two guests who opened it once,
+which is stated here rather than left to be found.
+
 ## Accepted, and why
 
 These are threats this plugin does not answer. Each one is here because it was
@@ -133,6 +173,12 @@ point a camera at the screen. No token model prevents either. The share controls
 who may start a session, and after that the media is out. This is the residual
 issue #25 asks to be stated in a sentence, and it is the reason T1 is about text
 rather than about media.
+
+Reuse is not observable, which is the residual the rule above leaves. Presenting a
+token again is allowed, no address is compared and no line is written, so an
+invited account that passes its own sign-in on is a case nothing here detects. It
+is the paragraph above in a second form, and #56 bounds how much of it one share
+can carry rather than telling the two apart.
 
 The operator is trusted completely. They can read every file the server can read,
 including the store and the key, and they can create a share for anything. A
