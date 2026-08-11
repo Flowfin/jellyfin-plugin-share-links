@@ -1,0 +1,73 @@
+# Measures the suite over the code that decides access (#20). A green suite says
+# the code ran; it does not say a wrong answer would have been noticed, and that
+# difference is what this job measures.
+#
+# Weekly and on demand rather than per pull request. The run is minutes rather
+# than seconds, its number moves when tests are added as well as when code is,
+# and a required check that changes value for reasons outside a change is a check
+# people learn to ignore. What holds a merge is the suite; this holds the suite.
+name: mutation
+
+on:
+  schedule:
+    # Sunday, early. Nothing else runs here then, and the score is waiting on
+    # Monday rather than competing with a working day's queue.
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+# Read-only: this job reads the tree, runs tests against mutated copies of it in
+# a temporary directory, and publishes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The same SDK the other jobs pin.
+  DOTNET_VERSION: "9.0.316"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # The test host targets 9.0 and the runner may carry something newer. Without
+  # this the run reports no test results at all and Stryker stops before it has
+  # mutated anything, which reads like a tooling failure rather than a runtime
+  # one. Measured: it is what the first run here did.
+  DOTNET_ROLL_FORWARD: "LatestMajor"
+
+jobs:
+  mutation:
+    name: Mutation score over the decision code
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install the mutation runner
+        # Pinned. What measures one week has to be what measures the next, or a
+        # score that moved is a score nobody can attribute.
+        run: dotnet tool install --global dotnet-stryker --version 4.16.0
+
+      - name: Run the mutation tests
+        # The threshold and the files it is measured over are in
+        # stryker-config.json, beside the code, rather than in this file. The
+        # runner exits non-zero when the score is under the break threshold,
+        # which is what reds this job.
+        run: dotnet stryker --config-file stryker-config.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report
+          path: StrykerOutput/*/reports/
+          if-no-files-found: warn
