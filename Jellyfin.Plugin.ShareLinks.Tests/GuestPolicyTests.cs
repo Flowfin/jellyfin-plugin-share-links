@@ -91,7 +91,7 @@ public class GuestPolicyTests
         Assert.True(property is not null, $"docs/guest-capabilities.md decides {name} and UserPolicy has no such property.");
         Assert.Equal(typeof(bool), property!.PropertyType);
 
-        Assert.Equal(expected, (bool)property.GetValue(GuestPolicy.Create())!);
+        Assert.Equal(expected, (bool)property.GetValue(GuestPolicy.Create(GuestPolicy.DefaultMaxActiveSessions))!);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class GuestPolicyTests
     {
         // Not a switch, so it is not in the theory above. The narrowest value is
         // asserted by name because that is how the document writes it.
-        var value = GuestPolicy.Create().SyncPlayAccess;
+        var value = GuestPolicy.Create(GuestPolicy.DefaultMaxActiveSessions).SyncPlayAccess;
 
         Assert.Equal("None", Enum.GetName(value.GetType(), value));
     }
@@ -113,7 +113,7 @@ public class GuestPolicyTests
         // carrying it silently.
         var decided = Decided();
         var server = new UserPolicy();
-        var guest = GuestPolicy.Create();
+        var guest = GuestPolicy.Create(GuestPolicy.DefaultMaxActiveSessions);
 
         var moved = typeof(UserPolicy)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -144,7 +144,7 @@ public class GuestPolicyTests
             IsHidden = false,
         };
 
-        GuestPolicy.Apply(wide);
+        GuestPolicy.Apply(wide, GuestPolicy.DefaultMaxActiveSessions);
 
         foreach (var (name, expected) in Decided())
         {
