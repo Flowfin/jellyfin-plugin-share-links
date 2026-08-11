@@ -81,4 +81,31 @@ public class PluginConfiguration : BasePluginConfiguration
     /// which is how an operator empties the store of what has expired.
     /// </remarks>
     public int ExpiredShareRetentionDays { get; set; } = ShareBounds.DefaultExpiredShareRetentionDays;
+
+    /// <summary>
+    /// Gets or sets the ceiling a new share is given when the operator creating it
+    /// names none, in megabits per second. No value means new shares get no
+    /// ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Megabits per second here and bits per second on the record, which is
+    /// <see cref="BitrateCap"/>'s reason for existing along with the bounds this
+    /// value is refused against. An empty value is no ceiling rather than a
+    /// ceiling of zero, and zero is refused, because serve nothing and serve
+    /// without a limit are opposite instructions.
+    /// </para>
+    /// <para>
+    /// A default rather than a ceiling of its own. A share created with a ceiling
+    /// of its own keeps it, and what happens when several ceilings apply at once
+    /// is #64.
+    /// </para>
+    /// <para>
+    /// Nullable rather than a sentinel number, so that "no ceiling" is the absence
+    /// of a value in the file instead of a magic one an operator has to know.
+    /// <c>PluginConfigurationTests</c> is where that survives the serialiser the
+    /// server writes this class out with.
+    /// </para>
+    /// </remarks>
+    public double? DefaultMaxBitrateMbps { get; set; }
 }

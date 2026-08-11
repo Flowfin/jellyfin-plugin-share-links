@@ -192,10 +192,17 @@ public sealed class ShareKeyTests : IDisposable
 
         // And nothing of the key's shape can be held by what is there: every
         // setting is a number or the public address, and none of them is bytes.
+        //
+        // The list is types rather than a rule about them, so widening it is an
+        // edit somebody makes deliberately. A number that may be absent was added
+        // for the bitrate ceiling in #62: the absence is what "no ceiling" is
+        // spelled as, and a nullable number holds no more than the number does.
         foreach (var property in typeof(PluginConfiguration).GetProperties())
         {
             Assert.True(
-                property.PropertyType == typeof(int) || property.PropertyType == typeof(string),
+                property.PropertyType == typeof(int)
+                    || property.PropertyType == typeof(string)
+                    || property.PropertyType == typeof(double?),
                 $"PluginConfiguration.{property.Name} is a {property.PropertyType}, and a setting that is not a number or a string is where key material would fit.");
         }
     }
