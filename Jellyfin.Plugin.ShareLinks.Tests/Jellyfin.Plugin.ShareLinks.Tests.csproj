@@ -17,6 +17,14 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageReference Include="Moq" Version="4.20.72" />
+    <!-- Collects line coverage during the test run (#80). The collector rather
+         than a global tool: it runs inside the same dotnet test invocation the
+         gate already makes, so the number is measured on the run that judges the
+         change and not on a second run of something else. -->
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <!-- The plugin project excludes these at runtime because a running server
          supplies them. A test host is not a server, so the test project pulls the
          same versions in with their runtime assets. -->

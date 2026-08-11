@@ -1,0 +1,34 @@
+# The line coverage floor for each type that decides access (#80).
+#
+# One type per line: the name as a cobertura report spells it, and the percentage
+# below which .github/scripts/refuse-coverage-below-the-floor.sh refuses. Nothing
+# outside this list is judged, which is the point: a number over the whole
+# assembly is mostly a measure of how much boilerplate it has.
+#
+# Every number here is the value MEASURED when the floor was introduced, rounded
+# down to a whole percent, and not a value anybody chose. The command that
+# produced them is in #80 along with the reading. Raising one is a decision to
+# take deliberately after a measurement, in the same way; lowering one is a
+# decision to stop judging something that used to hold.
+#
+# The measured value for a type is the lowest line rate across its own entry and
+# the entries the compiler writes for its async methods, so a floor of 100 means
+# every one of those is at 100.
+
+# The token path. Nothing here is bigger than it looks, and all of it is total,
+# so anything under full coverage is a routine nobody called.
+Jellyfin.Plugin.ShareLinks.ShareTokens 100
+Jellyfin.Plugin.ShareLinks.ShareTokenHash 100
+Jellyfin.Plugin.ShareLinks.ShareLookup 100
+
+# The store, and the record it holds. ShareStore is the one type here that meets
+# a real filesystem, and its floor is the lowest of its own rate and those of the
+# state machines its async methods become.
+Jellyfin.Plugin.ShareLinks.ShareStore 78
+Jellyfin.Plugin.ShareLinks.ShareStoreExtensions 100
+Jellyfin.Plugin.ShareLinks.ShareRecord 100
+
+# The decision, and what a guest may do once it has been made.
+Jellyfin.Plugin.ShareLinks.ShareResolution 100
+Jellyfin.Plugin.ShareLinks.ShareResolutionResult 81
+Jellyfin.Plugin.ShareLinks.GuestPolicy 100
