@@ -1,0 +1,15 @@
+{
+    "stryker-config": {
+        "project": "Jellyfin.Plugin.ShareLinks.csproj",
+        "test-projects": ["Jellyfin.Plugin.ShareLinks.Tests/Jellyfin.Plugin.ShareLinks.Tests.csproj"],
+        "mutate": ["**/ShareResolution.cs", "**/ShareLookup.cs", "**/ShareTokens.cs", "**/ShareTokenHash.cs", "**/GuestPolicy.cs"],
+        "reporters": ["progress", "json"],
+        "thresholds": {
+            "high": 100,
+            "low": 88,
+            "break": 88
+        },
+        "additional-timeout": 120000,
+        "concurrency": 4
+    }
+}
