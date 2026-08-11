@@ -75,11 +75,51 @@ Every switch is written there, including the ones whose value matches the server
 default. A default is the server's decision and it can move between server lines,
 which would otherwise widen a guest on an upgrade nobody connected to this plugin.
 
-Two fields are deliberately left alone. `MaxActiveSessions` is bounded rather than
-left at its default; how far is #56. `RemoteClientBitrateLimit` is the
+One field is deliberately left alone. `RemoteClientBitrateLimit` is the
 account-level ceiling and belongs to #61 and #62, which decide where the cap is
-enforced and what its bounds are. Setting either here would decide a number those
+enforced and what its bounds are. Setting it here would decide a number those
 issues own.
+
+## How many sessions one guest may hold
+
+`MaxActiveSessions` is the account switch that bounds this, and it is set rather
+than left where the server put it. The server's own answer is zero, which means no
+ceiling, so an account nobody touched can be signed in from as many places as
+somebody cares to sign it in from. One link handed to one invited guest is the
+intended case; a phone, a television and a laptop is ordinary; twenty places is
+worth noticing, and that is the range the number below sits in.
+
+The value is the one setting in `GuestPolicy` an operator chooses rather than one
+this plugin decides. It is `GuestMaxActiveSessions`, it defaults to five, and it is
+refused below one or above twenty when the setting is read.
+
+Five rather than three, which is what a phone, a television and a laptop comes to.
+A session the server has not finished with still occupies a place, so a ceiling of
+exactly three turns an ordinary third device into a refusal the first time a guest
+reopens an app. That is a judgement about how many devices one invited person uses
+and it was not measured against a running server.
+
+**The ceiling is per account and not per share.** The switch belongs to the
+account, so a guest invited to two shares at once carries one ceiling across both
+rather than one each. An operator who invites the same person to a second share has
+not given them a second allowance of devices, and that is a consequence they meet
+rather than a choice the setting offers.
+
+**An account that already carries a lower ceiling keeps it.** The value is written
+as the lower of the two rather than outright, because an operator-prepared account
+is one somebody else has already decided a number on and this plugin narrows an
+account without ever widening one, which is #58's rule. An account carrying the
+server's own zero is carrying no ceiling rather than the lowest one, so it takes the
+configured value; the other reading would leave every fresh account unlimited and
+undo the setting entirely.
+
+**What happens at the ceiling is the server's behaviour and is not measured here.**
+This plugin counts no sessions and turns nobody away. Whether the server refuses the
+newest arrival or displaces somebody who is already watching is a property of the
+server, no claim about it is made in either direction, and measuring it needs a
+running server with sessions on it. No test in this repository may reach one, and
+`docs/testing.md` is where that rule is written. `GuestSessionCeilingTests` asserts
+the number this plugin asks for and nothing about what is done with it.
 
 ## What is checked, and what is not
 
