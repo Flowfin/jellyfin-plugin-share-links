@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A report nobody produced. Every recorded type is at full coverage except ShareResolution, which sits under its floor. The check has to refuse this and name that type. -->
+<coverage line-rate="1" branch-rate="1" version="1.9" timestamp="0">
+  <packages>
+    <package name="Jellyfin.Plugin.ShareLinks" line-rate="1" branch-rate="1" complexity="1">
+      <classes>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareTokens" filename="ShareTokens.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareTokenHash" filename="ShareTokenHash.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareLookup" filename="ShareLookup.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareStore" filename="ShareStore.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareStoreExtensions" filename="ShareStoreExtensions.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareRecord" filename="ShareRecord.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareResolution" filename="ShareResolution.cs" line-rate="0.5" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.ShareResolutionResult" filename="ShareResolutionResult.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+        <class name="Jellyfin.Plugin.ShareLinks.GuestPolicy" filename="GuestPolicy.cs" line-rate="1" branch-rate="1" complexity="1">
+          <lines />
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>

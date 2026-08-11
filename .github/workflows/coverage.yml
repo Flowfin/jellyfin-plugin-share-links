@@ -1,0 +1,106 @@
+# Collects line coverage on every pull request and refuses a drop below the floor
+# recorded for the types that decide access (#80).
+#
+# Not a number over the assembly. That is mostly a measure of how much boilerplate
+# a plugin has, and it moves when boilerplate is added or removed rather than when
+# the code that decides who may watch what stops being tested.
+#
+# The floors are in .github/coverage-floor.txt beside the check, one type per
+# line, each at the value measured when it was introduced.
+name: coverage
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+# Read-only: this job reads the tree, runs the suite and publishes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "9.0.316"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  coverage:
+    name: Coverage floor on the types that decide access
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Prove the check refuses before trusting it to pass
+        # Four legs. Three run against reports nobody produced, each wrong in
+        # exactly one way, and the fourth against no report at all. Without these
+        # a check that refused everything and a check that refused nothing would
+        # both reach the step below looking identical.
+        run: |
+          set -euo pipefail
+          check=.github/scripts/refuse-coverage-below-the-floor.sh
+
+          if bash "$check" .github/coverage-fixtures/below-the-floor.xml </dev/null; then
+            echo "::error::A report with a type under its floor was accepted."
+            exit 1
+          fi
+          echo "  leg 1  a type under its floor is refused"
+
+          if bash "$check" .github/coverage-fixtures/missing-a-type.xml </dev/null; then
+            echo "::error::A report missing a recorded type was accepted, so an unmeasured type would read as a covered one."
+            exit 1
+          fi
+          echo "  leg 2  a recorded type missing from the report is refused"
+
+          if ! bash "$check" .github/coverage-fixtures/at-the-floor.xml </dev/null; then
+            echo "::error::A report at the floor was refused, so the check refuses everything rather than the right thing."
+            exit 1
+          fi
+          echo "  leg 3  a report at the floor is accepted"
+
+          if bash "$check" .github/coverage-fixtures/nothing-here.xml </dev/null; then
+            echo "::error::A report that does not exist was accepted. The check has to fail closed on a missing measurement."
+            exit 1
+          fi
+          echo "  leg 4  a measurement that was never made is refused"
+
+      - name: Restore and build
+        run: |
+          set -euo pipefail
+          dotnet restore
+          dotnet build --configuration Release --no-restore -warnaserror
+
+      - name: Run the suite and collect coverage
+        env:
+          # The test host targets 9.0 and the runner may carry something newer.
+          DOTNET_ROLL_FORWARD: "LatestMajor"
+        run: |
+          set -euo pipefail
+          dotnet test --configuration Release --no-build \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./artifacts/coverage
+
+      - name: Refuse a drop below the floor
+        run: |
+          set -euo pipefail
+          report=$(find ./artifacts/coverage -name coverage.cobertura.xml | head -1)
+          if [ -z "$report" ]; then
+            echo "::error::The test run produced no coverage report. Fail closed: nothing was measured."
+            exit 1
+          fi
+          bash .github/scripts/refuse-coverage-below-the-floor.sh "$report" </dev/null
