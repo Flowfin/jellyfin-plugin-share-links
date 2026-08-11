@@ -164,8 +164,10 @@ plugin asks for rather than behaviour it guarantees.
 
 ## What this does not settle
 
-Which items the account can see at all is confinement, which is #52, and it is a
-different question from what may be done with the one item a share names.
+Which items the account can see at all is confinement, which is #52 and is
+`docs/guest-confinement.md`. It is a different question from what may be done with
+the one item a share names, and the mechanism it chooses is not one of the switches
+above.
 
 Whether a guest's playback progress is visible to the operator, and what reaches
 the server's activity log, is `docs/playback-visibility.md`. This document says the
