@@ -85,9 +85,10 @@ returned to a caller that has not been written.
 
 ## What this does not settle
 
-What a restored backup does when the store and the key have moved apart is #40.
-This page fixes that a key is never silently replaced, which is the half #40 needs
-from here; the operator guidance across a restore is that issue's.
+What a restored backup does when the store and the key have moved apart is
+`docs/backup-restore.md`. This page fixes that a key is never silently replaced,
+which is the half that page takes from here; the operator guidance across a
+restore is there.
 
 Nothing here is measured against a running server. The permissions statement above
 is the one measurement this page owes and does not make, and it says so where a

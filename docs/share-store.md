@@ -175,7 +175,7 @@ Whether it runs in every path an operator can take to remove a plugin was not
 measured here.
 
 What happens when the folder comes back from a backup while the key has moved on
-is #40.
+is `docs/backup-restore.md`.
 
 ## The choice is not welded to the callers
 

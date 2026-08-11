@@ -140,4 +140,4 @@ running server, which no test in this repository may reach, and
 `docs/testing.md` is where that rule is written.
 
 What a restored backup does to shares that were revoked or expired before the
-backup was taken is #40, not this document.
+backup was taken is `docs/backup-restore.md`, not this document.
