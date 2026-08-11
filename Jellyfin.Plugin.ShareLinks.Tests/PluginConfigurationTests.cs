@@ -40,6 +40,7 @@ public class PluginConfigurationTests
             [
                 "DefaultMaxBitrateMbps",
                 "ExpiredShareRetentionDays",
+                "GuestMaxActiveSessions",
                 "MaxLiveShares",
                 "MaxLiveSharesPerItem",
                 "MaxShareLifetimeDays",

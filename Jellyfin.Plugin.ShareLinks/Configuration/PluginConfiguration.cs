@@ -108,4 +108,23 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </para>
     /// </remarks>
     public double? DefaultMaxBitrateMbps { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many sessions one invited guest may hold at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A ceiling on the account rather than on the share, because the switch it is
+    /// written onto belongs to the account. A guest invited to two shares carries
+    /// one ceiling across both and not one each, which is a consequence an
+    /// operator meets rather than a choice this setting offers;
+    /// <c>docs/guest-capabilities.md</c> is where that is argued.
+    /// </para>
+    /// <para>
+    /// <see cref="GuestPolicy"/> is where the value is refused against its bounds
+    /// and where an account that already carries a lower ceiling keeps it, because
+    /// this plugin narrows an account and never widens one.
+    /// </para>
+    /// </remarks>
+    public int GuestMaxActiveSessions { get; set; } = GuestPolicy.DefaultMaxActiveSessions;
 }
