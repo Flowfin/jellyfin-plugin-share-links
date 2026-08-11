@@ -88,6 +88,7 @@ check() {
 # sentence and is how a rule stops being about what it says.
 token_routine_marker='draws token bytes: this file is the one routine (#120)'
 decision_routine_marker='decides whether a share resolves: this file is the one routine (#48)'
+clock_routine_marker='supplies the machine clock: this file is the one routine (#68)'
 
 # Runs an invariant that is about how many files do a thing rather than about
 # whether any file does it, so it cannot be a pattern the way the checks above
@@ -194,15 +195,15 @@ check "route-is-not-anonymous" \
 # Expiry is the core behaviour and it is a function of time, so a type that reads
 # the machine clock directly can only be tested by sleeping or by not testing the
 # boundary, which is where the bugs are (#36). The clock arrives as TimeProvider,
-# and TimeProvider.System is refused for the same reason the raw property is: it
-# is the machine clock wearing the seam's name.
+# and this half of the rule has no exemption and needs none: a type that asks the
+# machine what time it is has nowhere for a test to stand, whatever the file it
+# sits in.
 #
-# The refusal has no exemption for a composition root today, because nothing in
-# the tree reads a clock at all and an exemption with no user is a hole nobody is
-# watching. The day the root genuinely needs one, widening this pattern is a
-# change to the rule, argued in the issue that needs it.
+# The half that named the seam wearing the machine's clothes has moved to a count
+# below, because the composition root #68 needs has to say the word once and a
+# pattern refusing it everywhere refuses the root along with the mistake.
 check "clock-comes-from-the-seam" \
-  '((DateTime|DateTimeOffset)\s*\.\s*(Now|UtcNow|Today)|TimeProvider\s*\.\s*System)' \
+  '(DateTime|DateTimeOffset)\s*\.\s*(Now|UtcNow|Today)' \
   "the machine clock is read directly. Take TimeProvider and call GetUtcNow, so a test can stand on either side of an expiry boundary without sleeping."
 
 # Token material comes from one routine, and one routine is a property of the
@@ -239,6 +240,29 @@ check_sole_caller "share-decision-comes-from-one-routine" \
   "$decision_routine_marker" \
   "produces a resolution verdict" \
   "produces none"
+
+# The real clock has to enter the tree somewhere, and a plugin that hands a route
+# its dependencies is where. One place, and it says so, which is the same shape as
+# the two counts above and for the same reason: each call is right on its own, and
+# what is lost when there are several is the single line a reader follows to find
+# out what the running server judges an expiry against.
+#
+# It replaces a flat refusal of the same text, and that is a weakening of one rule
+# where it stood in front of a root that cannot be written without it, rather than
+# of the rule the sentence above is about. Reading the clock through the seam is
+# still what every other file does; what changed is that the file supplying the
+# seam is now nameable instead of impossible.
+#
+# The bound. A file may declare itself and then read the clock in ten places, and
+# this counts files rather than lines. The marker is what a reader greps for, so
+# the count that matters is how many files answer, and a second reader inside one
+# declared file is a review's job.
+check_sole_caller "machine-clock-enters-in-one-routine" \
+  '\bTimeProvider\s*\.\s*System\b' \
+  "the machine clock enters the tree outside the one routine that supplies it, or more than one file claims to be that routine. Take the clock from the routine that already has it, or argue the second routine in an issue and move the marker." \
+  "$clock_routine_marker" \
+  "reads the machine clock" \
+  "reads none"
 
 if [ "$violations" -ne 0 ]; then
   echo "::error::One or more invariants were violated. Each is a rule this tree decided on; changing one is a change to the rule, not to the lint."
