@@ -30,15 +30,22 @@ So the two answers a leaked link can get are the two refusals: the caller is not
 signed in, or the caller is signed in as somebody the share does not name. Both
 are refusals and #26 is where they are made indistinguishable from each other.
 
-**This is asserted here and not yet proven.** #24 asks for two tests, one for
-each of those callers, and neither can exist while there is no route to present a
-token to:
+**Both refusals are now made by something that runs.** The route is #68 and it is
+on the mainline, so the two tests #24 asks for are two tests rather than a
+sentence here:
 
-    git grep -lE 'ApiController|ControllerBase|HttpGet|HttpPost' -- 'Jellyfin.Plugin.ShareLinks/*.cs' ; echo "exit=$?"
-    exit=1
+    grep -n 'AValidUnexpiredTokenFromACallerTheServerHasNotIdentifiedGetsNothing\|ACallerTheShareDoesNotNameGetsNothing' Jellyfin.Plugin.ShareLinks.Tests/GuestRouteTests.cs
 
-The route is #68. Until it lands, the sentence above is a design property held by
-this document and by nothing that runs.
+The first presents a token that resolves, from a caller the server has not
+identified, and gets nothing. The second presents the same token as an account
+the share does not name, and gets the same nothing. Both drive the route rather
+than the decision behind it, so what they judge is what a holder of the text
+would receive.
+
+What is still held by design rather than by a test is the step in front of them.
+An unauthenticated request does not reach this plugin at all, because the route
+carries an authorize attribute and the server refuses first, and no test in this
+suite may start a server to watch that happen.
 
 ## What a leaked link tells the holder even so
 
@@ -110,14 +117,16 @@ is unreserved in a URI, which is recorded against the routine that mints it:
 
 ## What this does not cover
 
-The two tests. They are the rest of #24 and they arrive with #68.
+Timing. That the two refusals carry the same bytes is asserted by a test on the
+route; that they take the same time to produce is not measured anywhere, and no
+claim about it is made here.
 
-That the two refusals are byte-identical, and as close to identical in timing as
-is reasonable, is #26 and is not decided here.
-
-What the route returns to a caller who is not signed in, and how they come back
-to the shared item after signing in, is #68. This document fixes only where the
-token sits, which is what that round trip has to preserve.
+Where a caller who is not signed in ends up. The route answers only callers the
+server has already identified, so a guest who follows the link before signing in
+meets the server's own refusal rather than anything of this plugin's, and comes
+back to the item only by opening the link again afterwards. Making that a round
+trip needs something in the web client, which this plugin does not add, and #68
+is where that is written down and what it waits on.
 
 Nothing here was measured against a reverse proxy, a chat client's preview
 fetcher or a mail scanner. The design assumes all three read the link and none of
