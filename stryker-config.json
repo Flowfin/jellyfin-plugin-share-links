@@ -6,8 +6,8 @@
         "reporters": ["progress", "json"],
         "thresholds": {
             "high": 100,
-            "low": 88,
-            "break": 88
+            "low": 94,
+            "break": 94
         },
         "additional-timeout": 120000,
         "concurrency": 4
