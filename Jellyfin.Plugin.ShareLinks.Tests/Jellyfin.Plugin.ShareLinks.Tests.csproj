@@ -45,6 +45,7 @@
     <None Include="..\docs\personal-data.md" Link="personal-data.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\bounds.md" Link="bounds.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\guest-capabilities.md" Link="guest-capabilities.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\api.md" Link="api.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
