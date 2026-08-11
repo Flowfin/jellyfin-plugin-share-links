@@ -166,7 +166,7 @@ public class ShareStore : IShareStore, IDisposable
     /// </summary>
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <returns>The records, or an empty list when the store has never been written.</returns>
-    /// <exception cref="ShareStoreUnreadableException">The file exists and does not parse. An empty list is not returned for this case, because a store that lost its contents and a server nobody has shared anything on must not look the same.</exception>
+    /// <exception cref="ShareStoreUnreadableException">The file exists and does not parse, or exists and cannot be opened or read. An empty list is not returned for any of those, because a store that lost its contents and a server nobody has shared anything on must not look the same.</exception>
     public async Task<IReadOnlyList<ShareRecord>> ReadAsync(CancellationToken cancellationToken = default)
     {
         // No semaphore here on purpose. A read that waited for the writer would
@@ -195,6 +195,19 @@ public class ShareStore : IShareStore, IDisposable
         {
             return Array.Empty<ShareRecord>();
         }
+        catch (IOException error)
+        {
+            // The file is there and this process cannot open it: a handle
+            // somebody else holds without sharing, a device that has gone away.
+            // Absent is the case above and returns nothing; present and
+            // unopenable is the case this type refuses, and the two must not
+            // arrive at the same answer.
+            throw new ShareStoreUnreadableException(_path, "the file could not be opened", error);
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            throw new ShareStoreUnreadableException(_path, "this plugin is not allowed to read the file", error);
+        }
 
         await using (stream.ConfigureAwait(false))
         {
@@ -207,6 +220,13 @@ public class ShareStore : IShareStore, IDisposable
             {
                 throw new ShareStoreUnreadableException(_path, error.Message, error);
             }
+            catch (IOException error)
+            {
+                // The open succeeded and the read did not. Rarer than the case
+                // above and the same statement to a caller: the file is there and
+                // its contents did not arrive.
+                throw new ShareStoreUnreadableException(_path, "the file could not be read to the end", error);
+            }
         }
     }
 
@@ -216,6 +236,8 @@ public class ShareStore : IShareStore, IDisposable
     /// <param name="change">Takes the records currently in the store and returns the records that should replace them. It is called while this store's writer lock is held, so it sees a list no other writer of this process can be changing underneath it.</param>
     /// <param name="cancellationToken">Cancels the change.</param>
     /// <returns>The records that were written.</returns>
+    /// <exception cref="ShareStoreUnreadableException">The store exists and could not be read, so there is nothing to change.</exception>
+    /// <exception cref="ShareStoreUnwritableException">The records could not be put on the disk. The store still holds what it held.</exception>
     /// <remarks>
     /// The read is inside the lock rather than outside it, which is the whole
     /// point. A caller that reads, thinks, and then calls a plain write has
@@ -359,7 +381,19 @@ public class ShareStore : IShareStore, IDisposable
         var directory = System.IO.Path.GetDirectoryName(_path);
         if (!string.IsNullOrEmpty(directory))
         {
-            Directory.CreateDirectory(directory);
+            try
+            {
+                Directory.CreateDirectory(directory);
+            }
+            catch (IOException error)
+            {
+                // Something that is not a directory is sitting on the path.
+                throw new ShareStoreUnwritableException(_path, "the folder the store lives in could not be made", error);
+            }
+            catch (UnauthorizedAccessException error)
+            {
+                throw new ShareStoreUnwritableException(_path, "this plugin is not allowed to make the folder the store lives in", error);
+            }
         }
 
         // A sibling of the destination, not a file in the temporary directory. A
@@ -373,13 +407,29 @@ public class ShareStore : IShareStore, IDisposable
 
         try
         {
-            var stream = new FileStream(
-                temporary,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true);
+            FileStream stream;
+            try
+            {
+                stream = new FileStream(
+                    temporary,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 4096,
+                    useAsync: true);
+            }
+            catch (IOException error)
+            {
+                throw new ShareStoreUnwritableException(_path, "no file could be created beside the store to write into", error);
+            }
+            catch (UnauthorizedAccessException error)
+            {
+                // The directory refuses a new file. This is the state an operator
+                // arrives in after tightening permissions on the data folder, and
+                // the records are untouched: the destination is only reached by
+                // the rename at the end, which does not run.
+                throw new ShareStoreUnwritableException(_path, "this plugin is not allowed to write in the folder the store lives in", error);
+            }
 
             await using (stream.ConfigureAwait(false))
             {
@@ -403,7 +453,18 @@ public class ShareStore : IShareStore, IDisposable
 #pragma warning restore CA1849
             }
 
-            File.Move(temporary, _path, overwrite: true);
+            try
+            {
+                File.Move(temporary, _path, overwrite: true);
+            }
+            catch (IOException error)
+            {
+                throw new ShareStoreUnwritableException(_path, "the finished file could not be put in place of the store", error);
+            }
+            catch (UnauthorizedAccessException error)
+            {
+                throw new ShareStoreUnwritableException(_path, "this plugin is not allowed to replace the store", error);
+            }
         }
         catch
         {
