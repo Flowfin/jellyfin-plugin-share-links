@@ -140,7 +140,9 @@ meant. #62 has to settle it against the server rather than against this document
 ## What this does not settle
 
 The bounds an operator may set the cap within, and its defaults, are #62. No
-number is picked here.
+number is picked here. They are picked there, in `BitrateCap`, and
+`docs/configuration.md` carries the row: megabits per second written, bits per
+second kept, at least 0.1 and at most 1000, and no value meaning no ceiling.
 
 The arithmetic that takes the lowest of the caps that apply, and says which one
 applied, is #64. This decides where the result is written and not how it is

@@ -38,6 +38,7 @@ public class PluginConfigurationTests
 
         Assert.Equal(
             [
+                "DefaultMaxBitrateMbps",
                 "ExpiredShareRetentionDays",
                 "MaxLiveShares",
                 "MaxLiveSharesPerItem",
