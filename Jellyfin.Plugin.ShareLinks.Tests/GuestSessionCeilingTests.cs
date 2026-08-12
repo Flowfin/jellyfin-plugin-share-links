@@ -109,6 +109,23 @@ public class GuestSessionCeilingTests
     }
 
     [Fact]
+    public void AnAccountAlreadyAtTheLowestCeilingKeepsIt()
+    {
+        // The boundary of the test above, and the one value where the comparison
+        // and the reading of zero meet. An account limited to a single device is
+        // an operator's deliberate answer, and it sits exactly on the lowest
+        // ceiling this plugin will let anybody configure, so it is the account
+        // most easily read as carrying no ceiling and widened to the configured
+        // number. Two is kept by a comparison that is one character wrong; one is
+        // not, and nothing else in this suite stands on that character.
+        var prepared = new UserPolicy { MaxActiveSessions = GuestPolicy.MinimumMaxActiveSessions };
+
+        GuestPolicy.Apply(prepared, GuestPolicy.DefaultMaxActiveSessions);
+
+        Assert.Equal(GuestPolicy.MinimumMaxActiveSessions, prepared.MaxActiveSessions);
+    }
+
+    [Fact]
     public void AnAccountThatAlreadyCarriesAHigherCeilingIsNarrowedToTheConfiguredOne()
     {
         var prepared = new UserPolicy { MaxActiveSessions = 12 };
@@ -156,6 +173,22 @@ public class GuestSessionCeilingTests
 
         Assert.Equal(3, prepared.MaxActiveSessions);
         Assert.True(prepared.IsAdministrator);
+    }
+
+    [Fact]
+    public void WritingTheCeilingRefusesAPolicyThatIsNotThere()
+    {
+        // The guard on the way in, proved rather than read. Without it the next
+        // line is a null reference from inside the plugin, on the path that sets
+        // up a guest, and the account is left in whatever state the caller found
+        // it in with nothing saying which switches were written.
+        Assert.Throws<ArgumentNullException>(() => GuestPolicy.Apply(null!, GuestPolicy.DefaultMaxActiveSessions));
+    }
+
+    [Fact]
+    public void ReadingTheCeilingRefusesAConfigurationThatIsNotThere()
+    {
+        Assert.Throws<ArgumentNullException>(() => GuestPolicy.MaxActiveSessionsFrom(null!));
     }
 
     [Fact]
