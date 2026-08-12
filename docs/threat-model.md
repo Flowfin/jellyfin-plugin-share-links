@@ -157,11 +157,12 @@ Revocation is what stops a token that has been working, on the next presentation
 rather than at the next restart, and expiry does the same at the instant the record
 names. Neither depends on how often the token worked before.
 
-What an operator sees when a token is presented again is nothing today. The plugin
-writes no log line at all yet, and `docs/logging.md` is where the counts and the
-share identifier that would show one are decided (#27). Until that lands an operator
-cannot tell one guest who opened the link twice from two guests who opened it once,
-which is stated here rather than left to be found.
+What an operator sees when a token is presented again is a second resolved line
+naming the same share, and nothing that separates the two callers. `docs/logging.md`
+is where that was decided (#27): a line carries the share and never the account, so
+an operator still cannot tell one guest who opened the link twice from two guests
+who opened it once, which is stated here rather than left to be found. The server's
+own session record is where that question is answered, and it is not this plugin's.
 
 ## Accepted, and why
 

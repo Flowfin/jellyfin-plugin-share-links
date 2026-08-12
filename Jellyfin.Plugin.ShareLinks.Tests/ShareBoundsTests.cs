@@ -9,6 +9,7 @@ using System.Xml.Serialization;
 using Jellyfin.Plugin.ShareLinks;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -151,11 +152,11 @@ public sealed class ShareBoundsTests : IDisposable
 
         for (var made = 0; made < 3; made++)
         {
-            await store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now);
+            await store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now, NullLogger.Instance);
         }
 
         var refusal = await Assert.ThrowsAsync<ShareBoundExceededException>(
-            () => store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now));
+            () => store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now, NullLogger.Instance));
 
         Assert.Contains("MaxLiveShares", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(3, (await store.ReadAsync()).Count);
@@ -168,18 +169,18 @@ public sealed class ShareBoundsTests : IDisposable
         var bounds = Bounds(maxLiveShares: 99, maxLiveSharesPerItem: 2);
         var item = Guid.NewGuid();
 
-        await store.AddAsync(ARecord(item), bounds, Now);
-        await store.AddAsync(ARecord(item), bounds, Now);
+        await store.AddAsync(ARecord(item), bounds, Now, NullLogger.Instance);
+        await store.AddAsync(ARecord(item), bounds, Now, NullLogger.Instance);
 
         var refusal = await Assert.ThrowsAsync<ShareBoundExceededException>(
-            () => store.AddAsync(ARecord(item), bounds, Now));
+            () => store.AddAsync(ARecord(item), bounds, Now, NullLogger.Instance));
 
         Assert.Contains("MaxLiveSharesPerItem", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(2, (await store.ReadAsync()).Count);
 
         // The ceiling is per item and not a second server ceiling wearing its
         // name, so another item is still admitted at the same instant.
-        await store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now);
+        await store.AddAsync(ARecord(Guid.NewGuid()), bounds, Now, NullLogger.Instance);
         Assert.Equal(3, (await store.ReadAsync()).Count);
     }
 
@@ -190,14 +191,14 @@ public sealed class ShareBoundsTests : IDisposable
         var bounds = Bounds(maxShareLifetimeDays: 30);
 
         var refusal = await Assert.ThrowsAsync<ShareBoundExceededException>(
-            () => store.AddAsync(ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(31)), bounds, Now));
+            () => store.AddAsync(ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(31)), bounds, Now, NullLogger.Instance));
 
         Assert.Contains("MaxShareLifetimeDays", refusal.Message, StringComparison.Ordinal);
         Assert.Empty(await store.ReadAsync());
 
         // Exactly the ceiling is admitted. The refusal is of a lifetime longer
         // than the ceiling, and a bound nobody may reach is a different bound.
-        await store.AddAsync(ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(30)), bounds, Now);
+        await store.AddAsync(ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(30)), bounds, Now, NullLogger.Instance);
         Assert.Single(await store.ReadAsync());
     }
 
@@ -267,13 +268,13 @@ public sealed class ShareBoundsTests : IDisposable
         var emptying = Bounds(expiredShareRetentionDays: 0);
 
         var dead = ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(1));
-        await store.AddAsync(dead, keeping, Now);
+        await store.AddAsync(dead, keeping, Now, NullLogger.Instance);
         Assert.Single(await store.ReadAsync());
 
         // A day after it expired, with retention set to nothing, the next create
         // is what takes it out.
         var later = Now.AddDays(2);
-        await store.AddAsync(ARecord(Guid.NewGuid(), createdAt: later, expiresAt: later.AddDays(1)), emptying, later);
+        await store.AddAsync(ARecord(Guid.NewGuid(), createdAt: later, expiresAt: later.AddDays(1)), emptying, later, NullLogger.Instance);
 
         var left = await store.ReadAsync();
         Assert.Single(left);
@@ -288,13 +289,13 @@ public sealed class ShareBoundsTests : IDisposable
 
         var first = ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(1));
         var second = ARecord(Guid.NewGuid(), expiresAt: Now.AddDays(1));
-        await store.AddAsync(first, bounds, Now);
-        await store.AddAsync(second, bounds, Now);
+        await store.AddAsync(first, bounds, Now, NullLogger.Instance);
+        await store.AddAsync(second, bounds, Now, NullLogger.Instance);
 
         // Both have expired and both are past retention, so a third create is
         // admitted and what it leaves behind is one record rather than three.
         var later = Now.AddDays(3);
-        await store.AddAsync(ARecord(Guid.NewGuid(), createdAt: later, expiresAt: later.AddDays(1)), bounds, later);
+        await store.AddAsync(ARecord(Guid.NewGuid(), createdAt: later, expiresAt: later.AddDays(1)), bounds, later, NullLogger.Instance);
 
         Assert.Single(await store.ReadAsync());
     }

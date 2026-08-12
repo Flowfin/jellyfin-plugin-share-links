@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -283,7 +284,8 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
             situation.KeyFile,
             ContextFor(situation.Caller),
             ManagerSaying(situation.Status),
-            At(situation.Now))
+            At(situation.Now),
+            NullLogger<ShareLinksGuestController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

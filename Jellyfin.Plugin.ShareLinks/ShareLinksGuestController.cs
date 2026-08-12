@@ -9,6 +9,7 @@ using MediaBrowser.Model.Plugins;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
@@ -55,6 +56,7 @@ public class ShareLinksGuestController : ControllerBase
     private readonly IAuthorizationContext _authorizationContext;
     private readonly IPluginManager _pluginManager;
     private readonly TimeProvider _clock;
+    private readonly ILogger<ShareLinksGuestController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ShareLinksGuestController"/> class.
@@ -64,18 +66,21 @@ public class ShareLinksGuestController : ControllerBase
     /// <param name="authorizationContext">The server's own answer to who is asking.</param>
     /// <param name="pluginManager">The server's own answer to what this plugin's status is.</param>
     /// <param name="clock">The clock an expiry is judged against.</param>
+    /// <param name="logger">Where this route's two lines go (#27).</param>
     public ShareLinksGuestController(
         IShareStore store,
         ShareKeyFile keyFile,
         IAuthorizationContext authorizationContext,
         IPluginManager pluginManager,
-        TimeProvider clock)
+        TimeProvider clock,
+        ILogger<ShareLinksGuestController> logger)
     {
         _store = store;
         _keyFile = keyFile;
         _authorizationContext = authorizationContext;
         _pluginManager = pluginManager;
         _clock = clock;
+        _logger = logger;
     }
 
     /// <summary>
@@ -104,15 +109,22 @@ public class ShareLinksGuestController : ControllerBase
         }
         catch (ShareStoreUnreadableException)
         {
+            // Not one of the decision's reasons, because the decision was never
+            // made. It is a state an operator has to act on rather than one more
+            // refused token, so it is a warning and it is not dressed up as a
+            // refusal code that would read as a token that named nothing.
+            ShareLog.StoreUnreadable(_logger);
             return TheOnlyRefusal();
         }
 
         var resolution = ShareResolution.Resolve(records, _keyFile, token, caller, StatusOfThisPlugin(), _clock);
         if (resolution.Share is not { } share)
         {
+            ShareLog.Refused(_logger, resolution.Refusal);
             return TheOnlyRefusal();
         }
 
+        ShareLog.Resolved(_logger, share);
         return Redirect(TheItemsAddress(share.ItemId));
     }
 

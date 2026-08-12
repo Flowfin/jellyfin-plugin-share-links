@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -387,7 +388,8 @@ public sealed class GuestRouteTests : IDisposable
             _keyFile,
             authorization,
             ManagerSaying(status),
-            At(Now))
+            At(Now),
+            NullLogger<ShareLinksGuestController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

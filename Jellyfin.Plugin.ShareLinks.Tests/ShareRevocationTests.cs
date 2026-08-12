@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks;
 using MediaBrowser.Model.Plugins;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -71,7 +72,7 @@ public sealed class ShareRevocationTests : IDisposable
         var before = ShareResolution.Resolve(await store.ReadAsync(), Key, "a-token", Invited, PluginStatus.Active, At(Now));
         Assert.True(before.IsResolved);
 
-        await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1));
+        await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), NullLogger.Instance);
 
         var after = ShareResolution.Resolve(await store.ReadAsync(), Key, "a-token", Invited, PluginStatus.Active, At(Now.AddMinutes(2)));
         Assert.Equal(ShareRefusal.Revoked, after.Refusal);
@@ -91,7 +92,7 @@ public sealed class ShareRevocationTests : IDisposable
         var share = ARecord();
         await store.MutateAsync(_ => new[] { share });
 
-        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), "shared with the wrong person");
+        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), NullLogger.Instance, "shared with the wrong person");
 
         Assert.NotNull(revoked);
         Assert.Equal(Now.AddMinutes(1), revoked!.RevokedAt);
@@ -117,10 +118,10 @@ public sealed class ShareRevocationTests : IDisposable
         var share = ARecord();
         await store.MutateAsync(_ => new[] { share });
 
-        await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), "the first press");
+        await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), NullLogger.Instance, "the first press");
         var afterFirst = await File.ReadAllTextAsync(StorePath);
 
-        var second = await store.RevokeAsync(share.Id, Guid.NewGuid(), Now.AddHours(5), "the second press");
+        var second = await store.RevokeAsync(share.Id, Guid.NewGuid(), Now.AddHours(5), NullLogger.Instance, "the second press");
 
         Assert.NotNull(second);
         Assert.Equal(Now.AddMinutes(1), second!.RevokedAt);
@@ -143,7 +144,7 @@ public sealed class ShareRevocationTests : IDisposable
         await store.MutateAsync(_ => new[] { share });
         var before = await File.ReadAllTextAsync(StorePath);
 
-        var result = await store.RevokeAsync(share.Id, Operator, Now.AddDays(30));
+        var result = await store.RevokeAsync(share.Id, Operator, Now.AddDays(30), NullLogger.Instance);
 
         Assert.NotNull(result);
         Assert.Null(result!.RevokedAt);
@@ -157,7 +158,7 @@ public sealed class ShareRevocationTests : IDisposable
         var share = ARecord();
         await store.MutateAsync(_ => new[] { share });
 
-        var result = await store.RevokeAsync(Guid.NewGuid(), Operator, Now.AddMinutes(1));
+        var result = await store.RevokeAsync(Guid.NewGuid(), Operator, Now.AddMinutes(1), NullLogger.Instance);
 
         Assert.Null(result);
         Assert.Null((await store.ReadAsync()).Single().RevokedAt);
@@ -171,7 +172,7 @@ public sealed class ShareRevocationTests : IDisposable
         var neighbour = ARecord(token: "another-token");
         await store.MutateAsync(_ => new[] { neighbour, wanted });
 
-        await store.RevokeAsync(wanted.Id, Operator, Now.AddMinutes(1));
+        await store.RevokeAsync(wanted.Id, Operator, Now.AddMinutes(1), NullLogger.Instance);
 
         var records = await store.ReadAsync();
         Assert.Equal(2, records.Count);
@@ -191,7 +192,7 @@ public sealed class ShareRevocationTests : IDisposable
         var share = ARecord();
         await store.MutateAsync(_ => new[] { share });
 
-        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1));
+        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), NullLogger.Instance);
 
         Assert.NotSame(share, revoked);
         Assert.Null(share.RevokedAt);
@@ -210,7 +211,7 @@ public sealed class ShareRevocationTests : IDisposable
         var share = ARecord();
         await store.MutateAsync(_ => new[] { share });
 
-        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), "why");
+        var revoked = await store.RevokeAsync(share.Id, Operator, Now.AddMinutes(1), NullLogger.Instance, "why");
 
         var untouched = typeof(ShareRecord).GetProperties()
             .Where(property => property.Name is not (nameof(ShareRecord.RevokedAt)

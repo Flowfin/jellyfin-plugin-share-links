@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks;
 using MediaBrowser.Model.Plugins;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -89,7 +90,7 @@ public sealed class BackupRestoreTests : IDisposable
         await store.MutateAsync(_ => new[] { share });
         Take(StorePath);
 
-        Assert.NotNull(await store.RevokeAsync(share.Id, Operator, WhileLive, "sent to the wrong person"));
+        Assert.NotNull(await store.RevokeAsync(share.Id, Operator, WhileLive, NullLogger.Instance, "sent to the wrong person"));
         Assert.Equal(ShareRefusal.Revoked, Resolve(await store.ReadAsync(), key, token).Refusal);
 
         Restore(StorePath);
@@ -120,7 +121,7 @@ public sealed class BackupRestoreTests : IDisposable
 
         await store.MutateAsync(_ => new[] { share });
         Take(StorePath);
-        await store.RevokeAsync(share.Id, Operator, WhileLive, "sent to the wrong person");
+        await store.RevokeAsync(share.Id, Operator, WhileLive, NullLogger.Instance, "sent to the wrong person");
         Restore(StorePath);
 
         var restored = Assert.Single(await store.ReadAsync());

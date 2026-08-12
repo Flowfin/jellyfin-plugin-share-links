@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
@@ -23,6 +24,7 @@ public static class ShareStoreExtensions
     /// <param name="record">The record to add.</param>
     /// <param name="bounds">The ceilings and the retention rule.</param>
     /// <param name="now">The instant the create is happening at.</param>
+    /// <param name="logger">Where the created line goes (#27).</param>
     /// <param name="cancellationToken">Cancels the change.</param>
     /// <returns>The records that were written.</returns>
     /// <exception cref="ShareBoundExceededException">The create would pass a ceiling. The store is left as it was, so the refusal costs nothing.</exception>
@@ -61,13 +63,14 @@ public static class ShareStoreExtensions
         ShareRecord record,
         ShareBounds bounds,
         DateTimeOffset now,
+        ILogger logger,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(bounds);
 
-        return await store.MutateAsync(
+        var written = await store.MutateAsync(
             current =>
             {
                 var kept = bounds.Retained(current, now);
@@ -84,6 +87,14 @@ public static class ShareStoreExtensions
                 return next;
             },
             cancellationToken).ConfigureAwait(false);
+
+        // After the write and not before it. A line saying a share was created
+        // is a line an operator reads as a share that exists, and a create that
+        // was refused by a ceiling or lost to an unwritable store did not create
+        // one. The refusal leaves by its exception instead.
+        ShareLog.Created(logger, record);
+
+        return written;
     }
 
     /// <summary>
@@ -93,6 +104,7 @@ public static class ShareStoreExtensions
     /// <param name="shareId">The share to revoke.</param>
     /// <param name="revokedByUserId">The account pressing revoke.</param>
     /// <param name="revokedAt">The instant the revocation happens at, which is also the instant the share's state is judged against.</param>
+    /// <param name="logger">Where the revocation line goes (#27).</param>
     /// <param name="reason">Free text for another operator to read later, or <c>null</c>.</param>
     /// <param name="cancellationToken">Cancels the change.</param>
     /// <returns>The record as it stands after the call, or <c>null</c> where the store holds no share with that identifier.</returns>
@@ -132,16 +144,24 @@ public static class ShareStoreExtensions
         Guid shareId,
         Guid revokedByUserId,
         DateTimeOffset revokedAt,
+        ILogger logger,
         string? reason = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
 
         ShareRecord? outcome = null;
+        var what = ShareRevocation.NoSuchShare;
 
         await store.MutateAsync(
             current =>
             {
+                // Reset per pass rather than only once outside, so a store that
+                // hands the callback the records a second time cannot leave a
+                // verdict from the first pass standing behind the line below.
+                outcome = null;
+                what = ShareRevocation.NoSuchShare;
+
                 var next = new List<ShareRecord>(current.Count);
                 for (var index = 0; index < current.Count; index++)
                 {
@@ -157,17 +177,24 @@ public static class ShareStoreExtensions
                         // Already stopped, by revocation or by its own instant.
                         // Nothing to change, and the call still succeeds.
                         outcome = record;
+                        what = ShareRevocation.AlreadyStopped;
                         next.Add(record);
                         continue;
                     }
 
                     outcome = Revoked(record, revokedByUserId, revokedAt, reason);
+                    what = ShareRevocation.Revoked;
                     next.Add(outcome);
                 }
 
                 return next;
             },
             cancellationToken).ConfigureAwait(false);
+
+        // Every ask, including the ones that changed nothing. An operator who
+        // pressed revoke and finds no line cannot tell a press the server never
+        // received from a press it received and agreed was already done.
+        ShareLog.Revoked(logger, shareId, what);
 
         return outcome;
     }
