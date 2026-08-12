@@ -152,6 +152,52 @@ public sealed class GuestRouteTests : IDisposable
     }
 
     /// <summary>
+    /// The same case again, with an identifier sitting beside the answer that
+    /// says nobody was authenticated. The route reads two things off the
+    /// authorization the server hands it, and a fixture where both are absent
+    /// exercises neither of them on its own: with the two joined by "or" instead
+    /// of "and", the test above still passes and this one does not.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnIdentifierBesideAnUnauthenticatedAnswerIsNotACaller()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord() });
+
+        // The account the share names, attached to an authorization that says the
+        // server authenticated nobody. Taking the identifier anyway is the route
+        // trusting something beside the server's own answer, which is the one
+        // thing the design rests on, and the share would open.
+        var answer = await Ask(store, "a-token", ContextSaying(authenticated: false, account: Invited));
+
+        Assert.IsType<NotFoundResult>(answer);
+    }
+
+    /// <summary>
+    /// The other half of the same pair. An authorization that says somebody was
+    /// authenticated and carries no account is not an account, and the empty
+    /// identifier is not a caller a record can name.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnAuthenticatedAnswerWithNoAccountIsNotACaller()
+    {
+        using var store = new ShareStore(StorePath);
+
+        // A record naming the empty identifier is not one this plugin writes. It
+        // is what a store edited by hand holds, and it is the only arrangement in
+        // which dropping the second half of the pair is visible: without it the
+        // empty identifier is refused for not being invited rather than for not
+        // being an account.
+        await store.MutateAsync(_ => new[] { ARecord(invited: Guid.Empty) });
+
+        var answer = await Ask(store, "a-token", ContextSaying(authenticated: true, account: null));
+
+        Assert.IsType<NotFoundResult>(answer);
+    }
+
+    /// <summary>
     /// The answers to every way of getting nothing are the same bytes on the
     /// wire. This is #26's condition and #68's third clause, and it is asserted
     /// over what the result writes rather than over its type.
@@ -237,12 +283,13 @@ public sealed class GuestRouteTests : IDisposable
     private ShareRecord ARecord(
         string token = "a-token",
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? revokedAt = null) => new ShareRecord
+        DateTimeOffset? revokedAt = null,
+        Guid? invited = null) => new ShareRecord
         {
             SchemaVersion = ShareRecord.CurrentSchemaVersion,
             Id = Guid.NewGuid(),
             ItemId = Item,
-            InvitedUserIds = new[] { Invited },
+            InvitedUserIds = new[] { invited ?? Invited },
             CreatedByUserId = Guid.NewGuid(),
             CreatedAt = Now.AddDays(-1),
             ExpiresAt = expiresAt ?? Now.AddDays(7),
@@ -268,14 +315,25 @@ public sealed class GuestRouteTests : IDisposable
     }
 
     private static IAuthorizationContext ContextFor(Guid? caller)
+        => ContextSaying(authenticated: caller is not null, account: caller);
+
+    /// <summary>
+    /// An authorization answer with its two halves set separately. The ordinary
+    /// fixture moves them together, because that is what a server produces, and
+    /// then neither half is exercised on its own.
+    /// </summary>
+    /// <param name="authenticated">What the answer says about whether anybody was authenticated.</param>
+    /// <param name="account">The account attached to the answer, or none.</param>
+    /// <returns>A context returning that answer for any request.</returns>
+    private static IAuthorizationContext ContextSaying(bool authenticated, Guid? account)
     {
         // The identifier is not something a caller of this type sets. It comes
         // off the account the server attached, which is #53 seen from the other
         // side, so a fixture that wants a particular caller has to attach one.
         var authorization = new AuthorizationInfo
         {
-            IsAuthenticated = caller is not null,
-            User = caller is { } identified
+            IsAuthenticated = authenticated,
+            User = account is { } identified
                 ? new User("guest", "provider", "reset") { Id = identified }
                 : null,
         };
@@ -311,16 +369,23 @@ public sealed class GuestRouteTests : IDisposable
             Encoding.UTF8.GetString(body.ToArray()));
     }
 
-    private async Task<ActionResult> Ask(
+    private Task<ActionResult> Ask(
         IShareStore store,
         string presentedToken,
         Guid? caller,
+        PluginStatus status = PluginStatus.Active)
+        => Ask(store, presentedToken, ContextFor(caller), status);
+
+    private async Task<ActionResult> Ask(
+        IShareStore store,
+        string presentedToken,
+        IAuthorizationContext authorization,
         PluginStatus status = PluginStatus.Active)
     {
         var controller = new ShareLinksGuestController(
             store,
             _keyFile,
-            ContextFor(caller),
+            authorization,
             ManagerSaying(status),
             At(Now))
         {
