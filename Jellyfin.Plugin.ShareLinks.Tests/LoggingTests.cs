@@ -277,7 +277,7 @@ public sealed class LoggingTests : IDisposable
 
         var line = Assert.Single(_log.Lines);
         Assert.Equal(LogLevel.Warning, line.Level);
-        Assert.Empty(line.Fields.Where(name => !string.Equals(name, "{OriginalFormat}", StringComparison.Ordinal)));
+        Assert.DoesNotContain(line.Fields, name => !string.Equals(name, "{OriginalFormat}", StringComparison.Ordinal));
     }
 
     // Create, resolve, refuse and revoke, in one store, so that every assertion
