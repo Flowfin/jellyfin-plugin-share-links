@@ -46,6 +46,10 @@
     <None Include="..\docs\bounds.md" Link="bounds.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\guest-capabilities.md" Link="guest-capabilities.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\docs\api.md" Link="api.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The whole directory, because LimitsTests compares the documents docs/limits.md
+         names against the documents that exist, and a list of individual copies here
+         would be the second list the comparison is meant to remove. -->
+    <None Include="..\docs\*.md" Link="docs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
