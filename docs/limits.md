@@ -58,6 +58,19 @@ already lets it reach.
 should see one item is one the operator narrows themselves, through the server's
 own library permissions, until that filter lands.
 
+### Another plugin's routes are outside anything this plugin can refuse
+
+#47's list of what a token can never reach ends on a line this plugin cannot hold:
+what a guest's account may reach on a server whose other plugins this one does not
+know about. It is not a test that can be written here, because there is no other
+plugin in the suite to point at and adding one would test an installation rather
+than this code. #47 names it as a documented statement with the reason it has none,
+and this is that statement.
+
+**What an operator does.** Reads a share as a bound on what this plugin serves and
+not as a bound on the server. Where another plugin exposes something a guest
+account should not reach, that plugin's own permissions are what keep them out.
+
 ### Nothing enforces a bitrate ceiling
 
 The record carries a ceiling and `EffectiveBitrate` takes the lowest of the three
@@ -145,12 +158,14 @@ and the request is not used instead.
 
 ### A clock that moves backwards brings expired shares back
 
-Expiry is compared against the clock on every request, so a server whose clock
-jumps backwards resolves shares that had already expired. #45 argues it in
-`docs/expiry.md` and leans on the retention sweep to bound it.
+Expiry is compared against the clock on every request, so a backwards step larger
+than the time since a share expired makes that share live again. #45 accepts it
+rather than calling it impossible, and the bound is the sweep: a record retention
+has already removed does not come back, and a revocation is a recorded state that
+no clock movement undoes. #79 is where both halves are asserted.
 
-**What an operator does.** Keeps the server's clock disciplined, and revokes rather
-than waiting on an expiry where it matters.
+**What an operator does.** Revokes rather than waiting on an expiry wherever it
+matters, because a revocation survives a clock that an expiry does not.
 
 ## The guest
 
