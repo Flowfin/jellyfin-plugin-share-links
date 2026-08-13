@@ -78,7 +78,10 @@ and who pressed it. The retention clock runs from the end of the share either wa
 
 Expired. The record stays until the sweep deletes it, ninety days after it ended.
 Expiry is an instant rather than an event, which is `docs/expiry.md`, so nothing
-happens to the file at that moment; what removes the record is the sweep.
+happens to the file at that moment; what removes the record is the sweep. The
+sweep runs on the way to the next share being created rather than on a timer, so
+ninety days is when a record stops being kept rather than when it stops existing,
+and the section below says what that costs.
 
 The guest account deleted from the server. The record still names the identifier,
 because the record is what says a share was made, and an identifier for an account
@@ -119,10 +122,34 @@ The removal claim is executed rather than described. A store is written with two
 shares, one of them naming a guest, that share is removed, and the file is then read
 as text and asserted to hold neither the guest's identifier nor the share's.
 
-What is not checked is the retention sweep, because there is no sweep. Ninety days
-is a decision here and a number nothing yet reads; the setting it becomes is #71 and
-the sweep that acts on it is #29. Until those land, this page states a rule the tree
-does not enforce, and the guard above proves the list rather than the deletion.
+The retention sweep is checked, and it was not when this section was first written.
+Ninety days is a setting the tree reads, which is #71:
+
+    git grep -n 'ExpiredShareRetentionDays' -- Jellyfin.Plugin.ShareLinks/Configuration/PluginConfiguration.cs
+    Jellyfin.Plugin.ShareLinks/Configuration/PluginConfiguration.cs:109:    public int ExpiredShareRetentionDays { get; set; } = ShareBounds.DefaultExpiredShareRetentionDays;
+
+and something acts on it, which is #29:
+
+    git grep -n 'bounds.Retained(current, now)' -- Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs
+    Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:76:                var kept = bounds.Retained(current, now);
+
+Four tests stand behind it, two over the window itself and two over what a write
+leaves in the file:
+
+    git grep -nE 'public (void|async Task) (Retention|ARetentionOfZero|TheSweepRuns)' -- Jellyfin.Plugin.ShareLinks.Tests/ShareBoundsTests.cs
+    Jellyfin.Plugin.ShareLinks.Tests/ShareBoundsTests.cs:231:    public void RetentionKeepsWhatStoppedInsideTheWindowAndDropsWhatDidNot()
+    Jellyfin.Plugin.ShareLinks.Tests/ShareBoundsTests.cs:249:    public void RetentionDatesFromWhenTheShareStoppedAndNotFromTheLaterRevocation()
+    Jellyfin.Plugin.ShareLinks.Tests/ShareBoundsTests.cs:264:    public async Task ARetentionOfZeroEmptiesWhatHasStoppedWorkingAtTheNextWrite()
+    Jellyfin.Plugin.ShareLinks.Tests/ShareBoundsTests.cs:285:    public async Task TheSweepRunsBeforeTheCeilingIsCounted()
+
+What is not checked, and cannot be while the sweep has this shape, is the ninety
+days elapsing on their own. The sweep runs on the way to a write rather than on a
+timer, so a server nobody creates a share on does not sweep, and a record that
+ended a year ago sits in the file until the next share is made. That is a bound on
+what this page promises rather than a detail of the implementation: retention here
+means a record does not survive the next write past its window, not that it is gone
+the morning after it expires. The scheduled task that would make the deletion
+prompt is not in this tree.
 
 The account half is not checked either. Nothing in this tree creates or deletes a
 server account, so the join sentence above is a statement about
