@@ -14,9 +14,16 @@ namespace Jellyfin.Plugin.ShareLinks.Configuration;
 /// <para>
 /// The four bounds below are read by <see cref="ShareBounds"/>, which refuses a
 /// value outside what the setting admits rather than serving under a rule nobody
-/// wrote. Refusal on save, and the controls an operator edits these with, are
-/// #71 and #70 and are not here yet, so a value edited into the file by hand is
-/// refused when a share is created and not when it is written.
+/// wrote.
+/// </para>
+/// <para>
+/// Two moments refuse a value, and they are not the same moment.
+/// <see cref="ShareConfiguration.Refuse"/> judges the whole class at once and is
+/// what <see cref="Plugin.UpdateConfiguration"/> calls, so a value saved through
+/// the server is refused as it is written. A file edited by hand never passes
+/// through that, and there the refusal is the older one: the routine that reads
+/// the setting refuses it, which is when a share is created rather than when the
+/// file is changed. The controls an operator edits these with are #70.
 /// </para>
 /// </remarks>
 public class PluginConfiguration : BasePluginConfiguration
@@ -71,6 +78,25 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <c>docs/expiry.md</c> is where that is argued.
     /// </remarks>
     public int MaxShareLifetimeDays { get; set; } = ShareBounds.DefaultMaxShareLifetimeDays;
+
+    /// <summary>
+    /// Gets or sets the lifetime, in days, a share is given when the operator
+    /// creating it names no expiry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fallback rather than a second ceiling. A share created with an expiry of
+    /// its own keeps that one, and both are held to
+    /// <see cref="MaxShareLifetimeDays"/>.
+    /// </para>
+    /// <para>
+    /// <see cref="ShareConfiguration"/> is where the value is refused against its
+    /// bounds, and the upper one is the ceiling above rather than a number of its
+    /// own: a default longer than the ceiling is a configuration in which every
+    /// share created without an expiry is refused.
+    /// </para>
+    /// </remarks>
+    public int DefaultShareLifetimeDays { get; set; } = ShareConfiguration.DefaultShareLifetimeDays;
 
     /// <summary>
     /// Gets or sets how many days a share that has stopped working is kept before it is deleted.
