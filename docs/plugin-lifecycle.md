@@ -56,6 +56,12 @@ values are the server's:
 A refusal for this reason is a refusal like any other on the guest route: the
 caller is told nothing about why, which is #26.
 
+The sentence above is a claim about behaviour, so it has a test behind it, over
+every status that is not Active rather than over the one an operator presses:
+
+    git grep -n 'public void APluginThatIsNotActiveRefusesALiveShare' -- Jellyfin.Plugin.ShareLinks.Tests/
+    Jellyfin.Plugin.ShareLinks.Tests/ShareResolutionTests.cs:122:    public void APluginThatIsNotActiveRefusesALiveShare(PluginStatus status)
+
 Nothing else changes. Records stay where they are, expiry keeps running against
 the clock rather than against the plugin, and re-enabling the plugin resolves the
 shares that have not expired or been revoked in the meantime. A disabled plugin
@@ -82,36 +88,49 @@ promises is the list below, which holds whether the hook ran or not.
 
 ## What is on disk, and what removes it
 
-Today, nothing of this plugin's own. It writes no file and never asks the server
-where its data folder is:
+Three files.
 
-    git grep -n 'DataFolderPath' -- 'Jellyfin.Plugin.ShareLinks/*.cs' ; echo "exit=$?"
-    exit=1
-
-What exists is the configuration file the base class writes for every plugin,
-under the path the server supplies:
+The configuration file, which the base class writes for every plugin, under the
+path the server supplies:
 
     grep -A2 'name="P:MediaBrowser.Common.Plugins.BasePlugin`1.ConfigurationFilePath"' "$common"
     <member name="P:MediaBrowser.Common.Plugins.BasePlugin`1.ConfigurationFilePath">
         <summary>
         Gets the full path to the configuration file.
 
-The share store lands under the plugin's own data folder, which is the choice
-`docs/share-store.md` records, and the store itself is #35 and #37. When it
-lands, it is the second entry in this list, and this section grows one line
-rather than being rewritten.
+The share store, which holds the records, and the key the token hashes are
+computed with. Both are this plugin's own, both live in the plugin's data
+folder, and both names are fixed in one place:
+
+    git grep -nE 'public const string (StoreFileName|KeyFileName)' -- Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:51:    public const string StoreFileName = "shares.json";
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:57:    public const string KeyFileName = "share-key";
+
+The plugin asks the server where that folder is rather than choosing one, and
+there is a single place it does the asking:
+
+    git grep -n 'DataFolderPath' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:80:        return Path.Combine(plugin.DataFolderPath, fileName);
+
+Why the store sits there rather than in the configuration is
+`docs/share-store.md`, and what the key is, how it is made and what rotating it
+costs is `docs/share-key.md`.
 
 **The one action that removes it.** Delete the plugin's data folder. The server
 reports the path as `DataFolderPath`, and it is a folder this plugin owns
 entirely, so removing it removes every share record and the keyed hash secret
 with them. The concrete path depends on where the server keeps plugin data and is
 the server's to decide, so no path is written here: a path written here that is
-wrong on somebody's install is worse than the property, which is that everything
-this plugin keeps is inside one folder and nothing of it is anywhere else.
+wrong on somebody's install is worse than the property, which is that both of the
+files this plugin writes are inside one folder and neither is anywhere else.
 
-That property is what makes the deliberate purge one action instead of a hunt,
-and it is the reason the configuration file holds no share data. `docs/share-store.md`
-argues that choice for other reasons and this is a third.
+The third is the configuration file, and it is left out of that action rather
+than forgotten. Where it sits is the server's to decide, and what it holds is
+settings: no token, no record, and nothing about a guest. `docs/personal-data.md`
+is the list of what is held about a person, and it is the store rather than this
+file. That is what makes the deliberate purge one action instead of a hunt.
+`docs/share-store.md` argues the same choice for other reasons and this is a
+third.
 
 ## What an uninstall does not undo
 
@@ -127,13 +146,19 @@ page states it beside the others.
 
 ## What is not covered here
 
-The test. #38 asks for one asserting that a disabled plugin refuses to resolve a
-live share, and there is no resolution routine to refuse from yet:
+The removal of the two files this plugin owns. The hook is not implemented, so
+nothing here runs when the plugin is uninstalled:
 
-    git grep -nE '^\s*(public|internal).*(class|record|struct|interface|enum) ' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
-    Jellyfin.Plugin.ShareLinks/Configuration/PluginConfiguration.cs:14:public class PluginConfiguration : BasePluginConfiguration
-    Jellyfin.Plugin.ShareLinks/Plugin.cs:15:public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
-    Jellyfin.Plugin.ShareLinks/ShareTokens.cs:52:public static class ShareTokens
+    git grep -n 'OnUninstalling' -- 'Jellyfin.Plugin.ShareLinks/*.cs' ; echo "exit=$?"
+    exit=1
+
+and the one deletion in the plugin is not this one. It removes the temporary
+file of a write that failed, on a path that has not touched the store:
+
+    git grep -n 'File.Delete' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
+    Jellyfin.Plugin.ShareLinks/ShareStore.cs:483:            File.Delete(path);
+
+So the action above is an operator's, and the list is what they act on.
 
 Whether the hook runs on every removal path, as said above. Measuring it needs a
 running server, which no test in this repository may reach, and

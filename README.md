@@ -26,9 +26,17 @@ catalogue shows:
       No version of this plugin has been published yet, so there is nothing here to
       read. A released version carries its own entry.
 
-What the tree holds is the plugin's identity, its page in the dashboard, and the
-routine that mints the token a link carries. There is no share record, no store,
-no route and no share list yet, so there is nothing here that shares anything.
+What the tree holds is the share record, the store it is kept in, the token and
+the keyed hash it is looked up by, the one routine that decides whether a share
+resolves, and the guest route a link points at. What it does not hold is any way
+to make a share: the whole route surface is one action, and it is the guest's.
+
+    git grep -nE '\[HttpGet|\[HttpPost|\[HttpDelete' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
+    Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:98:    [HttpGet("Guest/{token}")]
+
+So an operator has nothing to press. The administrator routes that create, list
+and revoke a share are #67, and the page that drives them is #70, and until both
+land nothing here shares anything.
 
 Everything below the next heading is therefore the design rather than a
 description of a working install. It is written down because the shape of the
