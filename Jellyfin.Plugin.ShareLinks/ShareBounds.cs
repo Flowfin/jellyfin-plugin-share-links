@@ -131,6 +131,32 @@ public sealed class ShareBounds
     }
 
     /// <summary>
+    /// Why the configured ceilings may not be used, or <c>null</c> when they may.
+    /// </summary>
+    /// <param name="configuration">The plugin configuration.</param>
+    /// <returns>A sentence naming the setting and the bound it missed, or <c>null</c>.</returns>
+    /// <remarks>
+    /// It asks <see cref="From(PluginConfiguration)"/> rather than comparing the
+    /// four values again, so there is one copy of each bound and an answer given
+    /// here cannot drift from the refusal that actually bites. The sentence names
+    /// the setting because the constructor is handed each setting's own name.
+    /// </remarks>
+    public static string? RefuseSettings(PluginConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        try
+        {
+            From(configuration);
+            return null;
+        }
+        catch (ArgumentOutOfRangeException refused)
+        {
+            return refused.Message;
+        }
+    }
+
+    /// <summary>
     /// Whether a record answers at an instant.
     /// </summary>
     /// <param name="record">The record.</param>

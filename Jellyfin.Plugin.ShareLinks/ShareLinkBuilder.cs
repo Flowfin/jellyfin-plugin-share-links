@@ -84,6 +84,33 @@ public static class ShareLinkBuilder
     }
 
     /// <summary>
+    /// Why the configured base URL may not be used, or <c>null</c> when it may.
+    /// </summary>
+    /// <param name="configuredBaseUrl">The value of the <c>PublicBaseUrl</c> setting.</param>
+    /// <returns>A sentence saying what is wrong with it, or <c>null</c>.</returns>
+    /// <remarks>
+    /// Empty is not refused. It is the setting's own default and it means the link
+    /// is built from what the request claimed, which <see cref="Build"/> is where
+    /// the cost of is written down. Refusing it here would make a fresh install an
+    /// invalid one.
+    /// </remarks>
+    public static string? Refuse(string? configuredBaseUrl)
+    {
+        var configured = (configuredBaseUrl ?? string.Empty).Trim();
+
+        if (configured.Length == 0)
+        {
+            return null;
+        }
+
+        // The same routine Build uses, so the rule has one home and this answer
+        // cannot admit a value the link builder would then refuse.
+        return TryReadBaseUrl(configured, out _)
+            ? null
+            : "the value is not an absolute http or https URL, or it carries credentials, a query or a fragment, so no link can be built from it";
+    }
+
+    /// <summary>
     /// Builds the absolute link for a share.
     /// </summary>
     /// <param name="configuredBaseUrl">The value of the <c>PublicBaseUrl</c> setting, empty when the operator has set none.</param>
