@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
@@ -92,10 +93,10 @@ public class ShareStoreInterfaceTests
         using var owner = Open(implementation);
         var bounds = new ShareBounds(maxLiveShares: 1, maxLiveSharesPerItem: 99, maxShareLifetimeDays: 30, expiredShareRetentionDays: 90);
 
-        await owner.Store.AddAsync(ARecord(), bounds, Now);
+        await owner.Store.AddAsync(ARecord(), bounds, Now, NullLogger.Instance);
 
         await Assert.ThrowsAsync<ShareBoundExceededException>(
-            () => owner.Store.AddAsync(ARecord(), bounds, Now));
+            () => owner.Store.AddAsync(ARecord(), bounds, Now, NullLogger.Instance));
 
         Assert.Single(await owner.Store.ReadAsync());
     }
@@ -114,10 +115,10 @@ public class ShareStoreInterfaceTests
         var bounds = new ShareBounds(maxLiveShares: 99, maxLiveSharesPerItem: 99, maxShareLifetimeDays: 30, expiredShareRetentionDays: 0);
 
         var dead = ARecord(expiresAt: Now.AddMinutes(1));
-        await owner.Store.AddAsync(dead, bounds, Now);
+        await owner.Store.AddAsync(dead, bounds, Now, NullLogger.Instance);
 
         var later = Now.AddHours(1);
-        await owner.Store.AddAsync(ARecord(createdAt: later, expiresAt: later.AddDays(1)), bounds, later);
+        await owner.Store.AddAsync(ARecord(createdAt: later, expiresAt: later.AddDays(1)), bounds, later, NullLogger.Instance);
 
         var left = await owner.Store.ReadAsync();
         Assert.Single(left);
