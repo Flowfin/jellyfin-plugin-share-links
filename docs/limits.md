@@ -247,6 +247,28 @@ every time and leaves a record behind for the whole retention window. Both are
 **What an operator does.** Reads `ExpiredShareRetentionDays` as a ceiling on a busy
 server rather than as a promise on a quiet one.
 
+### Removing a share does not reach a copy somebody else made
+
+The store rewrites the whole file and the write is a rename over the destination,
+so a removed record leaves no earlier version of the file behind. What that does
+not reach is a backup taken while the share was live, and this plugin deletes
+nothing outside its own file. #31 is where what is held about a guest, and for how
+long, is written down in `docs/personal-data.md`.
+
+**What an operator does.** Treats their own backups as the second place a guest's
+data lives, and prunes them on whatever schedule they already keep.
+
+### A share created before an upgrade can carry less than a share created after it
+
+The record is versioned and a field added later is absent from a record written
+earlier. Silence is read the safe way each time, which for #144's provenance field
+means an older record claims to have created none of its invited accounts, so the
+plugin will not remove an account it cannot prove it made. #37 is the migration
+path that carries records forward.
+
+**What an operator does.** Expects guest accounts invited before an upgrade to
+outlive their shares, and removes those by hand.
+
 ### What permissions these files carry on Windows was never measured
 
 The plugin can set a POSIX mode on a file it creates. What a Windows server gives
@@ -300,6 +322,18 @@ its own, in `docs/guest-confinement.md`.
 **What an operator does.** Nothing. It is written down so a reader who has met the
 upstream defect elsewhere does not go looking for it here.
 
+## Scripting against the routes
+
+### The route shape promises nothing yet
+
+`docs/api.md` describes every route the plugin serves and #72 is explicit that it
+promises no stability: no version has been published, so nothing here has ever been
+depended on by an installed copy, and a change to a path, an input or an answer
+appears in the release it lands in.
+
+**What an operator does.** Scripts against these routes at their own risk until
+there is a release to record a change against.
+
 ## The server line, and the bound on every claim above
 
 ### The package declares 10.11 and nothing else
@@ -328,13 +362,10 @@ These documents under `docs/` contribute no entry, and they are listed so that a
 document arriving with a limit nobody collected is a red suite rather than a silent
 gap.
 
-- `docs/api.md`, the route table and what stability it promises, which is none yet.
 - `docs/catalogue-checklist.md`, the catalogue's requirements against this
   repository, whose refusals are decisions rather than limits an operator meets.
 - `docs/parity-ledger.md`, the gate compared against the sibling repository's.
 - `docs/RELEASING.md`, how a release is cut.
-- `docs/personal-data.md`, what is held about a guest, whose retention answer is
-  the sweep entry above and whose field list is checked against the record.
 - `docs/limits.md`, this page.
 
 ## What is checked, and what is not
