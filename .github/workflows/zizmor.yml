@@ -22,7 +22,7 @@ name: Workflow Security Analysis
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
     branches: ["**"]
 
