@@ -29,8 +29,11 @@ on:
   # Keeps the Maintained check current and re-scores against upstream drift.
   schedule:
     - cron: "27 4 * * 1"
+  # The default branch here is `master`. This said `main`, which the upstream
+  # template ships and this repository has never had, so the trigger the comment
+  # above describes never fired (#211).
   push:
-    branches: [main]
+    branches: [master]
 
 # Read-only by default; the analysis job adds only the scopes it needs. A
 # read-only top-level declaration is itself one of the Token-Permissions checks
