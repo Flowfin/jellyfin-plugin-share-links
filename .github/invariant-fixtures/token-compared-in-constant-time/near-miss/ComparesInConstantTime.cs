@@ -15,4 +15,12 @@ internal sealed class ComparesInConstantTime
         // An ordinary comparison over something that is not a secret is ordinary.
         return shareId == other;
     }
+
+    public bool SameShareById(Guid shareId, Guid other)
+    {
+        // So is Equals on something that is not a secret. The arm that reads the
+        // thing a comparison is made on has to tell this from the same call made
+        // on a hash, and a pattern that refused every Equals would refuse this.
+        return shareId.Equals(other);
+    }
 }
