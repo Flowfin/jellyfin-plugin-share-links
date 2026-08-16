@@ -140,6 +140,18 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
+    /// Every member of a share the page reads when it draws a row, taken off the
+    /// script rather than listed here.
+    /// </summary>
+    /// <returns>What the page reads off a share.</returns>
+    private static IReadOnlyList<string> ValuesThePageReadsOffAShare() =>
+        Regex.Matches(Page(), @"\bshare\.(?<member>[A-Za-z][A-Za-z0-9]*)")
+            .Select(match => match.Groups["member"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
     /// Every setting the configuration holds, against the type it holds it in.
     /// </summary>
     /// <returns>The setting's name against its type.</returns>
@@ -263,6 +275,42 @@ public class ConfigurationPageTests
 
         Assert.True(body.Success, "the page has no table body for the shares to be written into");
         Assert.Equal(string.Empty, body.Groups["rows"].Value.Trim());
+    }
+
+    /// <summary>
+    /// Every value the page reads off a share is a member the listing answers
+    /// with. A page reading a member by a name the type does not carry draws an
+    /// empty column and says nothing about it, which is the one failure in this
+    /// file that an operator meets as missing information rather than as an error.
+    /// </summary>
+    [Fact]
+    public void EveryValueThePageReadsOffAShareIsOneTheListingAnswersWith()
+    {
+        var answered = typeof(ShareSummary)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(member => member.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var read = ValuesThePageReadsOffAShare();
+        Assert.NotEmpty(read);
+
+        foreach (var member in read)
+        {
+            Assert.Contains(member, answered, StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The revocation instant is on the administrator view, which is #46's third
+    /// clause. An operator looking for a link somebody says has stopped working
+    /// needs to see when it was stopped, and the state alone does not carry it: a
+    /// share revoked after it had already expired reads as expired.
+    /// </summary>
+    [Fact]
+    public void TheViewShowsWhenAShareWasRevoked()
+    {
+        Assert.Contains(nameof(ShareSummary.RevokedAt), ValuesThePageReadsOffAShare(), StringComparer.Ordinal);
+        Assert.Contains("<th scope=\"col\">Revoked</th>", Page(), StringComparison.Ordinal);
     }
 
     /// <summary>
