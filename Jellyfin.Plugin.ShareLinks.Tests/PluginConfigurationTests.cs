@@ -98,8 +98,11 @@ public class PluginConfigurationTests
     {
         // The template page carried the template's guid in a script literal, a third
         // copy of the identifier that nothing kept in step with the other two. The
-        // page has no script and needs no identifier; if one ever returns it has to
-        // come from a source that cannot drift.
+        // page names an identifier again, because it reads and writes the plugin's
+        // configuration, and this test is now the half that refuses the template's
+        // one. That the identifier it does name is this plugin's own is
+        // ConfigurationPageTests.TheIdentifierThePageAsksForItsConfigurationByIsThePluginsOwn,
+        // which is the source that cannot drift this comment used to ask for.
         using var stream = PluginAssembly.GetManifestResourceStream(
             string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", typeof(Plugin).Namespace));
         Assert.NotNull(stream);

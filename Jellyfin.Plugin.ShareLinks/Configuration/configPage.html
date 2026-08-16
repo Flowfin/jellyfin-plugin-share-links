@@ -8,17 +8,240 @@
         <div id="ShareLinksConfigPage" data-role="page" class="page type-interior pluginConfigurationPage">
             <div data-role="content">
                 <div class="content-primary">
-                    <h2>Share Links</h2>
-                    <h3>Public base URL</h3>
-                    <p>
-                        The address this server is reached at from outside, with no trailing slash, for example
-                        <code>https://media.example.org</code>, or <code>https://example.org/jellyfin</code> when a proxy puts the server under a path. Every share link is built from it.
-                    </p>
-                    <p>While it is empty, the link is built from what the incoming request said the server was. That is a header, which is text whoever made the request wrote, so a request carrying a forged host produces a link pointing at somewhere else, which you then send to a guest. Set this value and the request is not consulted at all. Behind a reverse proxy it is the only reliable answer, because the address the proxy passes on is not the one the guest typed.</p>
-                    <p>A value that is not an absolute <code>http</code> or <code>https</code> address is refused when a link is built, and no link is produced. It does not fall back to the request, because a typo here would then quietly restore the behaviour this setting exists to remove.</p>
-                    <p>There is no control on this page yet. The setting lives in the plugin's configuration file, and the dashboard control that edits it arrives with the rest of the configuration surface.</p>
+                    <form id="ShareLinksSettingsForm">
+                        <h2>Share Links</h2>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="ShareLinksPublicBaseUrl" data-setting="PublicBaseUrl" label="Public base URL" />
+                            <div class="fieldDescription">
+                                The address this server is reached at from outside, with no trailing slash, for example
+                                <code>https://media.example.org</code>, or <code>https://example.org/jellyfin</code> when a proxy puts the server under a path. Every share link is built from it.
+                            </div>
+                            <div class="fieldDescription">While it is empty, the link is built from what the incoming request said the server was. That is a header, which is text whoever made the request wrote, so a request carrying a forged host produces a link pointing at somewhere else, which you then send to a guest. Set this value and the request is not consulted at all. Behind a reverse proxy it is the only reliable answer, because the address the proxy passes on is not the one the guest typed.</div>
+                            <div class="fieldDescription">A value that is not an absolute <code>http</code> or <code>https</code> address is refused when a link is built, and no link is produced. It does not fall back to the request, because a typo here would then quietly restore the behaviour this setting exists to remove.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="1" id="ShareLinksMaxLiveShares" data-setting="MaxLiveShares" label="Live shares across the server" />
+                            <div class="fieldDescription">How many shares may be live at once. Live means neither revoked nor past its expiry, so revoking a share or letting one expire frees a place.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="1" id="ShareLinksMaxLiveSharesPerItem" data-setting="MaxLiveSharesPerItem" label="Live shares naming one item" />
+                            <div class="fieldDescription">How many live shares may name the same item. Several is the ordinary case of one title lent to several people; this is the bound that keeps a loop pointed at one item from consuming the whole server ceiling.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="1" id="ShareLinksMaxShareLifetimeDays" data-setting="MaxShareLifetimeDays" label="Longest lifetime a link may be given, in days" />
+                            <div class="fieldDescription">Checked when a share is created and never when one is resolved, so lowering it leaves links you have already handed out alone.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="1" id="ShareLinksDefaultShareLifetimeDays" data-setting="DefaultShareLifetimeDays" label="Lifetime a share gets when no expiry is named, in days" />
+                            <div class="fieldDescription">A fallback rather than a second ceiling. It has to be at least one day and no longer than the ceiling above, because a default longer than the ceiling is a configuration in which every share created without an expiry is refused.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="0" id="ShareLinksExpiredShareRetentionDays" data-setting="ExpiredShareRetentionDays" label="How long a share that has stopped working is kept, in days" />
+                            <div class="fieldDescription">Counted from the instant the share stopped answering rather than from when it was created. Zero deletes it at the first write after that instant, which is how you empty the store of what has expired.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="0.1" max="1000" step="0.1" id="ShareLinksDefaultMaxBitrateMbps" data-setting="DefaultMaxBitrateMbps" label="Ceiling a new share gets when none is named, in megabits per second" />
+                            <div class="fieldDescription">Leave it empty for no ceiling. Zero is refused rather than read as no ceiling, because serve nothing and serve without a limit are opposite instructions. Megabits per second here; the record keeps bits per second, which is the unit the account switch takes.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="1" max="20" id="ShareLinksGuestMaxActiveSessions" data-setting="GuestMaxActiveSessions" label="Sessions one invited guest may hold at once" />
+                            <div class="fieldDescription">A ceiling on the account rather than on the share, so a guest invited to two shares carries one allowance across both rather than one each.</div>
+                        </div>
+
+                        <div>
+                            <button is="emby-button" type="submit" class="raised button-submit block">
+                                <span>Save</span>
+                            </button>
+                        </div>
+
+                        <p>A value this plugin cannot work under is refused as it is saved and the message names the setting. Editing the configuration file by hand passes through none of that, and there the refusal arrives later, when the setting is next read.</p>
+                    </form>
+
+                    <h2>Shares</h2>
+
+                    <p>Every share the server holds, including the ones that have stopped working. A share that expired and a share that was never made look the same to somebody who is only told what is live, so the state column is what keeps them apart.</p>
+
+                    <p>This page enforces nothing. Everything it offers is checked again on the server, and everything it hides is still reachable by anybody who can call the routes. The revoke button appears only on a share that is still live, because pressing it on one that has already stopped changes nothing; that is the server's rule and not this page's, and a second press is accepted and leaves the first press's instant, reason and revoker where they were.</p>
+
+                    <p id="ShareLinksSharesMessage"></p>
+
+                    <table class="tblShares detailTable">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Invited</th>
+                                <th scope="col">State</th>
+                                <th scope="col">Expires</th>
+                                <th scope="col">Ceiling</th>
+                                <th scope="col">Revoked</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ShareLinksShareRows"></tbody>
+                    </table>
+
+                    <p>What is not here. There is no control that creates a share, because this plugin serves no route that creates one, and a link is therefore never shown on this page: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own; which of the ceilings that apply actually wins is decided elsewhere and is not on this page.</p>
                 </div>
             </div>
         </div>
+
+        <script type="text/javascript">
+            (function () {
+                "use strict";
+
+                // The plugin's own identifier, and the two routes it serves to an
+                // administrator. All three are compared against the compiled assembly by
+                // ConfigurationPageTests, so a renamed route or a changed identifier reds
+                // the suite rather than leaving a page that asks the server for something
+                // that is not there.
+                var pluginId = "a3703f07-f83d-49a0-a09f-50b890a2baac";
+                var listShares = "ShareLinks/Shares";
+                var revokeShare = "ShareLinks/Shares/{shareId}/Revoke";
+
+                var page = document.querySelector("#ShareLinksConfigPage");
+
+                function settingInputs() {
+                    return Array.prototype.slice.call(page.querySelectorAll("[data-setting]"));
+                }
+
+                function readInto(configuration) {
+                    settingInputs().forEach(function (input) {
+                        var value = input.value;
+
+                        if (input.type !== "number") {
+                            configuration[input.getAttribute("data-setting")] = value;
+                            return;
+                        }
+
+                        // An empty number is the absence of a value rather than a zero.
+                        // Zero is a real answer for retention and a refused one for a
+                        // ceiling, so the two must not be spelled the same way here.
+                        configuration[input.getAttribute("data-setting")] = value === "" ? null : Number(value);
+                    });
+
+                    return configuration;
+                }
+
+                function show(configuration) {
+                    settingInputs().forEach(function (input) {
+                        var value = configuration[input.getAttribute("data-setting")];
+                        input.value = value === null || value === undefined ? "" : value;
+                    });
+                }
+
+                function text(value) {
+                    return value === null || value === undefined ? "" : String(value);
+                }
+
+                function cell(row, value) {
+                    var td = document.createElement("td");
+                    td.textContent = text(value);
+                    row.appendChild(td);
+                    return td;
+                }
+
+                function draw(shares) {
+                    var rows = page.querySelector("#ShareLinksShareRows");
+                    rows.textContent = "";
+
+                    shares.forEach(function (share) {
+                        var row = document.createElement("tr");
+
+                        cell(row, share.ItemId);
+                        cell(row, (share.InvitedUserIds || []).join(", "));
+                        cell(row, share.State);
+                        cell(row, share.ExpiresAt);
+                        cell(row, share.MaxBitrateBitsPerSecond);
+                        cell(row, share.RevokedAt);
+
+                        var action = cell(row, "");
+                        if (share.State === "Live") {
+                            var button = document.createElement("button");
+                            button.setAttribute("is", "emby-button");
+                            button.setAttribute("type", "button");
+                            button.className = "raised";
+                            button.textContent = "Revoke";
+                            button.addEventListener("click", function () {
+                                revoke(share.Id);
+                            });
+                            action.appendChild(button);
+                        }
+
+                        rows.appendChild(row);
+                    });
+
+                    page.querySelector("#ShareLinksSharesMessage").textContent = shares.length === 0 ? "The server holds no shares." : "";
+                }
+
+                function load() {
+                    Dashboard.showLoadingMsg();
+
+                    return ApiClient.getJSON(ApiClient.getUrl(listShares))
+                        .then(draw)
+                        .catch(function () {
+                            // An empty table would read as a server with no shares on it,
+                            // which is the one answer that must not stand in for a fault.
+                            page.querySelector("#ShareLinksShareRows").textContent = "";
+                            page.querySelector("#ShareLinksSharesMessage").textContent = "The shares could not be read. The server log says why.";
+                        })
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+                }
+
+                function revoke(shareId) {
+                    Dashboard.showLoadingMsg();
+
+                    return ApiClient.ajax({
+                        type: "POST",
+                        url: ApiClient.getUrl(revokeShare.replace("{shareId}", shareId)),
+                    })
+                        .then(load)
+                        .catch(function () {
+                            page.querySelector("#ShareLinksSharesMessage").textContent = "The share was not revoked. The server log says why.";
+                        })
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+                }
+
+                page.addEventListener("pageshow", function () {
+                    Dashboard.showLoadingMsg();
+
+                    ApiClient.getPluginConfiguration(pluginId)
+                        .then(show)
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+
+                    load();
+                });
+
+                page.querySelector("#ShareLinksSettingsForm").addEventListener("submit", function (event) {
+                    event.preventDefault();
+
+                    Dashboard.showLoadingMsg();
+
+                    ApiClient.getPluginConfiguration(pluginId)
+                        .then(function (configuration) {
+                            return ApiClient.updatePluginConfiguration(pluginId, readInto(configuration));
+                        })
+                        .then(Dashboard.processPluginConfigurationUpdateResult)
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+
+                    return false;
+                });
+            })();
+        </script>
     </body>
 </html>
