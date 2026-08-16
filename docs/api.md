@@ -25,12 +25,16 @@ risk and not the moment to build on them.
 
 ## The routes
 
-| Method | Path                        | Reached by                          |
-| ------ | --------------------------- | ----------------------------------- |
-| GET    | `/ShareLinks/Guest/{token}` | any caller the server has signed in |
+| Method | Path                                  | Reached by                          |
+| ------ | ------------------------------------- | ----------------------------------- |
+| GET    | `/ShareLinks/Guest/{token}`           | any caller the server has signed in |
+| GET    | `/ShareLinks/Shares`                  | an administrator                    |
+| POST   | `/ShareLinks/Shares/{shareId}/Revoke` | an administrator                    |
 
-One route. The administrator routes for creating, listing and revoking a share
-are #67 and do not exist, so nothing about them is described here.
+Three routes. The route that creates a share is #67 and does not exist, so
+nothing about it is described here. Creating a share now also creates the account
+it is for, which is decision 2 of #94 and the lifecycle in
+`docs/guest-accounts.md`, and none of that is in the tree either.
 
 ### GET /ShareLinks/Guest/{token}
 
@@ -71,6 +75,88 @@ reach a server, so where the client shows an item is an assumption written in on
 place in the source and marked as one. What is tested is that the address carries
 the item the share names, carries the token nowhere, and keeps the path a reverse
 proxy mounts the server under.
+
+### GET /ShareLinks/Shares
+
+Every share the store holds, with what each one is doing now.
+
+**Input.** Nothing.
+
+**Who may call it.** An administrator, under the server's own elevation policy.
+
+**What it answers.**
+
+| Case                        | Answer                                          |
+| --------------------------- | ----------------------------------------------- |
+| The store could be read     | `200` and one row per record                    |
+| The store could not be read | `500`, no body, and a warning in the server log |
+
+A row carries the share's identifier, the item, the invited accounts, who made it
+and when, when it expires, what it is doing now, and the revocation fields where
+something revoked it. It does not carry the token and it does not carry the keyed
+hash of the token. The hash does not open a share, but it is the value the
+resolution compares against, and a route handing it out is a route handing out
+what an offline search needs.
+
+The link is not there either, and cannot be. Only the keyed hash is written down,
+so this plugin cannot produce a link a second time even when asked.
+
+Every record is listed, including the ones that have stopped working. The state
+column is what separates them, and it is read at the instant of the request
+rather than stored:
+
+| State     | What it means                                              |
+| --------- | ---------------------------------------------------------- |
+| `Live`    | The share resolves                                         |
+| `Expired` | It reached its expiry instant while nothing had revoked it |
+| `Revoked` | Somebody revoked it while it was still live                |
+
+A share revoked after it had already expired reads as `Expired`, because expiry
+is what stopped it. The revoker, the reason and the instant are still on the row.
+
+An unreadable store is an error here and a `404` on the guest route, and that
+difference is deliberate. A fault told to a guest is a fault told to whoever holds
+the link; an operator is the person who has to act on it, and an empty listing
+handed to them reads as a server with no shares on it.
+
+**The order.** The store's own. Sorting is a question about the page and not
+about the route.
+
+### POST /ShareLinks/Shares/{shareId}/Revoke
+
+Stops a share.
+
+**Input.** The share's identifier as a path segment, and optionally a body
+carrying `Reason`, which is free text one operator writes for another to read
+later. A body rather than a query parameter, because a query string ends up in
+access logs and browser history and the reason is free text about a person.
+
+**Who may call it.** An administrator, under the server's own elevation policy.
+
+**What it answers.**
+
+| Case                                          | Answer                                    |
+| --------------------------------------------- | ----------------------------------------- |
+| The store holds that share                    | `200` and the row as it stands afterwards |
+| The store holds no share with that identifier | `404`                                     |
+| The store could not be read or written        | `500`                                     |
+
+Pressing it twice succeeds and changes nothing. A share that had already stopped,
+by an earlier revocation or by its own expiry instant, keeps the instant, the
+reason and the revoker it already had, because the first press is what stopped it
+and the second press stopped nothing. The row that comes back is therefore the
+first press's and not the caller's own.
+
+A share this store does not hold is told apart from one it does, which the guest
+route never does. It is right here for the same reason it is wrong there: an
+operator who cannot tell a revocation that missed from one that worked will press
+it again and believe the second press.
+
+**What it does not do.** It does not delete the record, and it does not touch a
+session or a stream that is already playing. The record survives so that an
+operator can still see who was invited to what, which is `docs/personal-data.md`,
+and the record is deleted by the retention rule instead. Stopping a stream that is
+playing is #55 and is not implemented.
 
 ## What this page does not cover
 
