@@ -236,11 +236,21 @@ check "token-randomness-is-cryptographic" \
   "a non-cryptographic random source is used. Token material comes from RandomNumberGenerator."
 
 # A route reachable without authentication is the whole design undone: sharing is
-# for invited guests who sign in, and there are no anonymous public links. The
-# attribute is the one line that would make a route anonymous, so the pattern is
-# exact rather than clever.
+# for invited guests who sign in, and there are no anonymous public links.
+#
+# The refusal is over the attribute appearing anywhere inside an attribute list,
+# because the name has more than one spelling and the route is equally anonymous
+# under all of them. Attributes share a pair of brackets, and the attribute
+# written out with its namespace is what somebody gets when the editor offers to
+# qualify a name rather than add a using directive. A reading that expected the
+# closing bracket immediately after the name saw neither.
+#
+# The span stops at a closing bracket or a semicolon, so the word standing in a
+# comment or in a string after an attribute list that has already closed is not
+# swept in. The word boundary is what keeps a longer name carrying it, which is
+# the case the near miss holds, from being read as the attribute.
 check "route-is-not-anonymous" \
-  '\[\s*AllowAnonymous\s*(\(\s*\))?\s*\]' \
+  '\[[^\];]*\bAllowAnonymous\b' \
   "a route is marked AllowAnonymous. Every route this plugin serves is reached by a caller the server has already identified."
 
 # Expiry is the core behaviour and it is a function of time, so a type that reads
