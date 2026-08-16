@@ -380,6 +380,11 @@ gap.
 - `docs/catalogue-checklist.md`, the catalogue's requirements against this
   repository, whose refusals are decisions rather than limits an operator meets.
 - `docs/parity-ledger.md`, the gate compared against the sibling repository's.
+- `docs/refused-tests.md`, the tests this repository declines to write and what
+  stands in for each, which is a bound on the suite rather than on what an
+  operator can do. Where a refusal there does reach an operator it is already an
+  entry above, under what revoking does not stop and under what was never
+  measured.
 - `docs/RELEASING.md`, how a release is cut.
 - `docs/limits.md`, this page.
 

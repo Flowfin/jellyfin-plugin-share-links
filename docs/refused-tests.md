@@ -1,0 +1,114 @@
+# The tests this repository refuses to write
+
+## Why there is a list at all
+
+`docs/testing.md` states the six clauses every test here runs under. Some obvious
+tests break one of them, and this page is where each of those is refused by name
+with the thing that stands in its place written beside it (#75).
+
+The pairing is the whole point. A refusal with a replacement beside it is a
+decision somebody took and can be argued with. A refusal on its own is a gap, and
+the two are indistinguishable to a reader counting tests.
+
+A replacement reads landed or owed, in the same sense `docs/parity-ledger.md`
+uses. Landed names the test that carries it, and `RefusedTestsTests` resolves that
+name against the compiled test assembly, so a replacement renamed away reds the
+suite instead of going quiet. Owed names the issue that owes it and is checked no
+further than the issue reference, which is what stops this page reading as a suite
+that covers more than it does.
+
+## The refusals
+
+### A test that starts a real server and drives a browser
+
+**Why it is refused.** It needs a display or a headless browser stack, and it
+needs a network to reach the server it started. That is two clauses of the rule at
+once, and the browser stack is a third, since driving one means invoking a binary
+this repository does not control.
+
+**Replacement, landed.** `GuestRouteTests`, `DecisionTableOnTheWireTests`. The
+first names the action surface the assembly exposes and asserts what it admits.
+The second drives the whole product of the decision's inputs through the route and
+compares what reaches the caller as bytes, which is the part a browser would have
+been watching.
+
+**Replacement, owed.** #83. One run against a clean server, by hand, recorded with
+what was done at each step. The route tests judge what the plugin answers; whether
+an operator following the guide arrives at a working share is an observation and
+not an assertion, and no run on a machine without a server supplies it.
+
+### A test that exercises a real transcode
+
+**Why it is refused.** It needs a media file and a transcoder binary, and the rule
+admits neither. A test that shells out to a transcoder is testing whatever that
+binary is on the day it runs.
+
+**Replacement, landed.** `EffectiveBitrateTests`. The ceiling arithmetic is a
+routine that takes three numbers and returns the lowest with the name of the one
+that applied, so the behaviour worth asserting is reachable without anything
+playing.
+
+### A test of a real reverse proxy in front of the server
+
+**Why it is refused.** It needs certificates in the machine's trust store, which
+is the clause that fails on every machine except the one the certificate was
+installed on.
+
+**Replacement, landed.** `ShareLinkBuilderTests`. What a proxy would be exercising
+is whether a request can talk the plugin into building a link to somewhere else,
+and that is a unit question: `AForgedHostDoesNotReachTheLink` and
+`AForgedHostCarryingAPortAndAPathDoesNotReachTheLinkEither` present forged host,
+port and path and require the configured address to win.
+
+### A test that a link works when opened from a phone
+
+**Why it is refused.** It needs a phone.
+
+**Replacement, landed.** `GuestSessionCeilingTests`, and the statement that this
+plugin does not distinguish a device at all. #75 names the replacement here as a
+session-level test carrying a device identifier, and that test may not be written:
+nothing about a device or a session is an input to the decision, and
+`TokenReuseTests.NoDeviceOrSessionReachesTheDecision` is the guard that refuses one
+appearing. So the replacement is the session ceiling that a guest's account
+actually carries, plus the absence of the concept, and the wording in the issue is
+what is wrong rather than the suite.
+
+### A test that revocation stops a segment request already in flight
+
+**Why it is refused.** The open handle belongs to the server, so reaching it means
+a running server, a media file and a transcoder. All three are outside the rule
+(#55).
+
+**Replacement, owed.** #46 and #55. The reachable statement is that revoking a
+share asks the session manager to log out the tokens and devices belonging to that
+share and asks nothing for any other session, against a fake, plus the statement
+that a segment request passes through the same resolution that refuses a revoked
+record. If it does not, that is a design defect rather than a test gap.
+
+### A test that plays something end to end and watches the cap reach the stream
+
+**Why it is refused.** Same three, for the same reason as the transcode line: a
+real file, a real transcoder and a real client.
+
+**Replacement, owed.** #65. One check by hand, recorded with what was played and
+what the server reported, and with whether the ceiling reached a client on the
+operator's own network. The seam below it is `EffectiveBitrateTests` above; what
+the manual check covers is the step from the number this plugin computes to the
+stream a guest receives, and where that step is enforced is #61.
+
+## What is checked, and what is not
+
+`RefusedTestsTests` reads this file. It requires every refusal to say why it is
+refused, requires every refusal to carry at least one replacement, resolves every
+name on a landed replacement against a type or a method in the test assembly, and
+requires every owed replacement to name an issue.
+
+What it does not judge is whether a replacement is a good one. That a route-level
+test stands in adequately for a browser is an argument, and the review is where a
+bad substitution is caught. Two of the six lines above are owed today, so this page
+is a list of promises for those two, and a green suite says nothing about them
+beyond the issue numbers being there.
+
+Nothing refuses a refusal that was never written down. A test somebody declined to
+write and never brought here is invisible to this page and to the test that reads
+it.
