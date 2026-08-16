@@ -45,9 +45,40 @@ skipped() {
 
 violations=0
 
+# Prints what a refusal found, one file at a time. $1 the PCRE, $2 the file list.
+#
+# A hit that fits on one line is still printed as path:line:text, because that is
+# what a reader can go straight to and most hits are that. Where the match spans
+# lines there is no single line to name, so the matched text is printed with its
+# newlines shown instead of a line number that would point at the wrong end of
+# it. Saying which of the two happened is the point: a refusal that quietly
+# reported a first line would send somebody to a line that looks innocent.
+report_hits() {
+  local pattern="$1" file
+  printf '%s\n' "$2" | sed '/^$/d' | while IFS= read -r file; do
+    if grep -nP "$pattern" -- "$file" | sed "s|^|    ${file}:|"; then
+      continue
+    fi
+    printf '    %s: over more than one line: %s\n' \
+      "$file" \
+      "$(grep -zoP "$pattern" -- "$file" | tr '\0\n' '  ' | tr -s ' ')"
+  done
+}
+
 # Runs one invariant. $1 id, $2 the PCRE, $3 the sentence a reader gets when it
 # bites. grep exit codes: 0 a match, 1 none, anything else a broken scanner, and
 # a broken scanner is failed closed rather than read as a clean tree.
+#
+# The scan is over whole files rather than over lines. A line is not a unit of
+# anything in C#: a call with more arguments than fit gets wrapped, and every
+# pattern here was then blind to the wrapped form of the thing it refuses. The
+# plugin's own logging is written that way already, so this was not a shape
+# somebody would have had to go out of their way to reach.
+#
+# `-z` is what does it. It makes NUL the record separator, and a source file
+# holds none, so the file is one record and a pattern may cross the newlines
+# inside it. Nothing about the patterns changes except that they are no longer
+# stopped by a line ending they never meant anything by.
 check() {
   local id="$1" pattern="$2" message="$3" rc=0 hits
 
@@ -56,12 +87,12 @@ check() {
     return 0
   fi
 
-  hits=$(grep -rnP --include='*.cs' "$pattern" -- "${paths[@]}") || rc=$?
+  hits=$(grep -rlzP --include='*.cs' "$pattern" -- "${paths[@]}") || rc=$?
 
   case "$rc" in
     0)
       echo "REFUSED   ${id}"
-      printf '%s\n' "$hits" | sed 's/^/    /'
+      report_hits "$pattern" "$hits"
       echo "::error::${id}: ${message}"
       violations=1
       ;;
@@ -161,8 +192,17 @@ echo "Scanning: ${paths[*]}"
 # placeholder or an interpolation, or an argument after the format string. Prose
 # mentioning the word token in a message is not refused, because a message that
 # cannot say what it is about is not worth the invariant.
+#
+# The span from the logging call runs to the end of the statement rather than to
+# the first closing parenthesis. An argument list routinely contains a call of
+# its own, and the parenthesis closing THAT one arrives long before the token
+# does, so a span bounded by the first one stopped short of every argument after
+# the first nested call. A statement ends at a semicolon, which is a bound that
+# means something in this language. Its cost is stated rather than left to be
+# found: a semicolon inside the format string ends the span early, which loses a
+# hit rather than inventing one.
 check "token-not-logged" \
-  'Log(Trace|Debug|Information|Warning|Error|Critical)\([^)]*(\{[^}]*([Tt]oken|[Ss]ecret)[^}]*\}|,\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret)[A-Za-z_.]*\s*[,)])' \
+  'Log(Trace|Debug|Information|Warning|Error|Critical)\([^;]*(\{[^}]*([Tt]oken|[Ss]ecret)[^}]*\}|,\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret)[A-Za-z_.]*\s*[,)])' \
   "a logging call takes a token or secret as a value. Log the share identifier instead; it names the same record and is not a credential."
 
 # An ordinary comparison over a secret returns as soon as two bytes differ, and
