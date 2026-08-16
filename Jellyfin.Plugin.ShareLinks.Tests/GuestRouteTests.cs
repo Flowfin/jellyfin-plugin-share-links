@@ -283,7 +283,7 @@ public sealed class GuestRouteTests : IDisposable
     {
         var judged = RoutePolicy.Judge(typeof(Plugin).Assembly);
 
-        var action = Assert.Single(judged.Where(entry => entry.Verdict == RouteVerdict.RequiresAuthentication));
+        var action = Assert.Single(judged, entry => entry.Verdict == RouteVerdict.RequiresAuthentication);
         Assert.Equal("ShareLinksGuestController.Open", action.Controller + "." + action.Action);
         Assert.False(action.IsRefused);
     }
