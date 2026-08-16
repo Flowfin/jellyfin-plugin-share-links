@@ -50,6 +50,10 @@
          names against the documents that exist, and a list of individual copies here
          would be the second list the comparison is meant to remove. -->
     <None Include="..\docs\*.md" Link="docs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The whole directory again, for the same reason: WorkflowBranchTests judges
+         every workflow file rather than a list, so a workflow added later is judged
+         without anybody remembering to add it here. -->
+    <None Include="..\.github\workflows\*.yml;..\.github\workflows\*.yaml" Link="workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
