@@ -169,8 +169,19 @@ check "token-not-logged" \
 # the time it took is a measurement of how much of the secret was right. The
 # refusal is over the comparison forms, not over the types, so a name carrying
 # Token, Secret or Hash is the whole signal available to a pattern.
+#
+# Two shapes, because a comparison puts the secret in two different places. An
+# operator has it on one side or the other and either side names it. A call has
+# it as the argument OR as the thing the call is made on, and the second is the
+# one somebody writes when they already hold the stored hash: the argument is
+# then an ordinary name that says nothing, so a pattern reading only arguments
+# walks past it. Both sides of a call are read for that reason.
+#
+# The dot has to sit immediately before the method name, which is what keeps
+# FixedTimeEquals out of it: the correct call ends in Equals as well, and a
+# pattern matching that word anywhere refuses the repair it asks for.
 check "token-compared-in-constant-time" \
-  '(([A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)[A-Za-z_.]*)\s*(==|!=)|(==|!=)\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)[A-Za-z_.]*|\.(Equals|SequenceEqual)\(\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash))' \
+  '(([A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)[A-Za-z_.]*)\s*(==|!=)|(==|!=)\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)[A-Za-z_.]*|\.(Equals|SequenceEqual)\(\s*[A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)|[A-Za-z_.]*([Tt]oken|[Ss]ecret|[Hh]ash)[A-Za-z_.]*\s*\.\s*(Equals|SequenceEqual)\s*\()' \
   "a token, secret or hash is compared with an ordinary comparison, which returns early and leaks how much of it was right. Use CryptographicOperations.FixedTimeEquals."
 
 # System.Random is seeded from a source an attacker can reason about and is
