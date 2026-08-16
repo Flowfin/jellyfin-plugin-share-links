@@ -270,14 +270,21 @@ public sealed class GuestRouteTests : IDisposable
     /// The guard from #69 now judges something. Until this route landed it ran
     /// over an empty set, where every statement about the members is true.
     /// </summary>
+    /// <remarks>
+    /// This asserted that the assembly held exactly one action while it did. The
+    /// administrator routes in #67 made that false without making anything
+    /// wrong, so what is asserted now is the half the count was standing in for:
+    /// exactly one action is reached by any caller the server has signed in, and
+    /// it is this one. A second route admitting that set is what #53 is about,
+    /// and a plain count would no longer notice one arriving.
+    /// </remarks>
     [Fact]
-    public void TheRouteSurfaceIsThisOneActionAndItRequiresAnIdentifiedCaller()
+    public void TheOnlyActionAnySignedInCallerReachesIsThisOne()
     {
         var judged = RoutePolicy.Judge(typeof(Plugin).Assembly);
 
-        var action = Assert.Single(judged);
+        var action = Assert.Single(judged, entry => entry.Verdict == RouteVerdict.RequiresAuthentication);
         Assert.Equal("ShareLinksGuestController.Open", action.Controller + "." + action.Action);
-        Assert.Equal(RouteVerdict.RequiresAuthentication, action.Verdict);
         Assert.False(action.IsRefused);
     }
 

@@ -1,0 +1,470 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Net;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Xunit;
+
+namespace Jellyfin.Plugin.ShareLinks.Tests;
+
+/// <summary>
+/// What the administrator routes admit, what they answer, and what they refuse
+/// to hand out (#67).
+/// </summary>
+/// <remarks>
+/// <para>
+/// The actions are driven directly rather than through a server, which is what
+/// <c>docs/testing.md</c> requires of everything here. What that reaches is this
+/// plugin's part: the store read, the summary, and the revocation. What it does
+/// not reach is the server's own refusal of a caller who is not an administrator,
+/// which happens in the filter pipeline in front of the action. That half is
+/// asserted over the compiled attributes instead, which is the metadata the
+/// server itself reads.
+/// </para>
+/// <para>
+/// The create route is not here. #67 asks for three routes and two landed;
+/// creating a share now also creates the account it is for, which is decision 2
+/// of #94, and that is argued in the pull request rather than covered by an
+/// absent test here.
+/// </para>
+/// </remarks>
+public sealed class AdministratorRouteTests : IDisposable
+{
+    private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly Guid Operator = new Guid("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid AnotherOperator = new Guid("44444444-4444-4444-4444-444444444444");
+    private static readonly Guid Invited = new Guid("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid Item = new Guid("55555555-5555-5555-5555-555555555555");
+
+    private readonly string _directory;
+    private readonly ShareKeyFile _keyFile;
+    private readonly byte[] _key;
+
+    public AdministratorRouteTests()
+    {
+        _directory = Path.Combine(Path.GetTempPath(), "share-links-admin-route-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_directory);
+
+        _keyFile = new ShareKeyFile(Path.Combine(_directory, PluginServiceRegistrator.KeyFileName));
+        _key = _keyFile.Read();
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
+        catch (IOException)
+        {
+            // A leftover directory under the temporary directory is not worth
+            // failing a green suite over.
+        }
+    }
+
+    private string StorePath => Path.Combine(_directory, PluginServiceRegistrator.StoreFileName);
+
+    /// <summary>
+    /// Both administrator actions are reached only under the server's own
+    /// elevation policy. This is #67's second clause, asserted over the compiled
+    /// attribute rather than over the source, because an attribute that is
+    /// missing looks exactly like one that is present in a diff.
+    /// </summary>
+    [Fact]
+    public void EveryAdministratorActionIsReachedOnlyUnderTheServersOwnElevationPolicy()
+    {
+        var judged = RoutePolicy.Judge(typeof(ShareLinksAdminController));
+
+        Assert.Equal(
+            new[] { "List", "Revoke" },
+            judged.Select(action => action.Action).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+
+        foreach (var action in judged)
+        {
+            Assert.Equal(RouteVerdict.RequiresElevation, action.Verdict);
+            Assert.Equal(Policies.RequiresElevation, action.Detail);
+            Assert.False(action.IsRefused);
+        }
+    }
+
+    /// <summary>
+    /// The policy name is the server's own constant and not a copy of the text
+    /// it holds. A copy is a name that goes on compiling after the server renames
+    /// the policy, and what it produces is a route the server refuses everybody
+    /// on.
+    /// </summary>
+    [Fact]
+    public void ThePolicyIsSpelledWithTheServersConstantRatherThanACopyOfIt()
+    {
+        var declared = typeof(ShareLinksAdminController)
+            .GetCustomAttributes<AuthorizeAttribute>(inherit: true)
+            .Select(attribute => attribute.Policy)
+            .ToList();
+
+        Assert.Equal(new[] { Policies.RequiresElevation }, declared);
+    }
+
+    /// <summary>
+    /// Every record is listed, and the state says which of them still resolve.
+    /// This is #67's "list shares with their state" and #39's third clause: a
+    /// share that can no longer resolve must not look live.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheListingCarriesEveryRecordAndSaysWhichOfThemStillResolve()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(token: "live-token"),
+            ARecord(token: "expired-token", expiresAt: Now.AddDays(-1)),
+            ARecord(token: "revoked-token", revokedAt: Now.AddHours(-1)),
+        });
+
+        var listing = await Listing(store);
+
+        Assert.Equal(
+            new[] { ShareState.Live, ShareState.Expired, ShareState.Revoked },
+            listing.Select(row => row.State).ToArray());
+    }
+
+    /// <summary>
+    /// A share revoked after it had already expired reads as expired, because
+    /// expiry is what stopped it. The fields that record the revocation are still
+    /// on the row, so nothing is hidden by the state being the earlier of the two.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AShareRevokedAfterItHadAlreadyExpiredReadsAsExpiredAndKeepsItsRevocation()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(expiresAt: Now.AddDays(-2), revokedAt: Now.AddDays(-1)),
+        });
+
+        var row = Assert.Single(await Listing(store));
+
+        Assert.Equal(ShareState.Expired, row.State);
+        Assert.Equal(Now.AddDays(-1), row.RevokedAt);
+    }
+
+    /// <summary>
+    /// The listing carries neither the token nor the keyed hash of it, in any
+    /// field and anywhere in the bytes the caller receives. This is the half of
+    /// #67's third clause this change carries.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheListingCarriesNeitherTheTokenNorTheHashOfIt()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord(token: "a-token") });
+
+        var stored = Assert.Single(await store.ReadAsync());
+        var written = JsonSerializer.Serialize(await Listing(store));
+
+        // Both directions, because a field named something else still carries the
+        // value, and a field carrying nothing still carries the name a script
+        // would read.
+        Assert.DoesNotContain("a-token", written, StringComparison.Ordinal);
+        Assert.DoesNotContain(stored.TokenHash, written, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hash", written, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The members of the summary are the ones argued for, rather than whatever
+    /// the record happens to hold. A field added to the record and copied here
+    /// without being argued for reds this rather than shipping.
+    /// </summary>
+    [Fact]
+    public void TheSummaryCarriesExactlyTheMembersThatWereArguedFor()
+        => Assert.Equal(
+            new[]
+            {
+                "CreatedAt",
+                "CreatedByUserId",
+                "ExpiresAt",
+                "Id",
+                "InvitedUserIds",
+                "ItemId",
+                "MaxBitrateBitsPerSecond",
+                "RevocationReason",
+                "RevokedAt",
+                "RevokedByUserId",
+                "State",
+            },
+            typeof(ShareSummary).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(property => property.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray());
+
+    /// <summary>
+    /// A store that cannot be read is an error to an operator rather than an
+    /// empty listing. An empty listing is the answer a server with no shares on
+    /// it gives, and the two must not look the same to the person who has to act.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AStoreThatCannotBeReadIsAnErrorRatherThanAnEmptyListing()
+    {
+        await File.WriteAllTextAsync(StorePath, "{ this is not a store");
+        using var store = new ShareStore(StorePath);
+
+        Assert.Equal("500 headers:[] body:[]", await Bytes((await Controller(store).List(CancellationToken.None)).Result!));
+    }
+
+    /// <summary>
+    /// Revoking stops the share, records who pressed it and what they wrote, and
+    /// the answer is the share as it stands afterwards.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task RevokingStopsTheShareAndRecordsWhoPressedItAndWhy()
+    {
+        using var store = new ShareStore(StorePath);
+        var share = ARecord();
+        await store.MutateAsync(_ => new[] { share });
+
+        var answer = await Controller(store).Revoke(share.Id, new ShareRevocationRequest { Reason = "sent to the wrong person" }, CancellationToken.None);
+
+        var row = Assert.IsType<ShareSummary>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+        Assert.Equal(ShareState.Revoked, row.State);
+        Assert.Equal(Now, row.RevokedAt);
+        Assert.Equal(Operator, row.RevokedByUserId);
+        Assert.Equal("sent to the wrong person", row.RevocationReason);
+
+        // And in the store, because a route that answered without writing would
+        // pass every assertion above.
+        Assert.Equal(Now, Assert.Single(await store.ReadAsync()).RevokedAt);
+    }
+
+    /// <summary>
+    /// A revocation with no body succeeds. An operator who has nothing to write
+    /// still has a share to stop, and a surface that demanded a reason would
+    /// collect a full stop.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task RevokingWithNothingWrittenAgainstItStillStopsTheShare()
+    {
+        using var store = new ShareStore(StorePath);
+        var share = ARecord();
+        await store.MutateAsync(_ => new[] { share });
+
+        var answer = await Controller(store).Revoke(share.Id, request: null, CancellationToken.None);
+
+        var row = Assert.IsType<ShareSummary>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+        Assert.Equal(ShareState.Revoked, row.State);
+        Assert.Null(row.RevocationReason);
+    }
+
+    /// <summary>
+    /// Pressing it twice succeeds and changes nothing, and the second answer is
+    /// the first press rather than the caller's own. An operator who pressed
+    /// twice and saw their own name would believe they had stopped it, when what
+    /// stopped it was somebody else an hour earlier.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task PressingItTwiceSucceedsAndTheAnswerIsStillTheFirstPress()
+    {
+        using var store = new ShareStore(StorePath);
+        var share = ARecord();
+        await store.MutateAsync(_ => new[] { share });
+
+        await Controller(store, Operator, At(Now.AddHours(-1))).Revoke(share.Id, new ShareRevocationRequest { Reason = "the first press" }, CancellationToken.None);
+        var second = await Controller(store, AnotherOperator).Revoke(share.Id, new ShareRevocationRequest { Reason = "the second press" }, CancellationToken.None);
+
+        var row = Assert.IsType<ShareSummary>(Assert.IsType<OkObjectResult>(second.Result).Value);
+        Assert.Equal(Now.AddHours(-1), row.RevokedAt);
+        Assert.Equal(Operator, row.RevokedByUserId);
+        Assert.Equal("the first press", row.RevocationReason);
+    }
+
+    /// <summary>
+    /// Revoking a share the store does not hold is not found, which the guest
+    /// route never says about anything. Here it is right: an operator who cannot
+    /// tell a revocation that missed from one that worked will press it again and
+    /// believe the second press.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task RevokingAShareTheStoreDoesNotHoldIsNotFound()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord() });
+
+        var answer = await Controller(store).Revoke(Guid.NewGuid(), request: null, CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(answer.Result);
+    }
+
+    /// <summary>
+    /// A caller the server has not identified is refused before anything is
+    /// written. The elevation policy has already refused one in front of the
+    /// action, so this cannot happen on a server; what it stops is the empty
+    /// identifier being written into the field that says who revoked the share.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACallerTheServerHasNotIdentifiedRevokesNothing()
+    {
+        using var store = new ShareStore(StorePath);
+        var share = ARecord();
+        await store.MutateAsync(_ => new[] { share });
+
+        var answer = await Controller(store, caller: null).Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<StatusCodeResult>(answer.Result).StatusCode);
+        Assert.Null(Assert.Single(await store.ReadAsync()).RevokedAt);
+    }
+
+    /// <summary>
+    /// A store that cannot be read is an error on the revocation path too, and it
+    /// is the same answer as on the listing path. A revocation that failed and
+    /// answered as though it had worked is an operator who stops looking at a
+    /// share that is still live.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ARevocationAgainstAStoreThatCannotBeReadIsAnError()
+    {
+        await File.WriteAllTextAsync(StorePath, "{ this is not a store");
+        using var store = new ShareStore(StorePath);
+
+        var answer = await Controller(store).Revoke(Guid.NewGuid(), request: null, CancellationToken.None);
+
+        Assert.Equal("500 headers:[] body:[]", await Bytes(answer.Result!));
+    }
+
+    /// <summary>
+    /// The two routes are where <c>docs/api.md</c> says they are. The page and the
+    /// assembly are compared as a set by <c>ApiSurfaceTests</c>; this names the
+    /// templates, so a route moved by one segment is a failure that says which
+    /// one moved.
+    /// </summary>
+    [Fact]
+    public void TheRouteTemplatesAreTheOnesThePageDescribes()
+    {
+        Assert.Equal(
+            "ShareLinks",
+            typeof(ShareLinksAdminController).GetCustomAttributes<RouteAttribute>().Single().Template);
+
+        Assert.Equal(
+            "Shares",
+            typeof(ShareLinksAdminController).GetMethod(nameof(ShareLinksAdminController.List))!
+                .GetCustomAttributes<HttpGetAttribute>().Single().Template);
+
+        Assert.Equal(
+            "Shares/{shareId}/Revoke",
+            typeof(ShareLinksAdminController).GetMethod(nameof(ShareLinksAdminController.Revoke))!
+                .GetCustomAttributes<HttpPostAttribute>().Single().Template);
+    }
+
+    private async Task<IReadOnlyList<ShareSummary>> Listing(IShareStore store)
+    {
+        var answer = await Controller(store).List(CancellationToken.None);
+
+        return Assert.IsAssignableFrom<IReadOnlyList<ShareSummary>>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+    }
+
+    private ShareRecord ARecord(
+        string token = "a-token",
+        DateTimeOffset? expiresAt = null,
+        DateTimeOffset? revokedAt = null) => new ShareRecord
+        {
+            SchemaVersion = ShareRecord.CurrentSchemaVersion,
+            Id = Guid.NewGuid(),
+            ItemId = Item,
+            InvitedUserIds = new[] { Invited },
+            CreatedByUserId = Operator,
+            CreatedAt = Now.AddDays(-1),
+            ExpiresAt = expiresAt ?? Now.AddDays(7),
+            RevokedAt = revokedAt,
+            RevokedByUserId = revokedAt is null ? null : AnotherOperator,
+            TokenHash = ShareTokenHash.Compute(_key, token),
+        };
+
+    private static ShareLinksAdminController Controller(IShareStore store)
+        => Controller(store, Operator, At(Now));
+
+    private static ShareLinksAdminController Controller(IShareStore store, Guid? caller)
+        => Controller(store, caller, At(Now));
+
+    private static ShareLinksAdminController Controller(IShareStore store, Guid? caller, TimeProvider clock)
+        => new ShareLinksAdminController(
+            store,
+            ContextFor(caller),
+            clock,
+            NullLogger<ShareLinksAdminController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+
+    private static IAuthorizationContext ContextFor(Guid? caller)
+    {
+        var authorization = new AuthorizationInfo
+        {
+            IsAuthenticated = caller is not null,
+            User = caller is { } identified
+                ? new User("an administrator", "provider", "reset") { Id = identified }
+                : null,
+        };
+
+        var context = new Mock<IAuthorizationContext>();
+        context.Setup(c => c.GetAuthorizationInfo(It.IsAny<HttpRequest>()))
+            .ReturnsAsync(authorization);
+
+        return context.Object;
+    }
+
+    // What the result would write, as the string two of them are compared by.
+    // The same shape GuestRouteTests uses, so an answer here can be compared with
+    // an answer there without translating one of them.
+    private static async Task<string> Bytes(ActionResult answer)
+    {
+        var body = new MemoryStream();
+        var http = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+        };
+        http.Response.Body = body;
+
+        await answer.ExecuteResultAsync(new ActionContext(http, new RouteData(), new ActionDescriptor()));
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} headers:[{1}] body:[{2}]",
+            http.Response.StatusCode,
+            string.Join(",", http.Response.Headers.Select(header => header.Key + "=" + header.Value).OrderBy(text => text, StringComparer.Ordinal)),
+            Encoding.UTF8.GetString(body.ToArray()));
+    }
+
+    private static TimeProvider At(DateTimeOffset instant) => new FixedClock(instant);
+
+    private sealed class FixedClock : TimeProvider
+    {
+        private readonly DateTimeOffset _instant;
+
+        public FixedClock(DateTimeOffset instant) => _instant = instant;
+
+        public override DateTimeOffset GetUtcNow() => _instant;
+    }
+}

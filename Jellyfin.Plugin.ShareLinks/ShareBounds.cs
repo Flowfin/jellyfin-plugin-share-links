@@ -199,6 +199,41 @@ public sealed class ShareBounds
     }
 
     /// <summary>
+    /// What a record is doing at an instant, as the operator surface reports it (#39, #67).
+    /// </summary>
+    /// <param name="record">The record.</param>
+    /// <param name="now">The instant to read it at.</param>
+    /// <returns>The state.</returns>
+    /// <remarks>
+    /// <para>
+    /// Derived from <see cref="CeasedAt"/> rather than from the fields a second
+    /// time, so there is one rule about when a share stopped and this cannot
+    /// drift from the rule retention is counted by. A comparison written out
+    /// again here would agree with that one on the day it was written and not
+    /// afterwards.
+    /// </para>
+    /// <para>
+    /// One consequence of taking it from there, named rather than left to be
+    /// discovered. A share revoked after it had already expired reads as
+    /// <see cref="ShareState.Expired"/>, because expiry is what stopped it and
+    /// the revocation stopped nothing. The revoker, the reason and the instant
+    /// are all still on the record for an operator who wants to see that
+    /// somebody pressed the button afterwards.
+    /// </para>
+    /// </remarks>
+    public static ShareState StateOf(ShareRecord record, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        if (CeasedAt(record, now) is not { } instant)
+        {
+            return ShareState.Live;
+        }
+
+        return record.RevokedAt == instant ? ShareState.Revoked : ShareState.Expired;
+    }
+
+    /// <summary>
     /// Why a record may not be added, or <c>null</c> when it may.
     /// </summary>
     /// <param name="existing">The records already in the store.</param>
