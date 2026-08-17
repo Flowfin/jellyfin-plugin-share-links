@@ -29,23 +29,36 @@ it is not a copy anybody should hand a guest a link from.
 ### The feature is not finished, and what is missing is not obvious from the outside
 
 The tree holds the share record, the store, the token model, the resolution
-decision and the guest route. It holds no administrator route, so nothing creates,
-lists or revokes a share except a test, and no page shows one. Those are #67 and
-#70.
+decision, the guest route, and the administrator routes that create, list and
+revoke a share. What it holds no page for is any of it: an operator reaches these
+by calling them, and the configuration page shows no share. That is #70, and #67
+is where the routes themselves are.
 
 **What an operator does.** Reads this page as the design and the open issues as the
 state. Nothing installed today shares anything.
 
-### Nothing creates, changes or removes a guest account
+### A guest account is created and narrowed, and nothing ever ends one
 
 `docs/guest-accounts.md` decides under #51 that this plugin creates the account
-with the invitation and removes it when the last record naming it goes, and
-`docs/guest-capabilities.md` lists under #57 the switches it sets on that account.
-No code in this tree does either yet.
+with the invitation, disables it when the last live share naming it ends, and
+deletes it when the last record naming it is swept. The create route in #67 does
+the first of those three and writes the policy `docs/guest-capabilities.md` lists
+under #57. The other two are not in this tree.
 
-**What an operator does.** Reads every capability in those two pages as a decision
-rather than as a setting in force, and does not assume an account a record names
-has been narrowed by anything.
+So an account made for a share outlives the share. It stays on the server,
+hidden, able to sign in, with the credential the operator was shown, after the
+link has expired or been revoked. The share stops resolving on the instant, which
+is what revocation is for and is unaffected; what does not happen is the account
+going away with it.
+
+One narrow exception runs the other way. A create that made its accounts and was
+then refused by the store removes them again, which is the only account this
+plugin deletes, and it is bounded to identifiers the server returned inside that
+same call.
+
+**What an operator does.** Treats the server's user list as the place guest
+accounts are ended, and removes them there when a share is finished with, until
+#51 and #58 land the disabling and the deletion.
 
 ### Nothing confines a guest to the shared item
 

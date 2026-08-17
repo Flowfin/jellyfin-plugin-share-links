@@ -64,6 +64,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IShareStore>(_ => new ShareStore(InTheDataFolder(StoreFileName)));
         serviceCollection.AddSingleton(_ => new ShareKeyFile(InTheDataFolder(KeyFileName)));
         serviceCollection.AddSingleton(TimeProvider.System);
+        serviceCollection.AddSingleton<IPluginConfigurationSource>(_ => new PluginConfigurationSource());
     }
 
     /// <summary>

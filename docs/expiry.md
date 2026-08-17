@@ -108,8 +108,12 @@ The sweep itself, how often it runs and what it deletes, is the retention rule i
 the backwards-clock case, so a sweep that never runs makes that residual
 unbounded.
 
-The tests these rules exist for are #45's remaining clauses and #79's: one tick
-before, the instant, one tick after, the create route refusing a lifetime past the
-ceiling, and no route moving an expiry. None of them can be written yet, because
-there is no create route and no resolution path. This document is the decision;
-the guards arrive with the routes in #67 and #48.
+The tests these rules exist for are #45's clauses and #79's: one tick before, the
+instant, one tick after, the create route refusing a lifetime past the ceiling,
+and no route moving an expiry. The first three are `ClockBoundaryTests` and the
+fourth is
+`ShareCreationTests.ALifetimePastTheCeilingIsRefusedBeforeAnAccountIsMade`, which
+refuses through the same `ShareBounds` the store enforces rather than through a
+copy of the number at the route. The last one is still a statement about a set of
+routes rather than a test, and #47 is where a statement of that shape is
+collected.

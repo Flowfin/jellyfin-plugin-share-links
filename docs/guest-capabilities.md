@@ -75,6 +75,10 @@ Every switch is written there, including the ones whose value matches the server
 default. A default is the server's decision and it can move between server lines,
 which would otherwise widen a guest on an upgrade nobody connected to this plugin.
 
+The route hands that policy to the server on the account it has just made, and on
+no other account, which is `docs/account-restoration.md`'s rule and is asserted
+by `ShareCreationTests.ThePolicyIsWrittenOntoTheAccountsTheCreateMadeAndOntoNobodyElse`.
+
 One field is deliberately left alone. `RemoteClientBitrateLimit` is the
 account-level ceiling and belongs to #61 and #62, which decide where the cap is
 enforced and what its bounds are. Setting it here would decide a number those

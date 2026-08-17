@@ -187,12 +187,24 @@ held.
 
 ## What this document is, and what it is not
 
-It is a decision and a lifecycle. It is not code. Nothing in the tree creates,
-credentials, disables or deletes an account:
+It is a decision and a lifecycle. One step of that lifecycle is code and the rest
+is not.
 
-    git grep -n 'IUserManager' -- Jellyfin.Plugin.ShareLinks Jellyfin.Plugin.ShareLinks.Tests ; echo "exit=$?"
-    exit=1
+Creating is. The route in #67 makes the account, writes the policy this page
+sends it to `docs/guest-capabilities.md` for, mints the credential from the
+routine that already draws token bytes, and shows it once beside the link:
 
-What would prove the lifecycle rather than state it is the create route in #67,
-the confinement in #52, the revocation in #46 and the removal guard in #144.
-Every one of those is open, and this document is what they are built against.
+    git grep -ln 'IUserManager' -- Jellyfin.Plugin.ShareLinks
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+
+Disabling when the last live share ends is not, and deleting when the last record
+is swept is not. Both are #51 and #58, and until they land an account made for a
+share stays on the server after the share has stopped. `docs/limits.md` is where
+an operator is told that in the words they need.
+
+The one deletion that does exist is not the lifecycle's. A create that made its
+accounts and was then refused by the store removes exactly those, inside the same
+call, while no record names them. It is bounded by the identifiers the server
+returned rather than by the record, because there is no record on that path;
+`WasCreatedByThisPlugin` is the gate everywhere else, which is what #144 landed
+and what `docs/account-restoration.md` argues from.

@@ -80,8 +80,9 @@ been, or a support bundle that turned out to include it. Revoking one share is #
 and is the control for a link that went to the wrong person.
 
 Where an operator presses it, and where they are shown the number, is the
-administrator surface in #67 and #70. Neither exists yet, so today the count is
-returned to a caller that has not been written.
+administrator surface in #67 and #70. The routes that create, list and revoke a
+share are there; none of them rotates, and no page shows the number, so today the
+count is still returned to a caller that has not been written.
 
 ## What this does not settle
 
