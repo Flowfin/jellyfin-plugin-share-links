@@ -4,13 +4,24 @@ This is the decision issue #45 asks for. Expiry sounds simple and is not, so eac
 awkward part is answered here rather than discovered by the first routine that
 meets it.
 
-Nothing in the tree reads a clock yet:
+The clock is a seam, and the routines these rules bind read it from there rather
+than from the machine. Every file in the plugin that names one, on `origin/master`
+at `3cf7149`:
 
-    git grep -n 'TimeProvider' origin/master -- Jellyfin.Plugin.ShareLinks/ Jellyfin.Plugin.ShareLinks.Tests/ ; echo "exit=$?"
-    exit=1
+    git grep -ln 'TimeProvider' origin/master -- Jellyfin.Plugin.ShareLinks/
+    origin/master:Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareResolution.cs
 
-and reading the machine clock directly is refused, so the routines these rules
-bind will take the clock as a seam whether or not they remember to:
+The registrator supplies the machine clock once, the two routes take it and hand
+it on, and `ShareResolution` is where a rule on this page meets it. This paragraph
+said the opposite until 2026-08-17: it claimed no file in the tree read a clock,
+and pasted a command whose exit status was 1. The command returns the four files
+above. It was found by re-running it rather than by reading it.
+
+Reading the machine clock directly is still refused everywhere else, so a routine
+added after this sentence takes the seam whether or not it remembers to:
 
     bash .github/scripts/enforce-greppable-invariants.sh .github/invariant-fixtures/clock-comes-from-the-seam/violation ; echo "exit=$?"
     exit=1
