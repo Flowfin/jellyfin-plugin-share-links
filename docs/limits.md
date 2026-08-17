@@ -404,6 +404,11 @@ gap.
   reach, which is a bound on the token rather than a limit an operator meets.
   Where a line there does reach an operator it is already an entry above, under
   what confines a guest and under another plugin's routes.
+- `docs/security.md`, #84's statement of the posture and of what is not defended,
+  which is assembled from the pages that decide each part and takes no decision
+  of its own. Every limit it repeats is already an entry above, and its residual
+  section is the boundary of the design rather than behaviour an operator can act
+  on.
 - `docs/RELEASING.md`, how a release is cut.
 - `docs/limits.md`, this page.
 
