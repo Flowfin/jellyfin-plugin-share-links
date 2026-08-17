@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Net;
+using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -299,6 +300,174 @@ public sealed class AdministratorRouteTests : IDisposable
     }
 
     /// <summary>
+    /// Revoking signs the share's own guests out of the server and asks nothing
+    /// about anybody else. This is #55's second clause in the form that is
+    /// reachable without a server: what a test here can see is which accounts this
+    /// plugin asked the session manager about, and the session list itself is the
+    /// server's.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task RevokingSignsOutTheGuestsThisPluginMadeForTheShareAndNobodyElse()
+    {
+        var guest = Guid.NewGuid();
+        var somebodyElsesAccount = Guid.NewGuid();
+        var otherShare = ARecord(token: "another-token", invited: new[] { Guid.NewGuid() }, pluginCreated: new[] { Guid.NewGuid() });
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(
+            invited: new[] { guest, somebodyElsesAccount },
+            pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share, otherShare });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, Operator, At(Now), sessions).Revoke(share.Id, request: null, CancellationToken.None);
+
+        // The guest this plugin made, and only that one. The invited account it
+        // did not make belongs to a person who uses this server, and signing them
+        // out is a change to a person rather than to a share. The other share's
+        // guest is untouched because nothing about it stopped.
+        Assert.Equal(new[] { guest }, sessions.Revoked);
+    }
+
+    /// <summary>
+    /// A guest who still holds another live share keeps watching it. Revoking one
+    /// share is not a reason to stop somebody's other stream, and the account is
+    /// the only handle this plugin has, so the check has to be made before the ask
+    /// rather than inside it.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AGuestWhoStillHoldsAnotherLiveShareIsNotSignedOut()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var revoked = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        var stillLive = ARecord(token: "another-token", invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { revoked, stillLive });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, Operator, At(Now), sessions).Revoke(revoked.Id, request: null, CancellationToken.None);
+
+        Assert.Empty(sessions.Revoked);
+    }
+
+    /// <summary>
+    /// The other share having expired is not the other share still being live. A
+    /// reading that counted records naming the account rather than live ones would
+    /// leave a guest signed in with nothing left to watch, which is the state this
+    /// issue is about.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AGuestWhoseOtherShareHasAlreadyExpiredIsSignedOut()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var revoked = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        var expired = ARecord(token: "another-token", expiresAt: Now.AddDays(-1), invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { revoked, expired });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, Operator, At(Now), sessions).Revoke(revoked.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(new[] { guest }, sessions.Revoked);
+    }
+
+    /// <summary>
+    /// Nothing is spared. The second argument of the server's member is the token
+    /// to keep, and this plugin holds none: the caller is an administrator on a
+    /// session of their own and no session of theirs is under a guest account. A
+    /// token accidentally passed there is a guest left signed in by the call that
+    /// exists to sign them out.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheSignOutSparesNoToken()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, Operator, At(Now), sessions).Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(new[] { string.Empty }, sessions.Spared);
+    }
+
+    /// <summary>
+    /// A revocation that missed signs nobody out. Pressing revoke on an identifier
+    /// the store does not hold is an operator's typing mistake, and a call that
+    /// signed somebody out on the way to answering not found would be stopping a
+    /// stream nobody asked to stop.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ARevocationThatFindsNoShareSignsNobodyOut()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord(invited: new[] { guest }, pluginCreated: new[] { guest }) });
+
+        var sessions = new RecordingSessions();
+        var answer = await Controller(store, Operator, At(Now), sessions).Revoke(Guid.NewGuid(), request: null, CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(answer.Result);
+        Assert.Empty(sessions.Revoked);
+    }
+
+    /// <summary>
+    /// A caller the server has not identified signs nobody out either, for the
+    /// same reason nothing is written for them.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACallerTheServerHasNotIdentifiedSignsNobodyOut()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, caller: null, At(Now), sessions).Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Empty(sessions.Revoked);
+    }
+
+    /// <summary>
+    /// Pressing revoke on a share that had already stopped signs its guests out
+    /// again. It is the same idempotence the store already has, carried one step
+    /// further: a first press that wrote the record and then failed to reach the
+    /// session manager leaves a guest watching, and the only way an operator has
+    /// to try again is the button they already pressed.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task PressingRevokeOnAShareThatHadAlreadyStoppedSignsItsGuestsOutAgain()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(
+            revokedAt: Now.AddHours(-1),
+            invited: new[] { guest },
+            pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share });
+
+        var sessions = new RecordingSessions();
+        await Controller(store, Operator, At(Now), sessions).Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(new[] { guest }, sessions.Revoked);
+    }
+
+    /// <summary>
     /// Revoking a share the store does not hold is not found, which the guest
     /// route never says about anything. Here it is right: an operator who cannot
     /// tell a revocation that missed from one that worked will press it again and
@@ -388,12 +557,15 @@ public sealed class AdministratorRouteTests : IDisposable
     private ShareRecord ARecord(
         string token = "a-token",
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? revokedAt = null) => new ShareRecord
+        DateTimeOffset? revokedAt = null,
+        IReadOnlyList<Guid>? invited = null,
+        IReadOnlyList<Guid>? pluginCreated = null) => new ShareRecord
         {
             SchemaVersion = ShareRecord.CurrentSchemaVersion,
             Id = Guid.NewGuid(),
             ItemId = Item,
-            InvitedUserIds = new[] { Invited },
+            InvitedUserIds = invited ?? new[] { Invited },
+            PluginCreatedUserIds = pluginCreated ?? Array.Empty<Guid>(),
             CreatedByUserId = Operator,
             CreatedAt = Now.AddDays(-1),
             ExpiresAt = expiresAt ?? Now.AddDays(7),
@@ -409,14 +581,52 @@ public sealed class AdministratorRouteTests : IDisposable
         => Controller(store, caller, At(Now));
 
     private static ShareLinksAdminController Controller(IShareStore store, Guid? caller, TimeProvider clock)
+        => Controller(store, caller, clock, new RecordingSessions());
+
+    private static ShareLinksAdminController Controller(
+        IShareStore store,
+        Guid? caller,
+        TimeProvider clock,
+        RecordingSessions sessions)
         => new ShareLinksAdminController(
             store,
             ContextFor(caller),
+            sessions.Manager,
             clock,
             NullLogger<ShareLinksAdminController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
+
+    // A session manager that answers every ask and writes down which accounts it
+    // was asked about, in the order it was asked. Nothing here reaches a server:
+    // what the assertions below judge is which accounts this plugin asked to be
+    // signed out, which is the reachable half of #55 and the one
+    // `docs/refused-tests.md` names as standing in for the segment the server
+    // holds open.
+    private sealed class RecordingSessions
+    {
+        private readonly List<Guid> _revoked = new List<Guid>();
+        private readonly Mock<ISessionManager> _manager = new Mock<ISessionManager>();
+
+        public RecordingSessions()
+        {
+            _manager
+                .Setup(manager => manager.RevokeUserTokens(It.IsAny<Guid>(), It.IsAny<string>()))
+                .Callback((Guid account, string spared) =>
+                {
+                    _revoked.Add(account);
+                    Spared.Add(spared);
+                })
+                .Returns(Task.CompletedTask);
+        }
+
+        public ISessionManager Manager => _manager.Object;
+
+        public IReadOnlyList<Guid> Revoked => _revoked;
+
+        public List<string> Spared { get; } = new List<string>();
+    }
 
     private static IAuthorizationContext ContextFor(Guid? caller)
     {
