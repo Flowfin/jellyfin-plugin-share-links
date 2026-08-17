@@ -328,13 +328,14 @@ public sealed class ShareStoreFileStateTests : IDisposable
     /// absence asserted on.
     /// </para>
     /// <para>
-    /// The fixture is disposed in a finally, because the two lines that read it
-    /// are reflection over a private field and a class is free to rename or
-    /// retype that field. Where the read throws, the constructor has already made
-    /// the directory, and a test whose name ends in "and none is left behind"
-    /// would be the thing leaving one behind. A plain using does not do here: the
-    /// absence of the directory is asserted after disposal, so the disposal has to
-    /// end before the assertion rather than at the end of the block.
+    /// The fixture is disposed by a using with a body of its own, because the two
+    /// lines that read it are reflection over a private field and a class is free
+    /// to rename or retype that field. Where the read throws, the constructor has
+    /// already made the directory, and a test whose name ends in "and none is left
+    /// behind" would be the thing leaving one behind. The body is what makes it a
+    /// using rather than a using declaration: the absence of the directory is
+    /// asserted after disposal, and a declaration would hold the fixture to the
+    /// end of the loop body and put the assertion inside its lifetime.
     /// </para>
     /// <para>
     /// What it cannot reach is a test that opens a path in the temporary
@@ -360,19 +361,14 @@ public sealed class ShareStoreFileStateTests : IDisposable
 
             for (var run = 0; run < 3; run++)
             {
-                var fixture = (IDisposable)Activator.CreateInstance(fixtureClass)!;
                 string directory;
 
-                try
+                using (var fixture = (IDisposable)Activator.CreateInstance(fixtureClass)!)
                 {
                     directory = (string)field!.GetValue(fixture)!;
 
                     Assert.True(Directory.Exists(directory));
                     chosen.Add(directory);
-                }
-                finally
-                {
-                    fixture.Dispose();
                 }
 
                 Assert.False(Directory.Exists(directory));
