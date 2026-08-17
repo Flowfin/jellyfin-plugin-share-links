@@ -400,6 +400,10 @@ gap.
   operator can do. Where a refusal there does reach an operator it is already an
   entry above, under what revoking does not reach and under what was never
   measured.
+- `docs/negative-capabilities.md`, #47's list of what a share token can never
+  reach, which is a bound on the token rather than a limit an operator meets.
+  Where a line there does reach an operator it is already an entry above, under
+  what confines a guest and under another plugin's routes.
 - `docs/RELEASING.md`, how a release is cut.
 - `docs/limits.md`, this page.
 
