@@ -13,7 +13,7 @@ a statement about routes rather than about capabilities or about visibility.
 
 ## How to read a line
 
-A line is not evidence. Four of the nine below have a test that fails when the
+A line is not evidence. Five of the nine below have a test that fails when the
 thing holding them is removed, and the rest do not, so the status is written into
 the line rather than left to be inferred from its presence. A list whose lines all
 look alike reads as coverage, and most of this list is not coverage yet.
@@ -133,30 +133,48 @@ Collected here from #45, whose last clause is this sentence, because a statement
 about every route belongs on this list rather than alone in an issue about
 boundaries.
 
-Not held as a guard. What is true today is structural: the instant is init-only,
-so moving it means writing a new record, and every place that assigns it copies
-the record's own value.
+Held, for the routines that make a record out of a record. `ExpiryPolicy` reads
+the compiled plugin for every routine that takes a record and answers with one,
+drives each of them twice with a neighbouring instant on each side of the
+record's own, and refuses one whose answer expires at anything but the instant it
+was given:
+
+```
+git grep -n 'public void NoRoutineInThisPluginMovesTheExpiryOfARecordItWasGiven' -- Jellyfin.Plugin.ShareLinks.Tests/ExpiryPolicyTests.cs
+```
+
+The structural half is still true and is no longer what the line rests on. The
+instant is init-only, so moving it means writing a new record, and all three
+assignments, two writing a record and one building a listing row, are a copy:
 
 ```
 git grep -n 'public required DateTimeOffset ExpiresAt' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
 git grep -n 'ExpiresAt = ' -- Jellyfin.Plugin.ShareLinks/
 ```
 
-Three assignments, two of them writing a record and one building a listing row,
-and all three a copy. Nothing refuses a fourth that takes a new instant.
+What the guard adds to that is the routine nobody has written yet. A fourth
+writer taking a new instant compiles, passes every other test in the suite, and
+is refused only here.
+
+Two bounds, and both stay where they are. The subject is a routine that takes a
+record; a routine rebuilding a record out of something other than a record, a
+request body or the store's file, is outside it and is not judged. And a routine
+is judged on the inputs it was driven with, which is why it is driven on both
+sides of the instant rather than once: an extend-but-never-shorten rule would
+pass a single run.
+
 `docs/expiry.md` is the decision that nothing extends a link.
 
 ## What is checked, and what is not
 
-Four lines are held by a test that fails when the thing behind it is removed: this
+Five lines are held by a test that fails when the thing behind it is removed: this
 plugin's administrator routes, the creation and revocation routes that exist, the
-three switches about other people's sessions, and the download route. Those tests
-are named in the lines above and run in the ordinary suite.
+three switches about other people's sessions, the download route, and the expiry
+instant. Those tests are named in the lines above and run in the ordinary suite.
 
-Five are not. Two wait on the confinement filter in #52, one waits on the create
-route in #67 to finish the set it names, one is a statement about the server's own
-authorization that nothing here can judge, and one is the expiry line, which is a
-property of the source rather than a refusal.
+Four are not. Two wait on the confinement filter in #52, one waits on the create
+route in #67 to finish the set it names, and one is a statement about the server's
+own authorization that nothing here can judge.
 
 Nothing reads this page. `LimitsTests` requires every document under `docs/` to be
 accounted for in `docs/limits.md`, so this page arriving uncollected would red the
