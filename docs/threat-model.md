@@ -8,19 +8,34 @@ than a paragraph in the readme.
 Read `README.md` first for what the feature is. Read this for what can go wrong
 with it and what answers each one.
 
-## What is in the tree while this is being written
+## What is in the tree
 
-Almost none of it. The plugin's identity, its dashboard page and the routine that
-mints a token are the whole of the code today:
+Thirty-seven files, two of which are routes:
 
-    git grep -lE 'ApiController|ControllerBase|HttpGet|HttpPost' -- 'Jellyfin.Plugin.ShareLinks/*.cs' ; echo "exit=$?"
-    exit=1
+    git ls-tree -r --name-only origin/master -- Jellyfin.Plugin.ShareLinks/ | wc -l
+    37
 
-There is no route, no share record and no store. So most rows below name an issue
-in the proof column rather than a test, and that is the honest state rather than a
-gap in the table. A row naming an issue is a control that is owed. A row naming a
-test is a control that runs. The two are different words on purpose, and the
-document is worth less than it looks if a reader reads them as the same.
+    git grep -lE 'ApiController|ControllerBase|HttpGet|HttpPost' origin/master -- 'Jellyfin.Plugin.ShareLinks/*.cs'
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
+
+This section said the opposite until 2026-08-17. It said the plugin's identity,
+its dashboard page and the routine that mints a token were the whole of the code,
+that there was no route, no share record and no store, and it pasted the second
+command above with its exit status given as 1. I found it by re-running that
+command rather than by reading the sentence around it.
+
+Most rows below still name an issue in the proof column rather than a test, and
+that is the honest state rather than a gap in the table. A row naming an issue is
+a control that is owed. A row naming a test is a control that runs. The two are
+different words on purpose, and the document is worth less than it looks if a
+reader reads them as the same.
+
+What the correction changes is why a row names an issue. It is no longer that
+nothing could be built to prove it. Some of the issues in that column have closed
+since their row was written, and a row still naming one of those is the stale row
+the last section of this page warns about. Comparing every row against the issue
+it points at is the pass #93 asks for, and it is not done here.
 
 ## Assets
 
