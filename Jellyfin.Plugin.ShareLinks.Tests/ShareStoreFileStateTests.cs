@@ -328,6 +328,15 @@ public sealed class ShareStoreFileStateTests : IDisposable
     /// absence asserted on.
     /// </para>
     /// <para>
+    /// The fixture is disposed in a finally, because the two lines that read it
+    /// are reflection over a private field and a class is free to rename or
+    /// retype that field. Where the read throws, the constructor has already made
+    /// the directory, and a test whose name ends in "and none is left behind"
+    /// would be the thing leaving one behind. A plain using does not do here: the
+    /// absence of the directory is asserted after disposal, so the disposal has to
+    /// end before the assertion rather than at the end of the block.
+    /// </para>
+    /// <para>
     /// What it cannot reach is a test that opens a path in the temporary
     /// directory without going through its fixture. Nothing here would see that.
     /// </para>
@@ -352,12 +361,20 @@ public sealed class ShareStoreFileStateTests : IDisposable
             for (var run = 0; run < 3; run++)
             {
                 var fixture = (IDisposable)Activator.CreateInstance(fixtureClass)!;
-                var directory = (string)field!.GetValue(fixture)!;
+                string directory;
 
-                Assert.True(Directory.Exists(directory));
-                chosen.Add(directory);
+                try
+                {
+                    directory = (string)field!.GetValue(fixture)!;
 
-                fixture.Dispose();
+                    Assert.True(Directory.Exists(directory));
+                    chosen.Add(directory);
+                }
+                finally
+                {
+                    fixture.Dispose();
+                }
+
                 Assert.False(Directory.Exists(directory));
             }
         }
