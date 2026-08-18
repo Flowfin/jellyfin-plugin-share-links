@@ -7,6 +7,10 @@ choose Report a vulnerability. That opens a report only the maintainers of this
 repository can read, and it is the route to use for anything that could be
 exploited.
 
+The form is here, without navigating:
+
+<https://github.com/Flowfin/jellyfin-plugin-share-links/security/advisories/new>
+
 It is enabled, which is checkable rather than promised:
 
 ```
