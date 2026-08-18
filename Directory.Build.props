@@ -1,5 +1,28 @@
 <Project>
     <PropertyGroup>
+        <!-- A committed lockfile per project. Without one a restore is free to resolve a
+             transitive package to whatever the feed offers that day, so two builds of the
+             same commit can carry different code and neither says so. With one, that
+             resolution is a file in the tree and a change to it is a diff somebody reads.
+
+             Locked mode is not turned on here but passed as a flag on the routes that must
+             not move the graph, because turning it on for every local build would refuse
+             the ordinary act of adding a package before the lockfile has been written. The
+             one CI route that deliberately moves the graph, the floor restore in ci.yaml,
+             is left without it and says so at the call.
+
+             publish.yaml has restored in locked mode since it was written and fails with
+             an explicit error when the lockfile is absent, which it was: the release route
+             would have failed on first use.
+
+             Note for whoever edits this comment: an XML comment may not contain two
+             hyphens in a row, so the flag is named in prose here rather than written out.
+             A draft that spelled it caused MSBuild to lose the rest of this file, and the
+             build failed with NU1015 on a version that was defined twenty lines below. -->
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    </PropertyGroup>
+
+    <PropertyGroup>
         <!-- 0.0.0.0 is reserved and no release carries it, so an assembly reporting
              it was not built by the release process. A release supplies the version
              on the build command line and the tree never holds one; docs/versioning.md
