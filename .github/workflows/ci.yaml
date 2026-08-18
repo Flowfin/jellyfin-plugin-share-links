@@ -46,7 +46,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore --locked-mode
 
       - name: Build
         # -warnaserror on the command line as well as in the csproj: the project
@@ -97,6 +97,10 @@ jobs:
           echo "JELLYFIN_FLOOR=${floor}" >> "$GITHUB_ENV"
 
       - name: Restore against the floor
+        # No --locked-mode: this step restores against a different Jellyfin
+        # version on purpose, which is exactly what the committed graph
+        # refuses. The lockfile is right to refuse it and this job is
+        # right to ask, so the two are kept apart here.
         run: dotnet restore -p:JellyfinVersion="${JELLYFIN_FLOOR}"
 
       - name: Build against the floor
@@ -128,7 +132,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore --locked-mode
 
       - name: Build
         run: dotnet build --configuration Release --no-restore -warnaserror

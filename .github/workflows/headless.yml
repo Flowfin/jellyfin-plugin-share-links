@@ -53,7 +53,7 @@ jobs:
         # under test. What has to hold with the network off is the test run.
         run: |
           set -euo pipefail
-          dotnet restore
+          dotnet restore --locked-mode
           dotnet build --configuration Release --no-restore -warnaserror
 
       - name: Prove the container's conditions are actually in force
