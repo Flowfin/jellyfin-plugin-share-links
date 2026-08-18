@@ -214,11 +214,16 @@ route never does. It is right here for the same reason it is wrong there: an
 operator who cannot tell a revocation that missed from one that worked will press
 it again and believe the second press.
 
-**What it does not do.** It does not delete the record, and it does not touch a
-session or a stream that is already playing. The record survives so that an
-operator can still see who was invited to what, which is `docs/personal-data.md`,
-and the record is deleted by the retention rule instead. Stopping a stream that is
-playing is #55 and is not implemented.
+**What else it does.** It ends the server sessions of the guests this plugin made
+for that share, where no live share still names them (#55). An invited account
+this plugin did not create keeps its session. `docs/revocation.md` is where which
+accounts those are, what a guest sees, and what the call does not reach are
+written out.
+
+**What it does not do.** It does not delete the record, and it does not reach a
+segment request already in flight. The record survives so that an operator can
+still see who was invited to what, which is `docs/personal-data.md`, and the
+record is deleted by the retention rule instead.
 
 ## What this page does not cover
 

@@ -86,13 +86,14 @@ The four bounds arrived with #29, which is where each number is argued and where
 the refusal that reads them lives. `docs/bounds.md` is the longer version of that
 argument.
 
-The default bitrate ceiling arrived with #62, after #61 decided that the ceiling
-is written onto the invited account rather than enforced in the request path.
-That decision is what fixes the two units: an operator writes megabits per second
-because that is the unit an uplink is sold in, and the record keeps bits per
-second because that is what the account switch takes. `BitrateCap` is where the
-conversion and the bounds live and `docs/bitrate-cap.md` is where the enforcement
-point is argued.
+The default bitrate ceiling arrived with #62. The two units are fixed by the two
+ends rather than by where the ceiling is enforced: an operator writes megabits per
+second because that is the unit an uplink is sold in, and the record keeps bits
+per second because that is the unit the server counts a rate in, so no conversion
+sits between the stored number and the number a ceiling is compared against.
+`BitrateCap` is where the conversion and the bounds live and
+`docs/bitrate-cap.md` is where the enforcement point is argued and where #61's
+answer is written down.
 
 The session ceiling arrived with #56, which decided the number and where it is
 enforced. It is written onto the invited account rather than counted by this

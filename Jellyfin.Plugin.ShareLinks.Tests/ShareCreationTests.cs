@@ -9,6 +9,7 @@ using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Users;
 using Microsoft.AspNetCore.Http;
@@ -575,6 +576,7 @@ public sealed class ShareCreationTests : IDisposable
             _server.Library(),
             configuration,
             ContextFor(caller),
+            _server.Sessions(),
             new FixedClock(Now),
             NullLogger<ShareLinksAdminController>.Instance)
         {
@@ -627,7 +629,13 @@ public sealed class ShareCreationTests : IDisposable
             return user;
         }
 
-        public IUserManager Manager()
+        // A session manager that answers nothing, because these tests drive the
+    // create route and never a session. Strict, so a route that reached for one
+    // fails here rather than passing quietly - the same reason
+    // AdministratorRouteTests hands its own managers over as fakes.
+    public ISessionManager Sessions() => Mock.Of<ISessionManager>(MockBehavior.Strict);
+
+    public IUserManager Manager()
         {
             var manager = new Mock<IUserManager>(MockBehavior.Strict);
 

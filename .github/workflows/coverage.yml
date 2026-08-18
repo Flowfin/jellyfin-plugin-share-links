@@ -82,7 +82,7 @@ jobs:
       - name: Restore and build
         run: |
           set -euo pipefail
-          dotnet restore
+          dotnet restore --locked-mode
           dotnet build --configuration Release --no-restore -warnaserror
 
       - name: Run the suite and collect coverage

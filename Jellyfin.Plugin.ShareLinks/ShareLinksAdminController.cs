@@ -6,6 +6,7 @@ using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
+using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -41,7 +42,8 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// these two actions do is read what the store holds and ask the store to write a
 /// revocation, and both of those already exist over
 /// <see cref="IShareStore"/> so that the rule is the same wherever it is asked
-/// for.
+/// for. The one thing revocation reaches beyond the store is the server's own
+/// session list, which is #55 and is <see cref="GuestSessions"/>.
 /// </para>
 /// <para>
 /// A store that cannot be read is an error to this caller and a refusal to the
@@ -70,6 +72,7 @@ public class ShareLinksAdminController : ControllerBase
     private readonly ILibraryManager _libraryManager;
     private readonly IPluginConfigurationSource _configuration;
     private readonly IAuthorizationContext _authorizationContext;
+    private readonly ISessionManager _sessionManager;
     private readonly TimeProvider _clock;
     private readonly ILogger<ShareLinksAdminController> _logger;
 
@@ -82,6 +85,7 @@ public class ShareLinksAdminController : ControllerBase
     /// <param name="libraryManager">The server's own answer to whether an item exists.</param>
     /// <param name="configuration">Where the operator's settings are read from, per request.</param>
     /// <param name="authorizationContext">The server's own answer to who is asking.</param>
+    /// <param name="sessionManager">The server's session list, which a revocation reaches into (#55).</param>
     /// <param name="clock">The clock a state and a revocation instant are read from.</param>
     /// <param name="logger">Where this surface's lines go (#27).</param>
     public ShareLinksAdminController(
@@ -91,6 +95,7 @@ public class ShareLinksAdminController : ControllerBase
         ILibraryManager libraryManager,
         IPluginConfigurationSource configuration,
         IAuthorizationContext authorizationContext,
+        ISessionManager sessionManager,
         TimeProvider clock,
         ILogger<ShareLinksAdminController> logger)
     {
@@ -100,6 +105,7 @@ public class ShareLinksAdminController : ControllerBase
         _libraryManager = libraryManager;
         _configuration = configuration;
         _authorizationContext = authorizationContext;
+        _sessionManager = sessionManager;
         _clock = clock;
         _logger = logger;
     }
@@ -378,6 +384,23 @@ public class ShareLinksAdminController : ControllerBase
     /// who pressed twice sees the first press's instant, reason and revoker
     /// rather than their own.
     /// </para>
+    /// <para>
+    /// The record stopping is half of what an operator asked for and the sessions
+    /// it was keeping alive are the other half (#55). They are ended after the
+    /// store has written, never before: a revocation that signed a guest out and
+    /// was then refused by the store would have stopped a person watching a share
+    /// that is still live, and there is nothing to sign them back in with.
+    /// <see cref="GuestSessions"/> is where which accounts those are is decided.
+    /// </para>
+    /// <para>
+    /// The store is read a second time for that, because which other shares still
+    /// name a guest is what decides whether their session survives, and the answer
+    /// has to be the store as it stands after the revocation rather than before
+    /// it. A read that fails there is answered as an error even though the record
+    /// was written, because the alternative is telling an operator that a share
+    /// was stopped while a guest goes on watching it. Pressing revoke again
+    /// re-attempts both halves and changes nothing that already happened.
+    /// </para>
     /// </remarks>
     [HttpPost("Shares/{shareId}/Revoke")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -423,9 +446,28 @@ public class ShareLinksAdminController : ControllerBase
             return TheStoreCouldNotBeRead();
         }
 
-        return outcome is { } record
-            ? Ok(ShareSummary.Of(record, _clock.GetUtcNow()))
-            : NotFound();
+        if (outcome is not { } record)
+        {
+            return NotFound();
+        }
+
+        IReadOnlyList<ShareRecord> remaining;
+        try
+        {
+            remaining = await _store.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (ShareStoreUnreadableException)
+        {
+            ShareLog.StoreUnreadable(_logger);
+            return TheStoreCouldNotBeRead();
+        }
+
+        var now = _clock.GetUtcNow();
+        await GuestSessions.EndAsync(
+            _sessionManager,
+            GuestSessions.LeftWithNothingToWatch(remaining, record, now)).ConfigureAwait(false);
+
+        return Ok(ShareSummary.Of(record, now));
     }
 
     // One answer for a store this plugin cannot use, made in one place so that

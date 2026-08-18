@@ -4,13 +4,24 @@ This is the decision issue #45 asks for. Expiry sounds simple and is not, so eac
 awkward part is answered here rather than discovered by the first routine that
 meets it.
 
-Nothing in the tree reads a clock yet:
+The clock is a seam, and the routines these rules bind read it from there rather
+than from the machine. Every file in the plugin that names one, on `origin/master`
+at `3cf7149`:
 
-    git grep -n 'TimeProvider' origin/master -- Jellyfin.Plugin.ShareLinks/ Jellyfin.Plugin.ShareLinks.Tests/ ; echo "exit=$?"
-    exit=1
+    git grep -ln 'TimeProvider' origin/master -- Jellyfin.Plugin.ShareLinks/
+    origin/master:Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareResolution.cs
 
-and reading the machine clock directly is refused, so the routines these rules
-bind will take the clock as a seam whether or not they remember to:
+The registrator supplies the machine clock once, the two routes take it and hand
+it on, and `ShareResolution` is where a rule on this page meets it. This paragraph
+said the opposite until 2026-08-17: it claimed no file in the tree read a clock,
+and pasted a command whose exit status was 1. The command returns the four files
+above. It was found by re-running it rather than by reading it.
+
+Reading the machine clock directly is still refused everywhere else, so a routine
+added after this sentence takes the seam whether or not it remembers to:
 
     bash .github/scripts/enforce-greppable-invariants.sh .github/invariant-fixtures/clock-comes-from-the-seam/violation ; echo "exit=$?"
     exit=1
@@ -108,12 +119,16 @@ The sweep itself, how often it runs and what it deletes, is the retention rule i
 the backwards-clock case, so a sweep that never runs makes that residual
 unbounded.
 
-The tests these rules exist for are #45's clauses and #79's: one tick before, the
-instant, one tick after, the create route refusing a lifetime past the ceiling,
-and no route moving an expiry. The first three are `ClockBoundaryTests` and the
-fourth is
-`ShareCreationTests.ALifetimePastTheCeilingIsRefusedBeforeAnAccountIsMade`, which
-refuses through the same `ShareBounds` the store enforces rather than through a
-copy of the number at the route. The last one is still a statement about a set of
-routes rather than a test, and #47 is where a statement of that shape is
-collected.
+The tests these rules exist for are #45's remaining clauses and #79's: one tick
+before, the instant, one tick after, the create route refusing a lifetime past
+the ceiling, and no route moving an expiry. The boundary walked off one clock
+landed with the clock seam, and the no-route-moves-an-expiry clause landed as
+`ExpiryPolicy`, which refuses a routine that answers with a record expiring at
+anything but the instant it was given; `docs/negative-capabilities.md` carries
+that line and the two bounds the guard has.
+
+The ceiling clause was the one still owed, because it needed a create route to
+refuse anything. It is
+`ShareCreationTests.ALifetimePastTheCeilingIsRefusedBeforeAnAccountIsMade`, and
+it refuses through the same `ShareBounds` the store enforces rather than through
+a copy of the number at the route.

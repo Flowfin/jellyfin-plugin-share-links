@@ -220,13 +220,28 @@ No setting in this plugin changes that, which is #59's answer.
 **What an operator does.** Tells the guest, where that matters.
 `docs/playback-visibility.md` lists which surface shows what.
 
-### Revoking does not stop a stream that is already playing
+### Revoking does not reach a segment request already in flight
 
-Revocation is read when a request is made. A session already playing is not a
-request, and stopping one is #55.
+Revoking signs the share's guests out of the server, which is #55 and is written
+out in `docs/revocation.md`. What it cannot reach is a request already on its way
+for a segment: the handle belongs to the server, nothing in this plugin stands in
+the playback path, and what refuses the next request is the server finding the
+token revoked. Nothing here measured how long a player keeps going before it asks
+again.
 
-**What an operator does.** Revokes the share and then stops the session from the
-server's own dashboard, where the stream has to end now.
+**What an operator does.** Revokes the share, and where a stream has to stop this
+second rather than at the next request, ends the session from the server's own
+dashboard as well.
+
+### Revoking does not sign out an invited account this plugin did not create
+
+Only accounts this plugin made for the share are signed out, and only where no
+live share still names them. An account an operator invited from the server's own
+users belongs to a person who uses this server, and #55 declines to end their
+session over one share ending.
+
+**What an operator does.** Signs that account out from the server's own dashboard
+where it matters. `docs/revocation.md` says which accounts the route reaches.
 
 ## Files, backups and the key
 
@@ -396,8 +411,17 @@ gap.
 - `docs/refused-tests.md`, the tests this repository declines to write and what
   stands in for each, which is a bound on the suite rather than on what an
   operator can do. Where a refusal there does reach an operator it is already an
-  entry above, under what revoking does not stop and under what was never
+  entry above, under what revoking does not reach and under what was never
   measured.
+- `docs/negative-capabilities.md`, #47's list of what a share token can never
+  reach, which is a bound on the token rather than a limit an operator meets.
+  Where a line there does reach an operator it is already an entry above, under
+  what confines a guest and under another plugin's routes.
+- `docs/security.md`, #84's statement of the posture and of what is not defended,
+  which is assembled from the pages that decide each part and takes no decision
+  of its own. Every limit it repeats is already an entry above, and its residual
+  section is the boundary of the design rather than behaviour an operator can act
+  on.
 - `docs/RELEASING.md`, how a release is cut.
 - `docs/limits.md`, this page.
 

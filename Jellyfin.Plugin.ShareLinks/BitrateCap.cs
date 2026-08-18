@@ -12,9 +12,9 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// <para>
 /// Two units, on purpose. An operator writes megabits per second, because that is
 /// the unit an uplink is sold in and the number they already know. The record
-/// keeps bits per second, because that is what the account switch the ceiling is
-/// written onto takes, and <c>docs/bitrate-cap.md</c> is where enforcing it there
-/// rather than in the request path was decided.
+/// keeps bits per second, because that is the unit the server counts a rate in, so
+/// nothing converts between the stored number and the ceiling it is compared
+/// against. <c>docs/bitrate-cap.md</c> is where the enforcement point is decided.
 /// </para>
 /// <para>
 /// One unit for both would make one of the two sides do the conversion in its

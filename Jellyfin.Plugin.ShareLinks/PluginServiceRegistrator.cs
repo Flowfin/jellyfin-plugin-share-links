@@ -75,6 +75,30 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <exception cref="InvalidOperationException">The plugin has not been created yet, so the server has not said where its data folder is. Nothing is guessed in its place: a store written to a folder of this plugin's own choosing is a store an upgrade or an uninstall does not touch.</exception>
     public static string InTheDataFolder(string fileName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+
+        // A ROOTED NAME WOULD LEAVE THE DATA FOLDER, and Path.Combine would let
+        // it: given an absolute second argument it discards the first and
+        // returns the second unchanged. So Path.Combine("/var/lib/.../share-links",
+        // "/etc/passwd") is "/etc/passwd", silently, with no error anywhere.
+        //
+        // Every caller in this plugin passes a compile-time constant, so nothing
+        // reaches this today. That is the problem rather than the reassurance:
+        // this method is public and static, its safety rests on two call sites
+        // somebody has to go and read, and a third caller added next year would
+        // not be warned by anything. CodeQL reported it as cs/path-combine and
+        // was right to - it cannot see the callers either.
+        //
+        // The check costs one line and moves the guarantee out of the call sites
+        // and into the method that makes the promise.
+        if (Path.IsPathRooted(fileName) || fileName.Contains("..", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A file inside the data folder is named by a plain file name. "
+                + $"'{fileName}' is rooted or walks upwards, and combining it would leave the data folder.",
+                nameof(fileName));
+        }
+
         var plugin = Plugin.Instance
             ?? throw new InvalidOperationException("The plugin has not been created, so the server has not said where its data folder is.");
 

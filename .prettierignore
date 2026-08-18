@@ -9,3 +9,8 @@ artifacts/
 # The lockfile is npm's to write. Reformatting it puts prettier and `npm ci` in
 # disagreement over a file only one of them owns.
 package-lock.json
+
+# Same for NuGet. `dotnet restore` writes packages.lock.json and rewrites it in its
+# own style on the next force-evaluate, so a prettier pass would be undone by the
+# next person who adds a package and would show up as their diff.
+**/packages.lock.json

@@ -1,5 +1,59 @@
 <Project>
     <PropertyGroup>
+        <!-- The graph is watched, not only recorded. NuGet checks the restored graph
+             against the advisory database and NU1901 to NU1904 are raised to errors, so a
+             known-vulnerable package fails the restore. Left as warnings they would be
+             true and green, printed into a log nobody reads.
+    
+             This board committed a lockfile and ran no audit, which is the worse half of
+             the pair: the graph was held still and nothing looked at it. Eleven boards of
+             this fleet were in that state on 2026-08-18, and the twelfth is why it
+             matters. jellyfin-plugin-watchlist was told by Scorecard about one high
+             advisory; switching this on found a second one rated critical that Scorecard
+             had never reported.
+    
+             Mode all rather than direct: both of those arrived under the Jellyfin
+             packages and neither was referenced by a project file, so a direct-only audit
+             would have found neither.
+    
+             Nothing is pinned here. Measured with the audit forced on from the command
+             line, this board reports no advisory today; the entry is the detector, not a
+             repair.
+    
+             Note for whoever edits this comment: an XML comment may not contain two
+             hyphens in a row. A draft elsewhere in this fleet spelled out a command line
+             flag, left the file malformed, and the build failed on a property defined
+             twenty lines below. -->
+        <NuGetAudit>true</NuGetAudit>
+        <NuGetAuditMode>all</NuGetAuditMode>
+        <NuGetAuditLevel>low</NuGetAuditLevel>
+        <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!-- A committed lockfile per project. Without one a restore is free to resolve a
+             transitive package to whatever the feed offers that day, so two builds of the
+             same commit can carry different code and neither says so. With one, that
+             resolution is a file in the tree and a change to it is a diff somebody reads.
+
+             Locked mode is not turned on here but passed as a flag on the routes that must
+             not move the graph, because turning it on for every local build would refuse
+             the ordinary act of adding a package before the lockfile has been written. The
+             one CI route that deliberately moves the graph, the floor restore in ci.yaml,
+             is left without it and says so at the call.
+
+             publish.yaml has restored in locked mode since it was written and fails with
+             an explicit error when the lockfile is absent, which it was: the release route
+             would have failed on first use.
+
+             Note for whoever edits this comment: an XML comment may not contain two
+             hyphens in a row, so the flag is named in prose here rather than written out.
+             A draft that spelled it caused MSBuild to lose the rest of this file, and the
+             build failed with NU1015 on a version that was defined twenty lines below. -->
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    </PropertyGroup>
+
+    <PropertyGroup>
         <!-- 0.0.0.0 is reserved and no release carries it, so an assembly reporting
              it was not built by the release process. A release supplies the version
              on the build command line and the tree never holds one; docs/versioning.md

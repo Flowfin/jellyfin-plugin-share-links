@@ -11,131 +11,173 @@ compiles against, at the version `Directory.Build.props` pins:
 
 ## What is already fixed
 
-The per-share ceiling is on the record, and nothing reads it:
+The per-share ceiling is on the record, and it is carried and shown rather than
+acted on:
 
-    git grep -n 'MaxBitrateBitsPerSecond' -- Jellyfin.Plugin.ShareLinks/
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:237:    public long? MaxBitrateBitsPerSecond { get; init; }
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:293:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
-    Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:199:        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    git grep -n 'MaxBitrateBitsPerSecond' origin/master -- Jellyfin.Plugin.ShareLinks/
+    origin/master:Jellyfin.Plugin.ShareLinks/BitrateCap.cs:34:/// <see cref="ShareRecord.MaxBitrateBitsPerSecond"/> already takes, and a second
+    origin/master:Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:162:                        cell(row, share.MaxBitrateBitsPerSecond);
+    origin/master:Jellyfin.Plugin.ShareLinks/EffectiveBitrate.cs:11:/// is <see cref="ShareRecord.MaxBitrateBitsPerSecond"/>; the invited account
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareRecord.cs:237:    public long? MaxBitrateBitsPerSecond { get; init; }
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareRecord.cs:293:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:226:        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareSummary.cs:104:    public long? MaxBitrateBitsPerSecond { get; init; }
+    origin/master:Jellyfin.Plugin.ShareLinks/ShareSummary.cs:128:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
 
-Two of those three carry the value from one record to another. So the storage side
-is settled and the open question is where that number becomes a stream that obeys
-it.
+A field, two copies from one record to another, a listing row and a cell on the
+page. So the storage side is settled and the open question is where that number
+becomes a stream that obeys it.
 
 Transcoding stays on for a guest, and that is a decision rather than an oversight:
 
-    git grep -n 'EnableVideoPlaybackTranscoding' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
-    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:74:        policy.EnableVideoPlaybackTranscoding = true;
+    git grep -n 'EnableVideoPlaybackTranscoding' origin/master -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+    origin/master:Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:201:        policy.EnableVideoPlaybackTranscoding = true;
 
 A ceiling below what direct play needs forces a transcode, so an account that may
-not transcode turns every capped share into a broken player. An enforcement point
-that can only refuse contradicts that, and it is most of what rules out the third
-option below.
+not transcode turns every capped share into a broken player. That is what makes
+the ordinary case a lower-quality stream rather than a refusal, and it is why the
+refusal below is a second leg and not the whole answer.
 
 ## The three options
 
 ### Set the ceiling on the invited account
 
-The ceiling is a switch on the account policy this plugin already writes, and it
-is guarded rather than assumed: `GuestCapabilityTests` asserts the server still
-carries it under that name and with that type, so a server line that renamed or
-dropped it would red the suite instead of leaving a document describing a setting
-nobody sets.
+The ceiling is a switch on the account policy this plugin already writes, and the
+switch is guarded rather than assumed: `GuestCapabilityTests` asserts the server
+still carries it under that name and with that type, so a server line that renamed
+or dropped it would red the suite instead of leaving a document describing a
+setting nobody sets.
 
-    git grep -n 'RemoteClientBitrateLimit' -- Jellyfin.Plugin.ShareLinks.Tests/
-    Jellyfin.Plugin.ShareLinks.Tests/GuestCapabilityTests.cs:58:        { "RemoteClientBitrateLimit", "Int32" }
+    git grep -n 'RemoteClientBitrateLimit' origin/master -- Jellyfin.Plugin.ShareLinks.Tests/
+    origin/master:Jellyfin.Plugin.ShareLinks.Tests/EffectiveBitrateTests.cs:108:        Assert.Equal(0, new UserPolicy().RemoteClientBitrateLimit);
+    origin/master:Jellyfin.Plugin.ShareLinks.Tests/EffectiveBitrateTests.cs:109:        Assert.Equal(0, new ServerConfiguration().RemoteClientBitrateLimit);
+    origin/master:Jellyfin.Plugin.ShareLinks.Tests/GuestCapabilityTests.cs:58:        { "RemoteClientBitrateLimit", "Int32" }
 
-`GuestPolicy` sets every other switch and deliberately leaves this one, because
-the number belongs to this issue and to #62:
+It costs one value on an object the plugin already builds, and what it buys is
+that the plugin is not in the request path: the server applies the ceiling
+wherever it decides a stream, so there is no route here to miss.
 
-    git grep -n 'RemoteClientBitrateLimit' -- Jellyfin.Plugin.ShareLinks/
-    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:34:/// <c>RemoteClientBitrateLimit</c> by #61 and #62; setting either here would
-
-So this option costs one value on an object the plugin already builds, written
-through the same interface the account lifecycle in `docs/guest-accounts.md`
-already goes through. What it buys is that the plugin is not in the request path:
-the server applies the ceiling wherever it decides a stream, so there is no route
-here to miss. What it costs is that the ceiling belongs to an account rather than
-to a share, and the issue is right that this collides when one account holds two
-shares with different caps.
+What it costs is that the ceiling belongs to an account rather than to a share.
+One account holding two shares with different caps has one switch to hold both,
+so the number written has to be derived from the set of live shares naming the
+account rather than taken from the share being created. That derivation is a
+second thing that can be wrong: it has to be rewritten every time that set
+changes, and the set changes on expiry, which is an instant nothing calls the
+plugin at. A share that expires with nothing else moving leaves the account
+carrying a ceiling that no live share asks for.
 
 ### Intercept the playback information request
 
-The plugin sits in front of the request that asks what may be played and lowers
-the ceiling reported for a guest session to the share's own.
+The plugin sits in front of the request that asks what may be played and reports
+the share's own ceiling for a guest session.
 
-Exact per share, with no collision. The cost is the one decision 3 of #94 accepted
-for confinement, and here it lands worse rather than the same. A missed route in a
-confinement filter is a hole somebody has to find and use; a missed route here is
-a stream that quietly plays above the cap and is indistinguishable from one that
-obeyed it. It also puts a second thing in the request path for a number that the
-first option can hand the server before the request arrives.
+Exact per share, with no derived value to keep in step and nothing to clean up
+when a share stops being live. A well-behaved client reads the ceiling it is given
+and asks for a stream inside it, which is the ordinary case and the one that ends
+in a lower-quality stream rather than in an error.
+
+What it costs is a second surface where a missed route is the defect, which is the
+cost decision 3 of #94 already accepted for confinement. Here it lands differently
+rather than identically: a missed route in a confinement filter is a hole somebody
+has to find and use, and a missed route here is a stream that quietly plays above
+the cap and is indistinguishable from one that obeyed it.
+
+It also trusts the client to act on what it was told. A client that never reads
+the reported ceiling, or that has the stream address already, is not constrained
+by this leg at all.
 
 ### Refuse a playback request above the cap
 
-Ruled out. The issue already says why it is weak alone: a client that never asks
-politely is not constrained by a refusal on the polite path. The second reason is
-above. Refusing cannot produce the lower-quality stream that keeping transcoding
-on exists to produce, so this contradicts a decision already written down in
-`docs/guest-capabilities.md` rather than merely being insufficient.
+The request that asks for a stream above the share's ceiling is refused.
+
+Alone this is weak, for the reason the issue gives and for a second one: a point
+that can only refuse cannot produce the lower-quality stream that keeping guest
+transcoding on exists to produce, so alone it contradicts a decision already
+written down in `docs/guest-capabilities.md`.
+
+Behind the interception it is neither of those things. The polite path has already
+been given a ceiling it can meet, so the ordinary request arrives inside the cap
+and transcodes; what reaches the refusal is a request that asked for more than it
+was told it could have.
 
 ## The choice
 
-The ceiling is enforced on the invited account, and this plugin supplies the
-number rather than standing in the request path.
+Both mechanisms, not one. The playback information for a guest session reports the
+share's cap as the ceiling, and a playback request above the cap is refused.
 
-The collision the first option has is answered without deciding anything about
-whether an account belongs to a guest or to a share. The number written to the
-account is the lowest of the ceilings of the live shares naming it, which is the
-arithmetic #64 owns, so an account holding two shares gets the stricter of the two
-and neither share is served above its own cap.
+Each of the two has a hole the other closes. The interception alone trusts the
+client's honesty. The refusal alone cannot produce the lower-quality stream and is
+the leg the issue itself names as weak. Together the ordinary client is told a
+number it can meet and the client that never asks politely meets a refusal.
 
-That is a real cost and it is named rather than hidden. A guest with two shares is
-capped on both by the tighter one, and the looser share is quieter than its
-operator asked for. It errs in the direction that cannot serve more than was
-asked for, which is the direction to err in, and an operator who needs the two
-caps kept apart makes a second guest.
+The account-level route is not taken. Its collision is answerable, by writing the
+lowest of the ceilings of the live shares naming the account, and the answer is
+what makes it worse rather than what rescues it: it turns the switch into a
+derived value with no event behind one of its inputs. Expiry is the input with no
+event. Nothing calls this plugin at an expiry instant, so the cleanup would be a
+second failure path, running on creation and revocation and silently not running
+on the instant that actually ends a share.
 
-The number is recomputed when the set of live shares naming an account changes,
-which is creation and revocation, and not on a timer. A share reaching its expiry
-instant therefore leaves the account's ceiling where it was until something else
-moves it. That is the same shape as the sweep in `docs/expiry.md` and it is
-bounded the same way.
+This is not a preference between a simpler and a stricter answer. Under the
+account route the failure is quiet, in the direction of serving more than was
+asked for, and it is invisible to an operator reading the share view. Under the
+chosen pair the failure is a route somebody forgot to stand in front of, which is
+findable by enumerating the routes and is the same class of work the confinement
+filter already owes.
 
-This does not move the ceiling into `GuestPolicy`. That routine writes the
-switches a guest gets once, and this value changes over the life of an account as
-shares come and go, so it is written beside the policy rather than inside the
-routine that fixes it.
+The switch on the account stays where the server put it, and this plugin does not
+write it:
+
+    git grep -n 'RemoteClientBitrateLimit' origin/master -- Jellyfin.Plugin.ShareLinks/
+    origin/master:Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:35:/// <c>RemoteClientBitrateLimit</c> is bounded by #61 and #62; setting it here
+
+The account's own limit and the server configuration's are still read rather than
+ignored. They are the second and third inputs to `EffectiveBitrate.Lowest`, and
+the ceiling this plugin reports and refuses against is the lowest of the three, so
+an operator who has set either of them is not overridden by a share that asks for
+more.
 
 ## What this does not constrain
 
-The setting is named for remote clients, and whether it reaches a client on the
-operator's own network was not measured. Measuring it needs a running server
-rather than a package, and a name is not evidence. An operator who expects the cap
-to hold for a guest inside their network has to establish that themselves. What
-would measure it is the manual check #65 asks for, and it belongs on that check's
-list.
+A client that has the stream address already. It is constrained by the refusal leg
+and by nothing else, because it never asks what it may play. The third clause of
+#61, a test asserting that a request above the cap does not produce a stream above
+the cap, therefore has to drive that path and not only the polite one, or it
+proves the leg that was never in doubt.
 
-A client that never asks politely. The ceiling is applied where the server decides
-a stream, and whether it reaches every path a client can request bytes on was not
-measured here either. This is the residual the third option was rejected for, and
-choosing a different option does not remove it: it moves it from the plugin to the
-server.
+Every playback route this plugin does not stand in front of. This is the accepted
+cost above rather than a hedge: the set of routes a client can request bytes on is
+the thing that has to be enumerated and closed, and until it is, this choice is a
+ceiling on the routes that were thought of. No such enumeration exists in this
+repository today, and the reflection test that proves the plugin's own action set
+closed, `RoutePolicy`, judges what this plugin exposes rather than what the server
+does.
 
-An operator who edits the account afterwards. The plugin writes the number, does
-not hold it, and does not watch it. An operator raising the account's limit by
-hand raises it for every live share on that account until the next creation or
-revocation rewrites it.
+Whether the reported ceiling reaches a client on the operator's own network. Not
+measured. Measuring it needs a running server rather than a package, and the
+manual check #65 asks for is where it is answered.
 
 Anything after the stream has started. A cap decides what is served, not what
 happens to it afterwards, and `docs/threat-model.md` already accepts that a guest
 entitled to watch can hand the result to somebody else.
 
-A share that names no ceiling. The record holds a nullable value and the account
-switch is not nullable, so what the plugin writes when no live share names a
-ceiling is a value meaning no limit rather than an absence. Which value that is
-was not measured, and getting it wrong writes a ceiling of nothing where none was
-meant. #62 has to settle it against the server rather than against this document.
+An operator who edits the guest account by hand. Under this choice the plugin
+writes no bitrate value onto the account, so an operator who sets one there is
+adding a fourth ceiling rather than overwriting the plugin's. It is read as one of
+the three inputs above and it can only lower the result, never raise it.
+
+Nothing here was measured against a running server. The reported ceiling the
+interception would set is a name that exists in the packages this plugin compiles
+against, and the surface the refusal would sit behind is another:
+
+    grep -ac 'MaxStreamingBitrate' ~/.nuget/packages/jellyfin.model/10.11.11/lib/net9.0/MediaBrowser.Model.dll
+    1
+    grep -ac 'IMediaSourceManager' ~/.nuget/packages/jellyfin.controller/10.11.11/lib/net9.0/MediaBrowser.Controller.dll
+    1
+
+That is a grep over an assembly rather than reflection over its types, so a hit
+says the name is in the file and a miss says it is not. Neither is a statement
+about what a member does, and this page makes none.
 
 ## What this does not settle
 
@@ -145,21 +187,33 @@ number is picked here. They are picked there, in `BitrateCap`, and
 second kept, at least 0.1 and at most 1000, and no value meaning no ceiling.
 
 The arithmetic that takes the lowest of the caps that apply, and says which one
-applied, is #64. This decides where the result is written and not how it is
-computed.
+applied, is #64. This decides where the result is reported and refused against,
+not how it is computed.
 
-What happens when the cap cannot be honoured is #63. Under this choice that
-condition is reached only when even the lowest playable version is above the cap,
-because the ordinary case produces a transcode rather than a refusal, which is
-narrower than it would have been under the third option.
+What happens when the cap cannot be honoured is #63, and its answer is a refusal
+at playback with a warning at creation. Under this choice that condition is
+reached when even the lowest playable version is above the cap, because the
+ordinary case is a transcode down to the reported ceiling.
 
-The third clause of #61, a test asserting that a request above the cap does not
-produce a stream above the cap, is not met by this document. The seam it tests at
-is #64's routine and the write to the account, and nothing in the plugin touches
-either:
+The third clause of #61 is not met by this document. Nothing in the plugin touches
+either mechanism:
 
-    git grep -n 'IUserManager' -- Jellyfin.Plugin.ShareLinks/ Jellyfin.Plugin.ShareLinks.Tests/ ; echo "exit=$?"
+    git grep -nE 'MaxStreamingBitrate|PlaybackInfo|IMediaSourceManager' origin/master -- Jellyfin.Plugin.ShareLinks/ ; echo "exit=$?"
     exit=1
 
 Nothing in the tree enforces a bitrate ceiling today. This is the decision the
 enforcement is built against.
+
+## What this page said before
+
+Until this revision this page chose the account switch, and #61 is where the other
+answer was recorded. The two sat beside each other, and this page was the one that
+was wrong: a document describing an enforcement point that was not the one chosen
+is worse than no document, because #63 and #65 are both written against whatever
+this page says.
+
+Nothing had to be unwound, and that is measured rather than assumed. The command
+above returns nothing for either mechanism, and the one hit for the account switch
+is a remark recording that the field is left alone. So the cost of the disagreement
+was this page and the two places that point at it, and no enforcement had been
+built under the answer that was replaced.

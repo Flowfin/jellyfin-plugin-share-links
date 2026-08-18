@@ -92,5 +92,6 @@ routine's answer to inputs a route would hand it, and what a route hands it is
 #68.
 
 A session already playing when one of these events happens is not this page's
-subject. A request is what these rows are about, and stopping a stream that is
-already running is #55.
+subject. A request is what these rows are about. What a revocation does to a
+session the server has already signed in is #55, in `docs/revocation.md`, and
+these rows are unchanged by it.

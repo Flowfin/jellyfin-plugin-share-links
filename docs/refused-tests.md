@@ -79,11 +79,21 @@ what is wrong rather than the suite.
 a running server, a media file and a transcoder. All three are outside the rule
 (#55).
 
-**Replacement, owed.** #46 and #55. The reachable statement is that revoking a
-share asks the session manager to log out the tokens and devices belonging to that
-share and asks nothing for any other session, against a fake, plus the statement
-that a segment request passes through the same resolution that refuses a revoked
-record. If it does not, that is a design defect rather than a test gap.
+**Replacement, landed.** `RevokingSignsOutTheGuestsThisPluginMadeForTheShareAndNobodyElse`,
+`AGuestWhoStillHoldsAnotherLiveShareIsNotSignedOut`, `TheSignOutSparesNoToken`,
+`EveryAccountNamedIsAskedAboutAndNothingElseIs`. The reachable statement is that
+revoking a share asks the session manager to revoke the tokens of the accounts
+belonging to that share and asks nothing about any other account, against a fake
+(#55).
+
+The second half of what an earlier reading proposed here turned out to be false
+rather than owed, and saying so is the point of this line. A segment request does
+not pass through the resolution that refuses a revoked record: the guest route
+redirects to the item's own address, so the server serves the segments and this
+plugin is not in that path. What refuses the next request is the server finding
+the token revoked, which is why the sessions are ended rather than why a route
+refuses. `docs/revocation.md` writes that chain out and says which part of it this
+repository measured.
 
 ### A test that plays something end to end and watches the cap reach the stream
 
@@ -105,9 +115,11 @@ requires every owed replacement to name an issue.
 
 What it does not judge is whether a replacement is a good one. That a route-level
 test stands in adequately for a browser is an argument, and the review is where a
-bad substitution is caught. Two of the six lines above are owed today, so this page
-is a list of promises for those two, and a green suite says nothing about them
-beyond the issue numbers being there.
+bad substitution is caught. Two of the six lines above still carry an owed
+replacement, and both wait on the same thing rather than on code: one run against a
+real server, by hand, which no machine without one supplies. So this page is a list
+of promises for those two, and a green suite says nothing about them beyond the
+issue numbers being there.
 
 Nothing refuses a refusal that was never written down. A test somebody declined to
 write and never brought here is invisible to this page and to the test that reads
