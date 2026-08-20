@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Authorization;
@@ -39,10 +40,11 @@ namespace Jellyfin.Plugin.ShareLinks.Tests;
 /// server itself reads.
 /// </para>
 /// <para>
-/// The create route is not here. #67 asks for three routes and two landed;
-/// creating a share now also creates the account it is for, which is decision 2
-/// of #94, and that is argued in the pull request rather than covered by an
-/// absent test here.
+/// The create route is judged in <c>ShareCreationTests</c> rather than here. It
+/// is the one action on this controller that changes something outside this
+/// plugin's own store, so its fixture carries a server to change, and keeping
+/// that fixture out of these tests is what keeps the listing and the revocation
+/// judged against nothing but a store.
 /// </para>
 /// </remarks>
 public sealed class AdministratorRouteTests : IDisposable
@@ -93,7 +95,7 @@ public sealed class AdministratorRouteTests : IDisposable
         var judged = RoutePolicy.Judge(typeof(ShareLinksAdminController));
 
         Assert.Equal(
-            new[] { "List", "Revoke" },
+            new[] { "Create", "List", "Revoke" },
             judged.Select(action => action.Action).OrderBy(name => name, StringComparer.Ordinal).ToArray());
 
         foreach (var action in judged)
@@ -524,8 +526,8 @@ public sealed class AdministratorRouteTests : IDisposable
     }
 
     /// <summary>
-    /// The two routes are where <c>docs/api.md</c> says they are. The page and the
-    /// assembly are compared as a set by <c>ApiSurfaceTests</c>; this names the
+    /// The three routes are where <c>docs/api.md</c> says they are. The page and
+    /// the assembly are compared as a set by <c>ApiSurfaceTests</c>; this names the
     /// templates, so a route moved by one segment is a failure that says which
     /// one moved.
     /// </summary>
@@ -535,6 +537,11 @@ public sealed class AdministratorRouteTests : IDisposable
         Assert.Equal(
             "ShareLinks",
             typeof(ShareLinksAdminController).GetCustomAttributes<RouteAttribute>().Single().Template);
+
+        Assert.Equal(
+            "Shares",
+            typeof(ShareLinksAdminController).GetMethod(nameof(ShareLinksAdminController.Create))!
+                .GetCustomAttributes<HttpPostAttribute>().Single().Template);
 
         Assert.Equal(
             "Shares",
@@ -574,22 +581,31 @@ public sealed class AdministratorRouteTests : IDisposable
             TokenHash = ShareTokenHash.Compute(_key, token),
         };
 
-    private static ShareLinksAdminController Controller(IShareStore store)
+    private ShareLinksAdminController Controller(IShareStore store)
         => Controller(store, Operator, At(Now));
 
-    private static ShareLinksAdminController Controller(IShareStore store, Guid? caller)
+    private ShareLinksAdminController Controller(IShareStore store, Guid? caller)
         => Controller(store, caller, At(Now));
 
-    private static ShareLinksAdminController Controller(IShareStore store, Guid? caller, TimeProvider clock)
-        => Controller(store, caller, clock, new RecordingSessions());
+        // The two actions these tests drive read a store and a clock and nothing
+        // else. The server's own managers are handed over as fakes that answer
+        // nothing, which is what makes a listing that reached for one fail here
+        // rather than pass quietly; the create route, which does reach for them, is
+        // in ShareCreationTests with a fixture that can answer.
+        private ShareLinksAdminController Controller(IShareStore store, Guid? caller, TimeProvider clock)
+            => Controller(store, caller, clock, new RecordingSessions());
 
-    private static ShareLinksAdminController Controller(
-        IShareStore store,
-        Guid? caller,
-        TimeProvider clock,
-        RecordingSessions sessions)
+        private ShareLinksAdminController Controller(
+            IShareStore store,
+            Guid? caller,
+            TimeProvider clock,
+            RecordingSessions sessions)
         => new ShareLinksAdminController(
             store,
+            _keyFile,
+            Mock.Of<IUserManager>(MockBehavior.Strict),
+            Mock.Of<ILibraryManager>(MockBehavior.Strict),
+            Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),
             sessions.Manager,
             clock,

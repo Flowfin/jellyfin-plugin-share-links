@@ -120,10 +120,15 @@ the backwards-clock case, so a sweep that never runs makes that residual
 unbounded.
 
 The tests these rules exist for are #45's remaining clauses and #79's: one tick
-before, the instant, one tick after, the create route refusing a lifetime past the
-ceiling, and no route moving an expiry. The boundary walked off one clock landed
-with the clock seam, and the last of them landed as `ExpiryPolicy`, which refuses
-a routine that answers with a record expiring at anything but the instant it was
-given. `docs/negative-capabilities.md` carries the line and the two bounds the
-guard has. What is still owed is the ceiling clause, which needs a create route
-to refuse anything, and that is #67.
+before, the instant, one tick after, the create route refusing a lifetime past
+the ceiling, and no route moving an expiry. The boundary walked off one clock
+landed with the clock seam, and the no-route-moves-an-expiry clause landed as
+`ExpiryPolicy`, which refuses a routine that answers with a record expiring at
+anything but the instant it was given; `docs/negative-capabilities.md` carries
+that line and the two bounds the guard has.
+
+The ceiling clause was the one still owed, because it needed a create route to
+refuse anything. It is
+`ShareCreationTests.ALifetimePastTheCeilingIsRefusedBeforeAnAccountIsMade`, and
+it refuses through the same `ShareBounds` the store enforces rather than through
+a copy of the number at the route.

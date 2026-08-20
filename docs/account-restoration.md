@@ -115,18 +115,33 @@ is where it would otherwise be settled in passing by whoever writes it.
 
 ## What this does not cover
 
-This plugin changes no account today. Nothing in it reaches the interface that
-would:
+This plugin now changes an account, and this section said it did not. The create
+route in #67 landed, and it reaches the interface the earlier text records as
+absent:
 
-    git grep -n 'IUserManager' -- Jellyfin.Plugin.ShareLinks Jellyfin.Plugin.ShareLinks.Tests ; echo "exit=$?"
-    exit=1
+    git grep -ln 'IUserManager' -- Jellyfin.Plugin.ShareLinks
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
 
-So the decision above is a rule standing in front of the code it governs.
-`AccountRestorationTests.ThisPluginWritesToNoAccountYet` reads the compiled
-plugin for a reference to that interface and reds on the day one arrives, which
-is the day somebody has to have read this page. What it cannot see is a call made
-by reflection or through a wrapper of somebody else's, and that bound is the
-test's own.
+`AccountRestorationTests.ThisPluginWritesToNoAccountYet` was the tripwire for
+exactly that moment and it fired, which is what it was for. The rule above is no
+longer standing in front of code; it is standing behind one call, and what holds
+it is that the identifier reaching `UpdatePolicyAsync` is one `CreateUserAsync`
+returned in the same call. That is a fact about which value reaches a call rather
+than about which types an assembly names, so no reading of the compiled metadata
+can see it. It is held by
+`ShareCreationTests.ThePolicyIsWrittenOntoTheAccountsTheCreateMadeAndOntoNobodyElse`,
+which drives the route against a server that already holds somebody else's
+account and requires that account's policy to be untouched.
+
+`IUserDataManager` is still reached nowhere, and the tripwire that survives says
+so. That is the other half of the original one: playback state, favourites and
+what a person has watched are a different account surface from the policy, and
+nothing here writes to it.
+
+The one write that is not a policy write is the credential this plugin mints for
+an account it just made, handed to the server by `ChangePassword` and kept
+nowhere here. It is not prior state and there is nothing to restore: before the
+invitation the account did not exist, which is this page's whole argument.
 
 The two conditions #58 closes on are not met by this page and it does not close
 it. Both are tests over an account that was changed and then either left alone or

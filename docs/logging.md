@@ -28,9 +28,17 @@ exception message, a stack trace this plugin writes, or a URL it logs.
   the elevation policy; a log file is copied by backup tooling and read by
   whoever can read the server's disk.
 
-Nothing derived from a password is on this list, because there is nothing to put
-there: an invited guest signs in to the server, and the server owns that
-exchange. This plugin never sees a password.
+- The credential this plugin mints for an account it creates. It is drawn once,
+  handed to the server and shown to the operator in the answer to a create, and
+  it is a working sign-in for that account until somebody changes it. A prefix of
+  it is a partial credential for the same reason a prefix of a token is.
+
+This plugin sees a credential at exactly one moment, and this paragraph said it
+never saw one. That was true until the create route in #67 landed. What is
+unchanged is that nothing here writes one down: it is minted, given to the server
+and forgotten, so the line above is a rule about a value that exists for the
+length of one call rather than about a field in a store. The sign-in itself is
+still the server's exchange and this plugin has no part in it.
 
 The never list is not a level. Debug is not an exception to it, because a debug
 line is a line in the same file.

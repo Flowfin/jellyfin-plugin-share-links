@@ -49,7 +49,7 @@ current state; this file is not, and does not try to be.
 One server line, declared once, in `build.yaml`:
 
     grep -n '^targetAbi:' build.yaml
-    11:targetAbi: "10.11.0.0"
+    13:targetAbi: "10.11.9.0"
 
 That number is what the package offers a server and a catalogue as the line it
 was built for. Whether a particular server accepts it is the server's decision

@@ -28,13 +28,14 @@ risk and not the moment to build on them.
 | Method | Path                                  | Reached by                          |
 | ------ | ------------------------------------- | ----------------------------------- |
 | GET    | `/ShareLinks/Guest/{token}`           | any caller the server has signed in |
+| POST   | `/ShareLinks/Shares`                  | an administrator                    |
 | GET    | `/ShareLinks/Shares`                  | an administrator                    |
 | POST   | `/ShareLinks/Shares/{shareId}/Revoke` | an administrator                    |
 
-Three routes. The route that creates a share is #67 and does not exist, so
-nothing about it is described here. Creating a share now also creates the account
-it is for, which is decision 2 of #94 and the lifecycle in
-`docs/guest-accounts.md`, and none of that is in the tree either.
+Four routes. Creating a share also creates the accounts it is for, which is
+decision 2 of #94 and the lifecycle in `docs/guest-accounts.md`, so the create
+below changes something outside this plugin's own store and the section on it
+says what that costs.
 
 ### GET /ShareLinks/Guest/{token}
 
@@ -75,6 +76,67 @@ reach a server, so where the client shows an item is an assumption written in on
 place in the source and marked as one. What is tested is that the address carries
 the item the share names, carries the token nowhere, and keeps the path a reverse
 proxy mounts the server under.
+
+### POST /ShareLinks/Shares
+
+Makes a share, and the accounts it is for.
+
+**Input.** A body with four fields.
+
+| Field            | Required | What it is                                                   |
+| ---------------- | -------- | ------------------------------------------------------------ |
+| `ItemId`         | yes      | The one library item the share is for                        |
+| `GuestNames`     | yes      | The names the invited guests will be known by on this server |
+| `ExpiresAt`      | no       | When the share stops, as an absolute instant                 |
+| `MaxBitrateMbps` | no       | The ceiling for this share, in megabits per second           |
+
+`GuestNames` is names and not account identifiers, because at the moment an
+operator asks there are no accounts yet: this plugin makes one per name. A name
+the server already holds is refused back rather than made unique with a number.
+
+`ExpiresAt` absent takes `DefaultShareLifetimeDays` from the configuration, and
+`MaxBitrateMbps` absent takes `DefaultMaxBitrateMbps`, which is itself allowed to
+be no ceiling at all. An instant supplied in another offset is converted rather
+than reinterpreted, and it has to be after now, because a share is live strictly
+before its instant.
+
+**Who may call it.** An administrator, under the server's own elevation policy.
+
+**What it answers.**
+
+| Case                                        | Answer                                           |
+| ------------------------------------------- | ------------------------------------------------ |
+| The share was made                          | `200`, the share, the link and the credentials   |
+| The request or a bound refuses it           | `400` and a sentence naming the field or setting |
+| The store could not be read or written      | `500`                                            |
+| The configuration is outside its own bounds | `500` and a sentence naming the setting          |
+
+**The link and the credentials are in this answer and in no other.** Only the
+keyed hash of the token is written down, so this plugin cannot rebuild the link
+when asked, and the credential is handed to the server and kept nowhere here. An
+operator who loses the answer revokes the share and makes another one, which is
+the same thing `docs/expiry.md` says about extending a link.
+
+**What is refused, and what it costs.** Everything that can be decided without
+changing anything is decided first: the fields above, the key, the link, the
+ceilings on live shares and on lifetime read off the store, whether the item
+exists, and whether each name is free. So an ordinary mistake costs nothing at
+all, and no account is made for a request that was going to be refused.
+
+One case is not orderable away. The authoritative ceiling check is inside the
+store write, because a check outside it can be overtaken by a second
+administrator creating at the same moment, so a create that loses that race has
+already made its accounts. Those accounts are removed again, and this is the one
+place this plugin deletes an account: only identifiers the server returned inside
+that same call, only where no record names them. A removal that itself fails is
+not reported as a success; the create is still refused and the accounts are left
+in the server's own user list, hidden, under the names that were asked for.
+
+**What it does not do.** It does not narrow which items a guest can see. The
+account it makes carries the policy in `docs/guest-capabilities.md`, and
+confining a guest to the one shared item is #52 and is not implemented, so a
+guest account made today can reach the library its policy allows. That is the
+largest single thing this route does not yet do and it is in `docs/limits.md`.
 
 ### GET /ShareLinks/Shares
 

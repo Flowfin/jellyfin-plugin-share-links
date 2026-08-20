@@ -142,17 +142,17 @@ rather than an entry that is refused.
 
 ## A targetAbi that matches a supported server
 
-Ticked. `build.yaml` claims `10.11.0.0`, and 10.11 is the line the project is
+Ticked. `build.yaml` claims `10.11.9.0`, and 10.11 is the line the project is
 releasing:
 
     grep -n '^targetAbi:' build.yaml
-    12:targetAbi: "10.11.0.0"
+    13:targetAbi: "10.11.9.0"
     curl -sSL https://api.github.com/repos/jellyfin/jellyfin/releases/latest | grep -oE '"tag_name": "[^"]*"'
     "tag_name": "v10.11.11"
 
 The claim is not only a number in a file. The `abi-floor` job builds the plugin
 against that floor as well as against the newer server package the tree compiles
-with, so an API this plugin calls that does not exist at 10.11.0.0 is a red build
+with, so an API this plugin calls that does not exist at 10.11.9.0 is a red build
 rather than a runtime failure on somebody's server.
 
 ## A manifest in the expected shape

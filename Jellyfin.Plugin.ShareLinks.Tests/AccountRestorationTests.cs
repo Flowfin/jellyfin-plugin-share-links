@@ -51,27 +51,43 @@ public class AccountRestorationTests
     }
 
     [Fact]
-    public void ThisPluginWritesToNoAccountYet()
+    public void ThisPluginTouchesNoUserDataYet()
     {
+        // What is left of the tripwire this replaced. That one named two
+        // interfaces and fired on the day the create route reached the first of
+        // them, which is what it was for: somebody had to read
+        // docs/account-restoration.md before an account was ever written to, and
+        // the page now records that it was read and what holds the rule instead.
+        //
+        // This half is unchanged and is a different account surface. What a person
+        // has watched, resumed and marked as a favourite is theirs, and nothing
+        // here reads or writes any of it.
+        //
         // Read out of the compiled plugin rather than off its public shape,
-        // because a policy write is a call inside a method body and a signature
-        // never mentions it. Every type a compiled assembly names, wherever it
-        // names it, is in the type reference table.
+        // because such a call is inside a method body and a signature never
+        // mentions it. Every type a compiled assembly names, wherever it names it,
+        // is in the type reference table.
         //
         // The bound: a call made by reflection on a name assembled at run time,
         // or one made through a wrapper in another assembly, is named nowhere in
         // this table and is not seen here.
-        var referenced = TypeNamesReferencedByThePlugin();
+        Assert.DoesNotContain("IUserDataManager", TypeNamesReferencedByThePlugin());
+    }
 
-        var accountWrites = referenced
-            .Where(name => name is "IUserManager" or "IUserDataManager")
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            accountWrites.Length == 0,
-            "This plugin now reaches " + string.Join(", ", accountWrites)
-            + ", so it can change an account. docs/account-restoration.md decides which accounts it may change and why nothing records what they were before; read it before the first write lands.");
+    [Fact]
+    public void TheRuleAboutWhichAccountsAreWrittenToIsHeldByATestThatCanFail()
+    {
+        // The page's rule is that a policy is written onto an account this plugin
+        // made and onto no other account. Which account that is, is which
+        // identifier reaches a call, and no reading of the compiled metadata can
+        // see a value. So the rule is held by a test that drives the route
+        // against a server already holding somebody else's account, and this
+        // resolves that test by name so that deleting or renaming it reds here
+        // rather than leaving the page pointing at nothing.
+        //
+        // The name is a literal for the same reason the predicate above is one.
+        Assert.NotNull(typeof(ShareCreationTests).GetMethod(
+            "ThePolicyIsWrittenOntoTheAccountsTheCreateMadeAndOntoNobodyElse"));
     }
 
     [Fact]

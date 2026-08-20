@@ -189,7 +189,7 @@ guest and a title, which is a record of who watched what.
 
 **Held.** These never appear in a log line, at any level, in any form, including
 inside an exception message, a stack trace this plugin writes, or a URL it logs.
-The four leads below are compared against the policy's own list in both
+The five leads below are compared against the policy's own list in both
 directions, so a line reworded in one page and not the other reddens the suite.
 
 - The raw token, whole or in part. Truncation is not a way to log one, because a
@@ -202,6 +202,9 @@ directions, so a line reworded in one page and not the other reddens the suite.
 - The title of the item a share names. It is the other half of who watched what,
   and a log file is copied by backup tooling and read by whoever can read the
   server's disk.
+- The credential this plugin mints for an account it creates. It exists for the
+  length of one call and is shown once in the answer to a create, and a prefix of
+  it is a partial credential for the same reason a prefix of a token is.
 
 `NoLineCarriesTheRawToken`, `NoLineCarriesTheStoredHash`, `NoLineNamesAnAccount`
 assert three of them as absences, and `TheFieldsALineCarriesAreTheOnesThePolicyAllows`
