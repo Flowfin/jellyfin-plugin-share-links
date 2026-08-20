@@ -34,9 +34,15 @@ namespace Jellyfin.Plugin.ShareLinks.Tests;
 /// The route is driven directly rather than through a server, which is what
 /// <c>docs/testing.md</c> requires of everything here. What that reaches is the
 /// whole of this plugin's part: the store read, the decision, and the one thing
-/// said back. What it does not reach is the server's own refusal of a caller it
-/// has not signed in, which happens in front of the action and is stated in the
-/// pull request rather than asserted here.
+/// said back. It starts after the authorize attribute has been honoured or
+/// ignored, so where a caller the server has not signed in is refused is not a
+/// question anything in this file can answer;
+/// <c>RouteRefusalOrderTests</c> puts the framework's own authentication and
+/// authorization middlewares in front of this action and asserts that such a
+/// caller never reaches it and the store is never read. What neither file
+/// reaches is the server's own registration of that refusal, which is whether
+/// Jellyfin inserts those middlewares at all, what its default policy requires
+/// and what its authentication schemes do.
 /// </para>
 /// <para>
 /// Every refusal is compared as bytes rather than as a type, because the property
