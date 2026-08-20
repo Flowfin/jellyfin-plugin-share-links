@@ -381,7 +381,7 @@ there is a release to record a change against.
 
 ### The package declares 10.11 and nothing else
 
-`build.yaml` offers `10.11.0.0` as the line it was built for, and whether a
+`build.yaml` offers `10.11.9.0` as the line it was built for, and whether a
 particular server accepts it is the server's decision rather than this plugin's.
 Carrying 12.0 beside it is #181.
 
