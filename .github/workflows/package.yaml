@@ -73,7 +73,9 @@ jobs:
         # that argued it (#30). Reading the package rather than the csproj is
         # deliberate: what an operator installs is the zip, and a reference can
         # reach it through a transitive path no single project file shows.
-        run: unzip -Z1 ./artifacts/*.zip | bash .github/scripts/refuse-unrecorded-runtime-assemblies.sh
+        run: |
+          set -euo pipefail
+          unzip -Z1 ./artifacts/*.zip | bash .github/scripts/refuse-unrecorded-runtime-assemblies.sh
 
       - name: Prove that check refuses one
         # The step above passing means today's package is clean. It says nothing
