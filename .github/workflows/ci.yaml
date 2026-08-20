@@ -138,7 +138,9 @@ jobs:
         run: dotnet build --configuration Release --no-restore -warnaserror
 
       - name: Test
-        run: dotnet test --configuration Release --no-build --verbosity normal | tee test-output.txt
+        run: |
+          set -euo pipefail
+          dotnet test --configuration Release --no-build --verbosity normal | tee test-output.txt
 
       - name: Report the number of tests run
         # A suite that runs nothing reports success, which looks exactly like a
