@@ -73,6 +73,26 @@ appearing. So the replacement is the session ceiling that a guest's account
 actually carries, plus the absence of the concept, and the wording in the issue is
 what is wrong rather than the suite.
 
+### A demonstration of a confinement mechanism against a real library
+
+**Why it is refused.** Watching either candidate confine an account needs a running
+server with a library on it and an account making requests against it, which is two
+clauses of the rule at once: the suite here runs with no server and with no network,
+and `.github/workflows/headless.yml` proves both rather than asserting them.
+
+**Replacement, landed.** `GuestConfinementTests`. It is a narrower thing than a
+demonstration and the difference matters. What it asserts is that the members the
+comparison rests on are still on the server this plugin compiles against, so a
+server line that renames or drops one reds the suite instead of leaving
+`docs/guest-confinement.md` describing a mechanism nobody can use. It asserts
+nothing about how either mechanism behaves.
+
+**Replacement, owed.** #239. The filter this repository chose does not exist yet, so
+there is no behaviour here to demonstrate, and the first thing a run against a real
+server could watch is the one that issue builds. The choice itself was taken from
+what the server's API says it does, and `docs/guest-confinement.md` says so in its
+section on what was measured.
+
 ### A test that revocation stops a segment request already in flight
 
 **Why it is refused.** The open handle belongs to the server, so reaching it means
@@ -115,11 +135,11 @@ requires every owed replacement to name an issue.
 
 What it does not judge is whether a replacement is a good one. That a route-level
 test stands in adequately for a browser is an argument, and the review is where a
-bad substitution is caught. Two of the six lines above still carry an owed
-replacement, and both wait on the same thing rather than on code: one run against a
-real server, by hand, which no machine without one supplies. So this page is a list
-of promises for those two, and a green suite says nothing about them beyond the
-issue numbers being there.
+bad substitution is caught. Three of the lines above still carry an owed
+replacement, and a green suite says nothing about any of them beyond the issue
+numbers being there. Two of the three wait on one run against a real server, by
+hand, which no machine without one supplies. The third waits on code nobody has
+written, so it is a promise about a mechanism rather than about a machine.
 
 Nothing refuses a refusal that was never written down. A test somebody declined to
 write and never brought here is invisible to this page and to the test that reads
