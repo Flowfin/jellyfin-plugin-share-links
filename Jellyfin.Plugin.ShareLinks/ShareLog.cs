@@ -153,4 +153,51 @@ public static class ShareLog
 
         logger.LogWarning("The share store could not be read, so no share can resolve");
     }
+
+    /// <summary>
+    /// Guest accounts were removed because the last record naming them was swept (#238).
+    /// </summary>
+    /// <param name="logger">Where the line goes.</param>
+    /// <param name="outcome">What went and what was left behind.</param>
+    /// <remarks>
+    /// <para>
+    /// The accounts are counted rather than named, which is
+    /// <see cref="Created"/>'s rule and is kept here rather than made an exception
+    /// of. What it costs is real and is stated rather than glossed: an operator
+    /// reading this line learns that accounts were deleted and how many, and not
+    /// which. Naming them would be a change to what a log of this plugin's may
+    /// hold, which <c>docs/logging.md</c> decides and this line does not.
+    /// </para>
+    /// <para>
+    /// Two levels, because the two halves are read by different people at
+    /// different times. Accounts going is the ordinary end of a share and is
+    /// information. Accounts the server refused to delete are accounts nothing
+    /// will look at again, so that half is a warning even though the call
+    /// succeeded.
+    /// </para>
+    /// <para>
+    /// A call that removed nothing and left nothing behind writes no line. Every
+    /// create sweeps, so a line per create saying that no account was released
+    /// would be the ordinary case filling the log.
+    /// </para>
+    /// </remarks>
+    public static void GuestAccountsRemoved(ILogger logger, GuestAccountRemoval outcome)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(outcome);
+
+        if (outcome.Removed.Count > 0)
+        {
+            logger.LogInformation(
+                "{Removed} guest account(s) removed, their last record having been swept",
+                outcome.Removed.Count);
+        }
+
+        if (outcome.LeftBehind.Count > 0)
+        {
+            logger.LogWarning(
+                "{LeftBehind} guest account(s) could not be removed and are still on this server",
+                outcome.LeftBehind.Count);
+        }
+    }
 }

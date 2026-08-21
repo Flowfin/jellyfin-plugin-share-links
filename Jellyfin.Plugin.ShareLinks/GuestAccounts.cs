@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.ShareLinks;
 
@@ -144,6 +145,148 @@ public static class GuestAccounts
 
             await users.UpdatePolicyAsync(account, policy).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// The accounts a sweep released, which is what the removal path acts on (#238).
+    /// </summary>
+    /// <param name="before">The records the store held before the write.</param>
+    /// <param name="after">The records it holds after it, which is what the sweep left.</param>
+    /// <returns>The accounts, in the order the records that claimed them named them, each one once.</returns>
+    /// <remarks>
+    /// <para>
+    /// An account goes when the last record naming it is gone, which
+    /// <c>docs/guest-accounts.md</c> decides and this is the reading of. So the
+    /// candidates are the accounts claimed by the records that are no longer
+    /// there, and a candidate any surviving record still invites is not released.
+    /// </para>
+    /// <para>
+    /// Claimed rather than merely named, through
+    /// <see cref="ShareRecord.WasCreatedByThisPlugin"/>. This is the gate that
+    /// separates tidying up after a share from deleting somebody's own account,
+    /// and it is the same gate the disabling uses, for the same reason: an account
+    /// this plugin did not make belongs to whoever did.
+    /// </para>
+    /// <para>
+    /// Which records went is never asked, only which accounts are still named, and
+    /// that is one comparison rather than two on purpose. A record that survived
+    /// invites every account it claims, so skipping it first refuses nothing the
+    /// second comparison does not already refuse; the guard was written, could not
+    /// be made to bite, and was removed rather than shipped unproven.
+    /// </para>
+    /// <para>
+    /// A record another call swept between the two readings is in neither list, so
+    /// its accounts are that call's rather than this one's.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<Guid> ReleasedBy(
+        IReadOnlyList<ShareRecord> before,
+        IReadOnlyList<ShareRecord> after)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+
+        var released = new List<Guid>();
+        for (var index = 0; index < before.Count; index++)
+        {
+            var record = before[index];
+            for (var position = 0; position < record.PluginCreatedUserIds.Count; position++)
+            {
+                var account = record.PluginCreatedUserIds[position];
+                if (record.WasCreatedByThisPlugin(account)
+                    && !released.Contains(account)
+                    && !IsNamedByAny(after, account))
+                {
+                    released.Add(account);
+                }
+            }
+        }
+
+        return released;
+    }
+
+    /// <summary>
+    /// Removes the accounts named, and says which of them are still there.
+    /// </summary>
+    /// <param name="users">The server's own account management.</param>
+    /// <param name="accounts">The accounts to remove, from <see cref="ReleasedBy"/>.</param>
+    /// <param name="logger">Where the line about it goes (#27).</param>
+    /// <returns>What went and what was left behind.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is the most irreversible call this plugin makes, and what bounds it is
+    /// the list it is handed rather than anything it does itself. Hand it an
+    /// identifier that reached a record some other way and it deletes a person's
+    /// account on their own server, which is why the gate is in
+    /// <see cref="ReleasedBy"/> and why nothing else in this plugin builds a list
+    /// for it.
+    /// </para>
+    /// <para>
+    /// A refusal on one account does not stop the others. The record that claimed
+    /// them is already gone, so an account skipped here is one nothing will look at
+    /// again, and stopping at the first failure would strand every account after
+    /// it for a reason that has nothing to do with them.
+    /// </para>
+    /// <para>
+    /// An account the server says it does not have is counted as removed rather
+    /// than as left behind. The call asked for it to be gone and it is gone, and a
+    /// second pass over the same identifier is the ordinary way that happens.
+    /// </para>
+    /// </remarks>
+    public static async Task<GuestAccountRemoval> RemoveAsync(
+        IUserManager users,
+        IReadOnlyList<Guid> accounts,
+        ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(users);
+        ArgumentNullException.ThrowIfNull(accounts);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        var removed = new List<Guid>();
+        var leftBehind = new List<Guid>();
+
+        for (var index = 0; index < accounts.Count; index++)
+        {
+            var account = accounts[index];
+            try
+            {
+                await users.DeleteUserAsync(account).ConfigureAwait(false);
+                removed.Add(account);
+            }
+            catch (ArgumentException)
+            {
+                // The account is not there, which is the state this was after.
+                removed.Add(account);
+            }
+#pragma warning disable CA1031 // Do not catch general exception types
+            catch (Exception)
+            {
+                // Whatever the server refused with, the account is still there and
+                // the next one is still owed its attempt. What this cannot do is
+                // tell a refusal apart from a fault, because the interface
+                // declares neither.
+                leftBehind.Add(account);
+            }
+#pragma warning restore CA1031
+        }
+
+        var outcome = new GuestAccountRemoval { Removed = removed, LeftBehind = leftBehind };
+        ShareLog.GuestAccountsRemoved(logger, outcome);
+
+        return outcome;
+    }
+
+    private static bool IsNamedByAny(IReadOnlyList<ShareRecord> records, Guid account)
+    {
+        for (var index = 0; index < records.Count; index++)
+        {
+            if (records[index].InvitedUserIds.Contains(account))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Never above what is there. Below the lowest an operator may set is how the
