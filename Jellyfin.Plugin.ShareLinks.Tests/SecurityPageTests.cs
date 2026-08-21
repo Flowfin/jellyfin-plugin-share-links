@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -271,20 +272,20 @@ public class SecurityPageTests
     private static IReadOnlyCollection<string> Leads(string body)
     {
         var leads = new List<string>();
-        string? bullet = null;
+        StringBuilder? bullet = null;
 
         foreach (var line in body.Split('\n').Select(line => line.TrimEnd('\r')))
         {
             if (line.StartsWith("- ", StringComparison.Ordinal))
             {
                 Close(bullet, leads);
-                bullet = line[2..].Trim();
+                bullet = new StringBuilder(line[2..].Trim());
                 continue;
             }
 
             if (bullet is not null && line.StartsWith("  ", StringComparison.Ordinal) && line.Trim().Length > 0)
             {
-                bullet = bullet + ' ' + line.Trim();
+                bullet.Append(' ').Append(line.Trim());
                 continue;
             }
 
@@ -296,15 +297,16 @@ public class SecurityPageTests
         return leads.ToHashSet(StringComparer.Ordinal);
     }
 
-    private static void Close(string? bullet, List<string> leads)
+    private static void Close(StringBuilder? bullet, List<string> leads)
     {
         if (bullet is null)
         {
             return;
         }
 
-        var stop = bullet.IndexOf('.', StringComparison.Ordinal);
-        leads.Add(stop < 0 ? bullet : bullet[..stop]);
+        var text = bullet.ToString();
+        var stop = text.IndexOf('.', StringComparison.Ordinal);
+        leads.Add(stop < 0 ? text : text[..stop]);
     }
 
     // The third-level headings under a second-level one, with the body of each.
