@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Serialization;
@@ -114,6 +115,79 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
+    /// Every route the assembly serves, as the verb and the template together.
+    /// </summary>
+    /// <returns>The action's name against the call a caller makes.</returns>
+    /// <remarks>
+    /// The template alone stopped being enough the moment two actions shared one.
+    /// The create and the listing are both <c>ShareLinks/Shares</c> and differ only
+    /// in the verb, so an assertion over templates cannot tell a page that creates
+    /// from a page that only lists.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string> ServedWithVerb()
+    {
+        var served = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var controller in PluginAssembly.GetTypes()
+            .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract))
+        {
+            foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                foreach (var verb in action.GetCustomAttributes(inherit: true).OfType<HttpMethodAttribute>())
+                {
+                    served[controller.Name + "." + action.Name] = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0} {1}",
+                        string.Join(",", verb.HttpMethods),
+                        Served()[controller.Name + "." + action.Name]);
+                }
+            }
+        }
+
+        Assert.NotEmpty(served);
+        return served;
+    }
+
+    /// <summary>
+    /// Every call the page makes, as the verb and the address it names, with the
+    /// address resolved through the variable the script holds it in.
+    /// </summary>
+    /// <returns>The calls.</returns>
+    private static IReadOnlyList<string> CallsThePageMakes()
+    {
+        var page = Page();
+
+        var addresses = Regex.Matches(page, @"var (?<name>[A-Za-z][A-Za-z0-9]*) = ""(?<address>ShareLinks/[^""]*)"";")
+            .ToDictionary(match => match.Groups["name"].Value, match => match.Groups["address"].Value, StringComparer.Ordinal);
+
+        Assert.NotEmpty(addresses);
+
+        var calls = new List<string>();
+
+        foreach (System.Text.RegularExpressions.Match call in Regex.Matches(page, @"ApiClient\.getJSON\(ApiClient\.getUrl\((?<name>[A-Za-z][A-Za-z0-9]*)"))
+        {
+            calls.Add("GET " + addresses[call.Groups["name"].Value]);
+        }
+
+        foreach (System.Text.RegularExpressions.Match call in Regex.Matches(page, @"ApiClient\.ajax\(\{(?<options>.*?)\}\)", RegexOptions.Singleline))
+        {
+            var verb = Regex.Match(call.Groups["options"].Value, @"type:\s*""(?<verb>[A-Za-z]+)""");
+            var url = Regex.Match(call.Groups["options"].Value, @"url:\s*ApiClient\.getUrl\((?<name>[A-Za-z][A-Za-z0-9]*)");
+
+            Assert.True(verb.Success, "the page makes a call that names no verb");
+            Assert.True(url.Success, "the page makes a call whose address is not one of the ones it declares");
+
+            calls.Add(verb.Groups["verb"].Value.ToUpperInvariant() + " " + addresses[url.Groups["name"].Value]);
+        }
+
+        // A page that made none would agree with the assertions below by having
+        // nothing to disagree with, which is how they would pass on the day the
+        // script was deleted.
+        Assert.NotEmpty(calls);
+        return calls.Distinct(StringComparer.Ordinal).OrderBy(call => call, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
     /// Every input on the page that carries a setting, against the control type it
     /// was given.
     /// </summary>
@@ -191,6 +265,41 @@ public class ConfigurationPageTests
 
         Assert.Contains(served["ShareLinksAdminController.List"], addresses, StringComparer.Ordinal);
         Assert.Contains(served["ShareLinksAdminController.Revoke"], addresses, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The create, the listing and the revocation are each called, judged by the
+    /// verb as well as the address. The create and the listing share a template and
+    /// differ only in the verb, so a comparison over addresses alone reads a page
+    /// that only lists as one that creates, which is the whole of #70's remaining
+    /// clause passing on nothing.
+    /// </summary>
+    [Fact]
+    public void ThePageCallsTheCreateAsWellAsTheListingAndTheRevocation()
+    {
+        var served = ServedWithVerb();
+        var calls = CallsThePageMakes();
+
+        Assert.Contains(served["ShareLinksAdminController.Create"], calls, StringComparer.Ordinal);
+        Assert.Contains(served["ShareLinksAdminController.List"], calls, StringComparer.Ordinal);
+        Assert.Contains(served["ShareLinksAdminController.Revoke"], calls, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Every call the page makes is a route this plugin serves under that verb. A
+    /// page asking for the right address with the wrong verb reaches nothing, and
+    /// the failure is a control that does nothing on a server the suite says is
+    /// green.
+    /// </summary>
+    [Fact]
+    public void EveryCallThePageMakesIsServedUnderThatVerb()
+    {
+        var served = ServedWithVerb().Values.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var call in CallsThePageMakes())
+        {
+            Assert.Contains(call, served, StringComparer.Ordinal);
+        }
     }
 
     /// <summary>
@@ -383,11 +492,156 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
-    /// The page says a link is never shown on it and why. #70 asks for the created
-    /// link with a copy control, this plugin serves no route that creates a share,
-    /// and a page silent about that reads as one where the feature is elsewhere.
+    /// The page says the link and the credentials are shown once and that nothing
+    /// can produce them again. #70's clause is "shown once with a copy control",
+    /// and an operator who reads the panel as a place they can come back to is the
+    /// person this sentence is written to.
     /// </summary>
     [Fact]
-    public void ThePageSaysWhyNoLinkIsShownOnIt()
-        => Assert.Contains("a link is therefore never shown on this page", Page(), StringComparison.Ordinal);
+    public void ThePageSaysTheLinkIsShownOnce()
+    {
+        var page = Page();
+
+        Assert.Contains("shown once", page, StringComparison.Ordinal);
+        Assert.Contains("cannot produce", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The created link has a control that copies it. The link is
+    /// <see cref="ShareTokens.EncodedLength"/> characters of token on the end of an
+    /// address, which is not something an operator retypes, and a panel showing it
+    /// once without a way to take it is a panel that loses it.
+    /// </summary>
+    [Fact]
+    public void TheCreatedLinkCarriesACopyControl()
+    {
+        var page = Page();
+
+        Assert.Matches(@"<button\b[^>]*id=""ShareLinksCopyLink""", page);
+        Assert.Contains(@"page.querySelector(""#ShareLinksCopyLink"").addEventListener(""click""", page, StringComparison.Ordinal);
+
+        // The control copies the field the link is written into rather than
+        // something the page assembled a second time, so what is copied and what is
+        // shown cannot differ.
+        var handler = Regex.Match(
+            page,
+            @"#ShareLinksCopyLink""\)\.addEventListener\(""click"",\s*function\s*\(\)\s*\{(?<body>.*?)\n                \}\);",
+            RegexOptions.Singleline);
+
+        Assert.True(handler.Success, "the copy control has no click handler to read");
+        Assert.Contains("#ShareLinksCreatedLink", handler.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Contains("writeText", handler.Groups["body"].Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The page that ships carries no link and no credential of its own, so
+    /// everything an operator is shown in that panel came back from a create they
+    /// made. It is the same property the shares table has, over the answer that
+    /// cannot be asked for twice.
+    /// </summary>
+    [Fact]
+    public void TheShippedPageCarriesNoLinkOrCredentialOfItsOwn()
+    {
+        var page = Page();
+
+        var rows = Regex.Match(page, @"<tbody id=""ShareLinksCredentialRows"">(?<rows>.*?)</tbody>", RegexOptions.Singleline);
+        Assert.True(rows.Success, "the page has no table body for the credentials to be written into");
+        Assert.Equal(string.Empty, rows.Groups["rows"].Value.Trim());
+
+        var link = Regex.Match(page, @"<input\b[^>]*id=""ShareLinksCreatedLink""[^>]*>", RegexOptions.Singleline);
+        Assert.True(link.Success, "the page has no field for the link to be written into");
+        Assert.DoesNotContain("value=", link.Value, StringComparison.Ordinal);
+
+        // Hidden as it ships, so a page that never reached a create shows no panel
+        // rather than an empty one that reads as a link that failed to arrive.
+        Assert.Matches(@"<div id=""ShareLinksCreated""[^>]*\bhidden\b", page);
+    }
+
+    /// <summary>
+    /// Every value the page reads off a create is a member the create answers
+    /// with, in both halves of the answer. This is the same assertion the listing
+    /// has, and it matters more here: a member read by a name the type does not
+    /// carry writes an empty link into a panel that says it will not be shown
+    /// again.
+    /// </summary>
+    [Fact]
+    public void EveryValueThePageReadsOffACreateIsOneTheCreateAnswersWith()
+    {
+        AssertEveryMemberRead("created", typeof(ShareCreated));
+        AssertEveryMemberRead("guest", typeof(GuestCredential));
+    }
+
+    /// <summary>
+    /// The link comes back from one route the page calls and from no other, which
+    /// is what "shown once" rests on. The page can only fail to show it again; the
+    /// server has to be unable to answer with it, and a second route carrying a
+    /// link would make the panel's sentence false without a line of the page
+    /// changing.
+    /// </summary>
+    /// <remarks>
+    /// Judged over the answer types of the actions the page calls rather than over
+    /// the page. What it cannot see is a link inside a string a route answers with,
+    /// or one reachable through a member of a member.
+    /// </remarks>
+    [Fact]
+    public void TheLinkComesBackFromOneRouteThePageCallsAndFromNoOther()
+    {
+        var served = Served();
+        var addresses = AddressesThePageCalls();
+
+        var carrying = PluginAssembly.GetTypes()
+            .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+            .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            .Where(action => action.GetCustomAttributes(inherit: true).OfType<HttpMethodAttribute>().Any())
+            .Where(action => addresses.Contains(served[action.DeclaringType!.Name + "." + action.Name], StringComparer.Ordinal))
+            .Where(action => Answered(action) is { } answer && CarriesALink(answer))
+            .Select(action => action.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(new[] { "Create" }, carrying);
+    }
+
+    // What an action answers with, unwrapped through the task and the action result
+    // the route declares it in, because none of those is what a caller reads.
+    private static Type? Answered(MethodInfo action)
+    {
+        var answer = action.ReturnType;
+
+        while (answer.IsGenericType
+            && (answer.GetGenericTypeDefinition() == typeof(Task<>)
+                || answer.GetGenericTypeDefinition() == typeof(ActionResult<>)))
+        {
+            answer = answer.GetGenericArguments()[0];
+        }
+
+        return answer == typeof(void) ? null : answer;
+    }
+
+    private static bool CarriesALink(Type answer)
+        => answer.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Any(member => member.PropertyType == typeof(Uri));
+
+    private static void AssertEveryMemberRead(string variable, Type answered)
+    {
+        var read = Regex.Matches(Page(), @"\b" + variable + @"\.(?<member>[A-Za-z][A-Za-z0-9]*)")
+            .Select(match => match.Groups["member"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        // A page reading none of them would agree with this by having nothing to
+        // disagree with, which is how this passes on the day the panel is deleted.
+        Assert.NotEmpty(read);
+
+        var carried = answered
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(member => member.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var member in read)
+        {
+            Assert.Contains(member, carried, StringComparer.Ordinal);
+        }
+    }
 }
