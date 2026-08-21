@@ -157,6 +157,21 @@ Disabled rather than deleted, because deletion is not reversible and an operator
 who revoked the wrong share has nothing to put back. The account stops working at
 that moment, which is the property revocation actually needs.
 
+**When it happens, which is not the same as that it happens.** A revocation is a
+call, and the account is disabled inside it. An expiry is an instant passing, and
+nothing in this plugin runs at an instant:
+
+    git grep -n 'IScheduledTask' -- 'Jellyfin.Plugin.ShareLinks/*.cs' ; echo "exit=$?"
+    exit=1
+
+So an account whose last share ended by expiring is disabled the next time the
+routine runs, and today the only thing that runs it is a revocation of some other
+share. Until then the record refuses every resolution while the account it was
+for can still sign in, and what that account may reach is the server's answer
+rather than this plugin's. That is a real gap for an operator and it is written
+here rather than left to be met. Giving expiry a moment of its own is a scheduled
+task this plugin does not have.
+
 Deletion follows the record. When the last record naming the account is deleted
 under the retention rule, the account goes with it. The retention length is
 ninety days by decision 8 of #94 and is a setting rather than a constant, which

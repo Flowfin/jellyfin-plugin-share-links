@@ -135,10 +135,16 @@ third.
 ## What an uninstall does not undo
 
 Anything the plugin changed on a guest's account is not in the folder above and
-is not removed by deleting it. Making those changes additive and reversible, and
-putting an account back as it was, is #58. Until that lands, an uninstall leaves
-whatever the plugin wrote onto an account exactly as it was, and this sentence is
-the whole of the disclosure.
+is not removed by deleting it. An uninstall leaves whatever the plugin wrote onto
+an account exactly as it was, and this sentence is the whole of the disclosure.
+
+Nothing is put back, and that is a decision rather than a gap.
+`docs/account-restoration.md` records it: this plugin writes a policy onto an
+account it created and onto no other, so there is no prior state any account of
+somebody else's is waiting to be restored to. What the end of a share does to an
+account it made is disable it, which `docs/guest-accounts.md` decides and #58
+built, and an uninstall does not reach that either: the accounts an operator
+finds afterwards are the ones whose shares had not ended.
 
 A guest who has already received media data has that data. No uninstall reaches
 it. That is a residual risk rather than a gap, and #84 is where the security

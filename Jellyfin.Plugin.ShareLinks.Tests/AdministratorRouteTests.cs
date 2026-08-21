@@ -13,6 +13,7 @@ using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -38,6 +39,13 @@ namespace Jellyfin.Plugin.ShareLinks.Tests;
 /// which happens in the filter pipeline in front of the action. That half is
 /// asserted over the compiled attributes instead, which is the metadata the
 /// server itself reads.
+/// </para>
+/// <para>
+/// The revocation reaches two things outside the store, and both are judged from
+/// here because both are properties of the route rather than of the routine
+/// behind them: which sessions it asks the server to end, which is #55, and which
+/// accounts it disables, which is #58. The arithmetic each of those rests on is
+/// judged on its own in <c>GuestSessionsTests</c> and <c>GuestAccountsTests</c>.
 /// </para>
 /// <para>
 /// The create route is judged in <c>ShareCreationTests</c> rather than here. It
@@ -554,6 +562,164 @@ public sealed class AdministratorRouteTests : IDisposable
                 .GetCustomAttributes<HttpPostAttribute>().Single().Template);
     }
 
+    /// <summary>
+    /// One account, two live shares, one of them revoked. The account is left
+    /// enabled and nothing is written onto it at all, because an account named by
+    /// two shares stays live while either does, or revoking one share would
+    /// quietly break the other (#58).
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task EndingOneOfTwoLiveSharesLeavesTheAccountEnabled()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var revoked = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        var stillLive = ARecord(token: "another-token", invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { revoked, stillLive });
+
+        var accounts = new RecordingAccounts { Carries = { [guest] = GuestPolicy.DefaultMaxActiveSessions } };
+        await Controller(store, Operator, At(Now), new RecordingSessions(), accounts)
+            .Revoke(revoked.Id, request: null, CancellationToken.None);
+
+        // No policy at all rather than one carrying IsDisabled false. A write that
+        // said "still enabled" would be this plugin rewriting the policy of an
+        // account whose share has not ended, which is what the rule forbids.
+        Assert.Empty(accounts.Written);
+    }
+
+    /// <summary>
+    /// Revoking the last live share naming an account sets <c>IsDisabled</c> on it
+    /// and changes nothing else on the policy (#58).
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task RevokingTheLastLiveShareDisablesTheAccountAndChangesNothingElse()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(invited: new[] { guest }, pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share });
+
+        var carried = GuestPolicy.DefaultMaxActiveSessions;
+        var accounts = new RecordingAccounts { Carries = { [guest] = carried } };
+        await Controller(store, Operator, At(Now), new RecordingSessions(), accounts)
+            .Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(new[] { guest }, accounts.Written);
+
+        // Against the policy the create writes rather than against a list typed
+        // out here, so a switch that moves in GuestPolicy moves in both and this
+        // goes on judging the difference rather than the contents.
+        AssertIsTheGuestPolicyWithNothingButTheSwitchMoved(accounts.Policies[guest], carried);
+    }
+
+    /// <summary>
+    /// The same, where the last live share ended by reaching its expiry instant
+    /// rather than by being revoked. Nothing in this plugin runs at that instant,
+    /// so the account is caught up with the next time the routine runs, which is
+    /// the revocation of some other share (#58).
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnAccountWhoseLastShareExpiredIsDisabledToo()
+    {
+        var expiredGuest = Guid.NewGuid();
+        var revokedGuest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var expired = ARecord(
+            expiresAt: Now.AddDays(-1),
+            invited: new[] { expiredGuest },
+            pluginCreated: new[] { expiredGuest });
+        var toRevoke = ARecord(
+            token: "another-token",
+            invited: new[] { revokedGuest },
+            pluginCreated: new[] { revokedGuest });
+        await store.MutateAsync(_ => new[] { expired, toRevoke });
+
+        var carried = GuestPolicy.DefaultMaxActiveSessions;
+        var accounts = new RecordingAccounts
+        {
+            Carries = { [expiredGuest] = carried, [revokedGuest] = carried },
+        };
+        await Controller(store, Operator, At(Now), new RecordingSessions(), accounts)
+            .Revoke(toRevoke.Id, request: null, CancellationToken.None);
+
+        // The expired share's account is the point. It belongs to no record this
+        // call touched, and a routine that only looked at the record it had just
+        // revoked would leave it enabled for as long as the server stands.
+        Assert.Equal(new[] { expiredGuest, revokedGuest }, accounts.Written);
+        AssertIsTheGuestPolicyWithNothingButTheSwitchMoved(accounts.Policies[expiredGuest], carried);
+    }
+
+    /// <summary>
+    /// An invited account the record does not claim under
+    /// <c>WasCreatedByThisPlugin</c> is left untouched, on every one of these. It
+    /// belongs to somebody who made it, and switching it off is done to that
+    /// person rather than to a share (#58).
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnInvitedAccountThisPluginDidNotMakeIsNotDisabled()
+    {
+        var guest = Guid.NewGuid();
+        var somebodyElse = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(
+            invited: new[] { guest, somebodyElse },
+            pluginCreated: new[] { guest });
+        await store.MutateAsync(_ => new[] { share });
+
+        var accounts = new RecordingAccounts
+        {
+            Carries = { [guest] = GuestPolicy.DefaultMaxActiveSessions, [somebodyElse] = 3 },
+        };
+        await Controller(store, Operator, At(Now), new RecordingSessions(), accounts)
+            .Revoke(share.Id, request: null, CancellationToken.None);
+
+        Assert.Equal(new[] { guest }, accounts.Written);
+        Assert.DoesNotContain(somebodyElse, accounts.Policies.Keys);
+    }
+
+    // The policy a disable writes, compared against the policy the create writes
+    // for the same ceiling, member by member. Exactly IsDisabled may differ.
+    //
+    // Reflection rather than a list of properties, because a switch added to
+    // GuestPolicy and forgotten here is the way this assertion stops covering what
+    // it says it covers.
+    private static void AssertIsTheGuestPolicyWithNothingButTheSwitchMoved(UserPolicy written, int ceiling)
+    {
+        var asCreated = GuestPolicy.Create(ceiling);
+
+        Assert.True(written.IsDisabled, "the account was not disabled, so the end of its last live share did nothing to it.");
+        Assert.False(asCreated.IsDisabled, "the guest policy now disables the accounts the create makes, and this comparison would then report a difference of nothing.");
+
+        var moved = typeof(UserPolicy).GetProperties()
+            .Where(property => property.CanRead && property.GetIndexParameters().Length == 0)
+            .Where(property => !string.Equals(property.Name, nameof(UserPolicy.IsDisabled), StringComparison.Ordinal))
+            .Where(property => !AreTheSame(property.GetValue(written), property.GetValue(asCreated)))
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.Empty(moved);
+    }
+
+    private static bool AreTheSame(object? written, object? asCreated)
+    {
+        if (written is System.Collections.IEnumerable left
+            && asCreated is System.Collections.IEnumerable right
+            && written is not string)
+        {
+            return left.Cast<object>().SequenceEqual(right.Cast<object>());
+        }
+
+        return Equals(written, asCreated);
+    }
+
     private async Task<IReadOnlyList<ShareSummary>> Listing(IShareStore store)
     {
         var answer = await Controller(store).List(CancellationToken.None);
@@ -587,11 +753,12 @@ public sealed class AdministratorRouteTests : IDisposable
     private ShareLinksAdminController Controller(IShareStore store, Guid? caller)
         => Controller(store, caller, At(Now));
 
-        // The two actions these tests drive read a store and a clock and nothing
-        // else. The server's own managers are handed over as fakes that answer
-        // nothing, which is what makes a listing that reached for one fail here
-        // rather than pass quietly; the create route, which does reach for them, is
-        // in ShareCreationTests with a fixture that can answer.
+        // The two actions these tests drive read a store, a clock and the accounts
+        // a revocation switches off, and nothing else. The library and the
+        // configuration are handed over as fakes that answer nothing, which is what
+        // makes a listing that reached for one fail here rather than pass quietly;
+        // the create route, which does reach for them, is in ShareCreationTests
+        // with a fixture that can answer.
         private ShareLinksAdminController Controller(IShareStore store, Guid? caller, TimeProvider clock)
             => Controller(store, caller, clock, new RecordingSessions());
 
@@ -600,10 +767,18 @@ public sealed class AdministratorRouteTests : IDisposable
             Guid? caller,
             TimeProvider clock,
             RecordingSessions sessions)
+            => Controller(store, caller, clock, sessions, new RecordingAccounts());
+
+        private ShareLinksAdminController Controller(
+            IShareStore store,
+            Guid? caller,
+            TimeProvider clock,
+            RecordingSessions sessions,
+            RecordingAccounts accounts)
         => new ShareLinksAdminController(
             store,
             _keyFile,
-            Mock.Of<IUserManager>(MockBehavior.Strict),
+            accounts.Manager,
             Mock.Of<ILibraryManager>(MockBehavior.Strict),
             Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),
@@ -613,6 +788,48 @@ public sealed class AdministratorRouteTests : IDisposable
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
+
+    // The accounts a server holds, as far as the revocation can see them: what
+    // each one carries as a session ceiling, and the policy it was last written.
+    // Strict, so a route reaching for a member nobody expected fails here rather
+    // than passing quietly.
+    //
+    // GetUserById answers with the ceiling this fake was told the account carries,
+    // which is the mapping GuestAccounts.DisableAsync states as a claim rather
+    // than a measurement: the server's own translation between a policy and the
+    // account row is not in this tree and was not read.
+    private sealed class RecordingAccounts
+    {
+        private readonly Mock<IUserManager> _manager = new Mock<IUserManager>(MockBehavior.Strict);
+
+        public RecordingAccounts()
+        {
+            _manager
+                .Setup(manager => manager.GetUserById(It.IsAny<Guid>()))
+                .Returns((Guid id) => Carries.TryGetValue(id, out var ceiling)
+                    ? new User("a guest", "provider", "reset") { Id = id, MaxActiveSessions = ceiling }
+                    : null);
+
+            _manager
+                .Setup(manager => manager.UpdatePolicyAsync(It.IsAny<Guid>(), It.IsAny<UserPolicy>()))
+                .Callback((Guid id, UserPolicy policy) =>
+                {
+                    Written.Add(id);
+                    Policies[id] = policy;
+                })
+                .Returns(Task.CompletedTask);
+        }
+
+        public IUserManager Manager => _manager.Object;
+
+        // The accounts a policy was written onto, in the order they were written,
+        // so a second write on one account is visible rather than collapsed.
+        public List<Guid> Written { get; } = new List<Guid>();
+
+        public Dictionary<Guid, UserPolicy> Policies { get; } = new Dictionary<Guid, UserPolicy>();
+
+        public Dictionary<Guid, int> Carries { get; } = new Dictionary<Guid, int>();
+    }
 
     // A session manager that answers every ask and writes down which accounts it
     // was asked about, in the order it was asked. Nothing here reaches a server:

@@ -401,6 +401,13 @@ public class ShareLinksAdminController : ControllerBase
     /// was stopped while a guest goes on watching it. Pressing revoke again
     /// re-attempts both halves and changes nothing that already happened.
     /// </para>
+    /// <para>
+    /// The same second read is what the account side is decided from (#58).
+    /// <see cref="GuestAccounts"/> disables every account this plugin made that no
+    /// live share invites any more, which is a wider question than which sessions
+    /// this revocation ended: a share that stopped by reaching its expiry instant
+    /// has no route of its own, so this is where its account is caught up with.
+    /// </para>
     /// </remarks>
     [HttpPost("Shares/{shareId}/Revoke")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -463,6 +470,16 @@ public class ShareLinksAdminController : ControllerBase
         }
 
         var now = _clock.GetUtcNow();
+
+        // The account before the session, because an account that is still
+        // enabled can sign in again the moment its tokens are taken away, and the
+        // reverse order leaves exactly that window open. Over the whole store
+        // rather than over this record, so an account whose last share ended by
+        // reaching its expiry instant is reached here as well (#58).
+        await GuestAccounts.DisableAsync(
+            _userManager,
+            GuestAccounts.WithNoLiveShareLeft(remaining, now)).ConfigureAwait(false);
+
         await GuestSessions.EndAsync(
             _sessionManager,
             GuestSessions.LeftWithNothingToWatch(remaining, record, now)).ConfigureAwait(false);
