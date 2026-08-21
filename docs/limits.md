@@ -37,28 +37,33 @@ is where the routes themselves are.
 **What an operator does.** Reads this page as the design and the open issues as the
 state. Nothing installed today shares anything.
 
-### A guest account is created and narrowed, and nothing ever ends one
+### A guest account ends late, and on a quiet server it does not end
 
 `docs/guest-accounts.md` decides under #51 that this plugin creates the account
 with the invitation, disables it when the last live share naming it ends, and
-deletes it when the last record naming it is swept. The create route in #67 does
-the first of those three and writes the policy `docs/guest-capabilities.md` lists
-under #57. The other two are not in this tree.
+deletes it when the last record naming it is swept. All three are in this tree
+now: the create route is #67, the disabling is #58 and the deletion is #238.
 
-So an account made for a share outlives the share. It stays on the server,
-hidden, able to sign in, with the credential the operator was shown, after the
-link has expired or been revoked. The share stops resolving on the instant, which
-is what revocation is for and is unaffected; what does not happen is the account
-going away with it.
+What none of them has is a moment of its own. Nothing in this plugin runs on a
+timer, so each of the last two happens on the way through a call somebody else
+made. The disabling runs when a share is revoked, and the deletion runs when the
+sweep drops a record, which is on the way to a create.
 
-One narrow exception runs the other way. A create that made its accounts and was
-then refused by the store removes them again, which is the only account this
-plugin deletes, and it is bounded to identifiers the server returned inside that
-same call.
+So the instant a share expires does nothing to the account it was for. Between
+that instant and the next revocation the account is still enabled, with the
+credential the operator was shown, and between the retention length passing and
+the next create the account is still there. On a server where nobody revokes and
+nobody creates, neither ever happens. The share stops resolving on the instant,
+which is what revocation is for and is unaffected; what waits is what happens to
+the account.
 
-**What an operator does.** Treats the server's user list as the place guest
-accounts are ended, and removes them there when a share is finished with, until
-#51 and #58 land the disabling and the deletion.
+A removal that the server refuses part way leaves the accounts it did not remove
+where they are. The count goes to the log, the accounts are not named there, and
+nothing retries.
+
+**What an operator does.** Reads the server's own user list as the authority for
+which guest accounts exist, rather than the share list, and ends one there when a
+share is finished with and the account has not gone by itself.
 
 ### Nothing confines a guest to the shared item
 
@@ -286,6 +291,11 @@ stopped working are deleted when the next share is created and not before. Nothi
 bounds the rate either: a script creating and revoking in a loop frees a live place
 every time and leaves a record behind for the whole retention window. Both are
 #29's, in `docs/bounds.md`.
+
+The guest accounts follow the records, so a server that never sweeps never deletes
+one either. That is the same sentence as the section above and it is the same
+cause, said here because a reader who came for retention will not have read that
+one.
 
 **What an operator does.** Reads `ExpiredShareRetentionDays` as a ceiling on a busy
 server rather than as a promise on a quiet one.

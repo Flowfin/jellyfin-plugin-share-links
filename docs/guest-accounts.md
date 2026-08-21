@@ -178,6 +178,33 @@ ninety days by decision 8 of #94 and is a setting rather than a constant, which
 is #29, and what a record holds about a person until then is
 `docs/personal-data.md`.
 
+**When that is, and it is later than an operator expects.** The sweep is not a
+timer. It runs on the way to a write, which today is a create:
+
+    git grep -n 'bounds.Retained(current, now)' -- Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs
+    Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:76:                var kept = bounds.Retained(current, now);
+
+So the account of a share that ended ninety days ago is removed by the next share
+somebody creates, and on a server nobody creates a share on it is not removed at
+all. The two ends of that are worth reading together: the account is disabled
+long before this, which is the property that stops it working, and what waits for
+the sweep is only the deletion. Making it prompt is a scheduled task this plugin
+does not have.
+
+Deferred rather than immediate was the choice, and the alternative was removing
+the account at the instant its last share ended. That is the same moment
+disabling happens, and doing both there would make the disabling pointless while
+turning a revocation an operator regrets into something with nothing to put back.
+The account outliving its shares by the retention length is what buys that.
+
+**What a removal that fails part way leaves.** The accounts it did not remove,
+still on the server, with no record naming them and nothing that will look at
+them again. A refusal on one account does not stop the ones after it, and the
+count of both halves goes to the log. The log counts them and does not name them,
+which is the rule every line of this plugin's follows, so an operator reading it
+learns that accounts were left behind and not which: the server's own user list is
+where they are found.
+
 The last live share matters and not the first. An account named by two shares
 stays live while either does, or revoking one share would quietly break the
 other.
@@ -196,26 +223,35 @@ identifier in that list naming an account this plugin did not create is an
 account this plugin would delete. A store carried forward from before this
 decision is one way that happens, and a record edited by hand is another.
 
-Until the record carries that fact, nothing may delete an account. #144 is where
-the field, the migration for records written without it, and the refusal are
-held.
+The record carries that fact now. #144 landed the field, the reading of its
+absence in a record written before it existed, and the predicate that refuses to
+claim an account the record does not also invite:
+
+    git grep -n 'public bool WasCreatedByThisPlugin' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:326:    public bool WasCreatedByThisPlugin(Guid userId) =>
+
+That predicate is the gate on the deletion as well as on the policy write, which
+`docs/account-restoration.md` argues, and #238 is the removal path that stands
+behind it. An account the record does not claim is left where it is, and the
+record naming it goes exactly as it would have.
 
 ## What this document is, and what it is not
 
-It is a decision and a lifecycle. One step of that lifecycle is code and the rest
-is not.
+It is a decision and a lifecycle, and the lifecycle is code now.
 
 Creating is. The route in #67 makes the account, writes the policy this page
 sends it to `docs/guest-capabilities.md` for, mints the credential from the
-routine that already draws token bytes, and shows it once beside the link:
+routine that already draws token bytes, and shows it once beside the link.
+Disabling when the last live share ends is #58, and deleting when the last record
+naming the account is swept is #238. Both are in one routine beside the create:
 
     git grep -ln 'IUserManager' -- Jellyfin.Plugin.ShareLinks
+    Jellyfin.Plugin.ShareLinks/GuestAccounts.cs
     Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
 
-Disabling when the last live share ends is not, and deleting when the last record
-is swept is not. Both are #51 and #58, and until they land an account made for a
-share stays on the server after the share has stopped. `docs/limits.md` is where
-an operator is told that in the words they need.
+What is still not code is a moment of its own for either of them. Both run on the
+way through a call somebody else made, which the two paragraphs above say plainly
+where an operator meets them.
 
 The one deletion that does exist is not the lifecycle's. A create that made its
 accounts and was then refused by the store removes exactly those, inside the same

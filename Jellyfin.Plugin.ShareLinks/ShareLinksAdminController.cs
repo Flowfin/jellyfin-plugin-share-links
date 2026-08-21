@@ -288,9 +288,10 @@ public class ShareLinksAdminController : ControllerBase
         }
 
         var record = ShareCreation.Record(configuration, request, shareId, caller, Identifiers(guests), tokenHash, now);
+        IReadOnlyList<ShareRecord> written;
         try
         {
-            await _store.AddAsync(record, bounds, now, _logger, cancellationToken).ConfigureAwait(false);
+            written = await _store.AddAsync(record, bounds, now, _logger, cancellationToken).ConfigureAwait(false);
         }
         catch (ShareBoundExceededException error)
         {
@@ -308,6 +309,17 @@ public class ShareLinksAdminController : ControllerBase
             await RemoveTheAccountsThisCallMade(guests).ConfigureAwait(false);
             return AServerFault();
         }
+
+        // The write is what swept, so this is where an account whose last record
+        // has just gone is removed (#238). After the answer is safe to build and
+        // before it is returned: a removal that fails part way leaves a named
+        // state and a line rather than an exception, because the share this
+        // caller asked for was created and telling them otherwise would be
+        // untrue.
+        await GuestAccounts.RemoveAsync(
+            _userManager,
+            GuestAccounts.ReleasedBy(existing, written),
+            _logger).ConfigureAwait(false);
 
         return Ok(new ShareCreated
         {

@@ -533,6 +533,83 @@ public sealed class ShareCreationTests : IDisposable
             MaxBitrateMbps = maxBitrateMbps,
         };
 
+    /// <summary>
+    /// The account of a share that has ended goes when the last record naming it
+    /// is swept, and the sweep happens on the way to a write (#238). Two records
+    /// name one account here, because one record going is not the last record
+    /// going and an account still named is an account that stays.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheAccountOfASweptRecordIsRemovedByTheCreateThatSweptIt()
+    {
+        var guest = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var first = AnEndedRecord(guest, claimed: true);
+        var second = AnEndedRecord(guest, claimed: true);
+        await store.MutateAsync(_ => new[] { first, second });
+
+        var answer = await Controller(store, Operator, WithNoRetention()).Create(ARequest(), CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(answer.Result);
+
+        // Both records went, which is what makes this the last record naming the
+        // account rather than one of two.
+        Assert.DoesNotContain(await store.ReadAsync(), record => record.Id == first.Id || record.Id == second.Id);
+        Assert.Equal(new[] { guest }, _server.Deleted);
+    }
+
+    /// <summary>
+    /// An account the swept record does not claim under
+    /// <c>WasCreatedByThisPlugin</c> is left where it is. The record naming it goes
+    /// exactly as before; what does not happen is the deletion, and the difference
+    /// between the two is somebody's own account on their own server.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheAccountOfASweptRecordThisPluginDidNotMakeIsLeftAlone()
+    {
+        var somebodyElse = Guid.NewGuid();
+
+        using var store = new ShareStore(StorePath);
+        var swept = AnEndedRecord(somebodyElse, claimed: false);
+        await store.MutateAsync(_ => new[] { swept });
+
+        var answer = await Controller(store, Operator, WithNoRetention()).Create(ARequest(), CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(answer.Result);
+        Assert.DoesNotContain(await store.ReadAsync(), record => record.Id == swept.Id);
+        Assert.Empty(_server.Deleted);
+    }
+
+    // A record that stopped working before the instant these tests run at, so the
+    // sweep drops it under a retention of nothing.
+    private ShareRecord AnEndedRecord(Guid guest, bool claimed) => new ShareRecord
+    {
+        SchemaVersion = ShareRecord.CurrentSchemaVersion,
+        Id = Guid.NewGuid(),
+        ItemId = Item,
+        InvitedUserIds = new[] { guest },
+        PluginCreatedUserIds = claimed ? new[] { guest } : Array.Empty<Guid>(),
+        CreatedByUserId = Operator,
+        CreatedAt = Now.AddDays(-2),
+        ExpiresAt = Now.AddDays(-1),
+        TokenHash = ShareTokenHash.Compute(_key, "an-old-token"),
+    };
+
+    // The settings with the retention set to nothing, which is how an operator
+    // empties the store of what has stopped working. It is the shortest way to
+    // reach a sweep in a test, and the rule it exercises is the same one a server
+    // on the default ninety days reaches later.
+    private static IPluginConfigurationSource WithNoRetention()
+    {
+        var source = new Mock<IPluginConfigurationSource>();
+        source.Setup(s => s.Current()).Returns(new PluginConfiguration { ExpiredShareRetentionDays = 0 });
+
+        return source.Object;
+    }
+
     private static string TheRefusal<T>(ActionResult<T> answer)
         => Assert.IsType<string>(Assert.IsType<BadRequestObjectResult>(answer.Result).Value);
 
