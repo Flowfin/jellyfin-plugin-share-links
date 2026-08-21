@@ -65,6 +65,63 @@
                         <p>A value this plugin cannot work under is refused as it is saved and the message names the setting. Editing the configuration file by hand passes through none of that, and there the refusal arrives later, when the setting is next read.</p>
                     </form>
 
+                    <h2>Create a share</h2>
+
+                    <form id="ShareLinksCreateForm">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="ShareLinksCreateItemId" label="Item identifier" />
+                            <div class="fieldDescription">The identifier of the one item being shared. This page does not look items up by title, for the same reason the table below names them by identifier: nothing here asks the server what an item is called.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <textarea is="emby-textarea" id="ShareLinksCreateGuestNames" class="emby-textarea" rows="3" label="Guests, one name per line"></textarea>
+                            <div class="fieldDescription">One account is made per name, and the name is what appears in the server's own user list. A name that is already taken is refused and nothing is made.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="datetime-local" id="ShareLinksCreateExpiresAt" label="Expires at" />
+                            <div class="fieldDescription">Read in this browser's time zone and sent as an absolute instant. Leave it empty to take the default lifetime above.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="0.1" max="1000" step="0.1" id="ShareLinksCreateMaxBitrateMbps" label="Ceiling for this share, in megabits per second" />
+                            <div class="fieldDescription">Leave it empty to take the default ceiling above, or to have none where no default is set.</div>
+                        </div>
+
+                        <div>
+                            <button is="emby-button" type="submit" class="raised button-submit block">
+                                <span>Create</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <p id="ShareLinksCreateMessage"></p>
+
+                    <div id="ShareLinksCreated" hidden>
+                        <p>The link and the credentials below are shown once. The server keeps only a keyed hash of the token and writes no credential down, so it cannot produce either of them again, and leaving this page or creating another share is the end of them. Copy them now.</p>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="ShareLinksCreatedLink" readonly />
+                            <div>
+                                <button is="emby-button" type="button" id="ShareLinksCopyLink" class="raised">
+                                    <span>Copy link</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <table class="tblCredentials detailTable">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Guest</th>
+                                    <th scope="col">Credential</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ShareLinksCredentialRows"></tbody>
+                        </table>
+
+                        <p>Each guest signs in on the server's own sign-in page with the name and credential beside it, and then opens the link. A guest who opens the link before signing in is sent to the sign-in page and opens the link again afterwards; nothing here carries the destination across.</p>
+                    </div>
+
                     <h2>Shares</h2>
 
                     <p>Every share the server holds, including the ones that have stopped working. A share that expired and a share that was never made look the same to somebody who is only told what is live, so the state column is what keeps them apart.</p>
@@ -88,7 +145,7 @@
                         <tbody id="ShareLinksShareRows"></tbody>
                     </table>
 
-                    <p>What is not here. There is no control that creates a share, because this plugin serves no route that creates one, and a link is therefore never shown on this page: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own; which of the ceilings that apply actually wins is decided elsewhere and is not on this page.</p>
+                    <p>What is not here. The link is not, and cannot be: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked, and the table above is a listing rather than a way back to what a create answered. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own; which of the ceilings that apply actually wins is decided elsewhere and is not on this page.</p>
                 </div>
             </div>
         </div>
@@ -103,6 +160,7 @@
                 // the suite rather than leaving a page that asks the server for something
                 // that is not there.
                 var pluginId = "a3703f07-f83d-49a0-a09f-50b890a2baac";
+                var createShare = "ShareLinks/Shares";
                 var listShares = "ShareLinks/Shares";
                 var revokeShare = "ShareLinks/Shares/{shareId}/Revoke";
 
@@ -181,6 +239,88 @@
                     page.querySelector("#ShareLinksSharesMessage").textContent = shares.length === 0 ? "The server holds no shares." : "";
                 }
 
+                // What a create answered is held nowhere: it is written into the panel
+                // and forgotten. Clearing it is the whole of "shown once" that this page
+                // can carry, because the other half is the server having nothing to
+                // answer with a second time.
+                function forgetTheCreated() {
+                    page.querySelector("#ShareLinksCreated").hidden = true;
+                    page.querySelector("#ShareLinksCreatedLink").value = "";
+                    page.querySelector("#ShareLinksCredentialRows").textContent = "";
+                }
+
+                function showTheCreated(created) {
+                    page.querySelector("#ShareLinksCreatedLink").value = text(created.Link);
+
+                    var rows = page.querySelector("#ShareLinksCredentialRows");
+                    rows.textContent = "";
+
+                    (created.Guests || []).forEach(function (guest) {
+                        var row = document.createElement("tr");
+                        cell(row, guest.Name);
+                        cell(row, guest.Credential);
+                        rows.appendChild(row);
+                    });
+
+                    page.querySelector("#ShareLinksCreated").hidden = false;
+                }
+
+                function theCreateAsked() {
+                    var expiresAt = page.querySelector("#ShareLinksCreateExpiresAt").value;
+                    var ceiling = page.querySelector("#ShareLinksCreateMaxBitrateMbps").value;
+
+                    return {
+                        ItemId: page.querySelector("#ShareLinksCreateItemId").value.trim(),
+
+                        // One name per line, and a blank line is not a guest. An empty
+                        // name reaches the server as a refusal rather than as an account
+                        // with no name, and dropping it here means the operator is told
+                        // about the names they meant instead.
+                        GuestNames: page
+                            .querySelector("#ShareLinksCreateGuestNames")
+                            .value.split("\n")
+                            .map(function (name) {
+                                return name.trim();
+                            })
+                            .filter(function (name) {
+                                return name !== "";
+                            }),
+
+                        // An instant rather than the local text the control holds, so
+                        // what the server is asked for does not depend on where it
+                        // thinks it is.
+                        ExpiresAt: expiresAt === "" ? null : new Date(expiresAt).toISOString(),
+                        MaxBitrateMbps: ceiling === "" ? null : Number(ceiling),
+                    };
+                }
+
+                function create() {
+                    // Before the call rather than after it. A create that is refused
+                    // must not leave the previous answer on the screen, where it reads
+                    // as the link of the share that was just refused.
+                    forgetTheCreated();
+                    page.querySelector("#ShareLinksCreateMessage").textContent = "";
+                    Dashboard.showLoadingMsg();
+
+                    return ApiClient.ajax({
+                        type: "POST",
+                        url: ApiClient.getUrl(createShare),
+                        data: JSON.stringify(theCreateAsked()),
+                        contentType: "application/json",
+                        dataType: "json",
+                    })
+                        .then(function (created) {
+                            showTheCreated(created);
+                            return load();
+                        })
+                        .catch(function () {
+                            page.querySelector("#ShareLinksCreateMessage").textContent = "The share was not created. The server log says why.";
+                        })
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+                }
+
                 function load() {
                     Dashboard.showLoadingMsg();
 
@@ -214,6 +354,9 @@
                 }
 
                 page.addEventListener("pageshow", function () {
+                    // Opening the page again is not a second showing of what a create
+                    // answered. The panel starts empty every time.
+                    forgetTheCreated();
                     Dashboard.showLoadingMsg();
 
                     ApiClient.getPluginConfiguration(pluginId)
@@ -223,6 +366,26 @@
                         });
 
                     load();
+                });
+
+                page.querySelector("#ShareLinksCreateForm").addEventListener("submit", function (event) {
+                    event.preventDefault();
+                    create();
+                    return false;
+                });
+
+                page.querySelector("#ShareLinksCopyLink").addEventListener("click", function () {
+                    var link = page.querySelector("#ShareLinksCreatedLink");
+
+                    // The control selects the text as well as copying it, so an
+                    // operator on a browser that refuses the clipboard is left with the
+                    // link selected rather than with a button that did nothing.
+                    link.select();
+                    link.setSelectionRange(0, link.value.length);
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(link.value);
+                    }
                 });
 
                 page.querySelector("#ShareLinksSettingsForm").addEventListener("submit", function (event) {
