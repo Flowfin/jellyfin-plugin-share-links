@@ -26,8 +26,12 @@ password="an-observation-password-1"
 ceiling=2
 
 # The bitrate the share is capped at, in bits per second, and a request well
-# above it. One megabit is under what the clip the workflow generates needs.
-cap=1000000
+# above it. A fifth of a megabit, which is the lowest ceiling this plugin accepts
+# and is under what the clip the workflow generates carries. That the clip really
+# is above the cap is asserted further down rather than assumed: a cap above the
+# item would leave the whole of the second observation true and about nothing.
+cap=200000
+capMbps=0.2
 above=8000000
 
 # The plugin, by the identifier its own source fixes. Written out rather than
@@ -153,7 +157,7 @@ done
 
 say "creating a share, which is what mints the guest account"
 status=$(call POST /ShareLinks/Shares operator "$token" \
-  "{\"ItemId\":\"$item\",\"GuestNames\":[\"Observed Guest\"],\"MaxBitrateMbps\":1}")
+  "{\"ItemId\":\"$item\",\"GuestNames\":[\"Observed Guest\"],\"MaxBitrateMbps\":$capMbps}")
 [ "$status" = "200" ] || fail "the share was not created: $status $(body)"
 # The names the answer actually uses. `GuestCredential` carries `Name` and
 # `Credential`, and asking it for a user name and a password read `null` twice
@@ -209,6 +213,27 @@ echo "PlaybackInfo asking for $above -> $status"
 echo "what the server reported:"
 body | jq -c '{sources: [.MediaSources[]? | {Bitrate, SupportsDirectPlay, SupportsDirectStream, TranscodingUrl}]}' 2>/dev/null || body
 [ "$status" = "200" ] || fail "the playback information request was not answered: $status $(body)"
+
+# The case has to be a real one. A clip whose own bitrate is under the ceiling
+# would let every assertion below pass while nothing was ever capped, so what the
+# server says the source carries is compared against the ceiling before anything
+# is concluded from the two requests that follow.
+carried=$(body | jq -r '[.MediaSources[]? | .Bitrate // empty] | .[0] // empty')
+echo "the server says the source carries $carried, and the ceiling is $cap"
+[ -n "$carried" ] || fail "the server reported no bitrate for the source, so there is nothing to compare the ceiling against"
+[ "$carried" -gt "$cap" ] || fail "the clip carries $carried and the ceiling is $cap, so the ceiling is above the item and this observation would be about nothing"
+
+# The interception leg, as far as this can see it. The filter lowers the ceiling
+# the request asked for; what the server does with a lowered ceiling and no
+# device profile is its own, and where it answers with the source rather than a
+# transcode plan there is no lowered number in the answer to read. That is said
+# rather than asserted around.
+plan=$(body | jq -r '[.MediaSources[]? | .TranscodingUrl // empty] | .[0] // empty')
+if [ -n "$plan" ]; then
+  echo "the server answered with a transcode plan: $plan"
+else
+  echo "NOT OBSERVED: the server answered with the source rather than a transcode plan, so this answer carries no lowered ceiling to read. The request carried no device profile, which is what a client sends to make the server plan one."
+fi
 
 status=$(call GET "/Videos/$item/stream?static=true&videoBitRate=$above" "guest-1" "$guest_token")
 echo "stream asking for $above, the ceiling being $cap -> $status"
