@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks.Configuration;
@@ -66,6 +67,13 @@ namespace Jellyfin.Plugin.ShareLinks;
 [Route("ShareLinks")]
 public class ShareLinksAdminController : ControllerBase
 {
+    // What is written against every record a rotation stops. One sentence, the
+    // same every time, so that an operator reading a listing afterwards can tell
+    // a share somebody revoked from one the key rotation took with it. It names no
+    // path and no person, which is what docs/logging.md admits into a field that
+    // is read back on a route.
+    private const string TheKeyWasRotated = "the keyed hash secret was rotated";
+
     private readonly IShareStore _store;
     private readonly ShareKeyFile _keyFile;
     private readonly IUserManager _userManager;
@@ -497,6 +505,128 @@ public class ShareLinksAdminController : ControllerBase
             GuestSessions.LeftWithNothingToWatch(remaining, record, now)).ConfigureAwait(false);
 
         return Ok(ShareSummary.Of(record, now));
+    }
+
+    /// <summary>
+    /// Replaces the install's keyed-hash key, stopping every share on the server.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <returns>How many live shares stopped and how far the rotation got, or a refusal.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is the move for a key that may have leaked, and it is the widest
+    /// thing an operator can do from this plugin: every link that has ever been
+    /// handed out stops working, at once, with no way back.
+    /// <c>docs/share-key.md</c> is where that is argued and this route is what
+    /// #28 asked for.
+    /// </para>
+    /// <para>
+    /// The records are stopped before the key is written, and the order is the
+    /// design rather than a preference. Replacing the key first would leave, for
+    /// as long as the second step took or for good if it failed, a store full of
+    /// records that read live and resolve for nobody, which is the one state
+    /// <see cref="ShareState"/> exists to prevent. Stopping the records first
+    /// fails the other way: the shares are stopped, which is what an operator
+    /// asked for, and the key that may have leaked is still on disk, which is
+    /// what pressing rotate again repairs.
+    /// </para>
+    /// <para>
+    /// The count is taken where the records were stopped, which is immediately
+    /// before the key changed rather than at the same instant, and the difference
+    /// is a share created between those two writes. Such a share is issued under
+    /// the old key, is not stopped by this call and stops resolving anyway when
+    /// the key lands, so it is the one record a rotation can leave reading live
+    /// and resolving for nobody. It is not pretended away here: the store and the
+    /// key file are two things and no lock spans them.
+    /// </para>
+    /// <para>
+    /// What follows the two writes is exactly what a revocation does, for the
+    /// reason #243 gives: a rotation that stopped every share and left every
+    /// guest signed in would behave differently from revoking those same shares
+    /// one at a time, and an operator has no way to be told which of the two they
+    /// pressed. The account before the session, over the whole store rather than
+    /// over the stopped records, both for the reasons <see cref="Revoke"/> gives.
+    /// </para>
+    /// </remarks>
+    [HttpPost("Key/Rotate")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ShareKeyRotated>> RotateKey(CancellationToken cancellationToken)
+    {
+        // Checked for the reason the revocation gives: the elevation policy has
+        // already refused an unidentified caller, and the alternative is writing
+        // the empty identifier into the field that says who stopped every share on
+        // this server.
+        if (await WhoIsAsking().ConfigureAwait(false) is not { } caller)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        var now = _clock.GetUtcNow();
+
+        ShareRotationStop stop;
+        try
+        {
+            stop = await _store.StopEveryLiveShareAsync(caller, now, _logger, TheKeyWasRotated, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ShareStoreUnreadableException)
+        {
+            ShareLog.StoreUnreadable(_logger);
+            return TheStoreCouldNotBeRead();
+        }
+        catch (ShareStoreUnwritableException)
+        {
+            // Nothing was stopped and the key is untouched, so this answer is the
+            // whole of what happened. The key is deliberately not written after a
+            // failure here: a key replaced over records that still read live is
+            // the state the order of these two steps exists to avoid.
+            return TheStoreCouldNotBeRead();
+        }
+
+        var outcome = ShareKeyRotationOutcome.Rotated;
+        try
+        {
+            _keyFile.Rotate(stop.Stopped.Count);
+        }
+        catch (IOException)
+        {
+            outcome = ShareKeyRotationOutcome.SharesStoppedKeyKept;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            outcome = ShareKeyRotationOutcome.SharesStoppedKeyKept;
+        }
+
+        // Both halves run whichever way the key write went. The records are
+        // stopped either way, so the guests they were for have nothing left to
+        // watch either way, and leaving them signed in because a file could not be
+        // written would be the rotation behaving differently from the revocation
+        // it is a bulk form of.
+        await GuestAccounts.DisableAsync(
+            _userManager,
+            GuestAccounts.WithNoLiveShareLeft(stop.Store, now)).ConfigureAwait(false);
+
+        for (var index = 0; index < stop.Stopped.Count; index++)
+        {
+            await GuestSessions.EndAsync(
+                _sessionManager,
+                GuestSessions.LeftWithNothingToWatch(stop.Store, stop.Stopped[index], now)).ConfigureAwait(false);
+        }
+
+        var answer = new ShareKeyRotated
+        {
+            SharesStopped = stop.Stopped.Count,
+            Outcome = outcome,
+        };
+
+        // The half-landed state carries a body where the store's faults do not,
+        // and it is the same body the good answer carries. An operator whose key
+        // was not replaced still needs the count, because the shares are stopped
+        // and that is not undone by pressing rotate again.
+        return outcome == ShareKeyRotationOutcome.Rotated
+            ? Ok(answer)
+            : new ObjectResult(answer) { StatusCode = StatusCodes.Status500InternalServerError };
     }
 
     // One answer for a store this plugin cannot use, made in one place so that

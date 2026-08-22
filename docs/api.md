@@ -31,6 +31,7 @@ risk and not the moment to build on them.
 | POST   | `/ShareLinks/Shares`                  | an administrator                    |
 | GET    | `/ShareLinks/Shares`                  | an administrator                    |
 | POST   | `/ShareLinks/Shares/{shareId}/Revoke` | an administrator                    |
+| POST   | `/ShareLinks/Key/Rotate`              | an administrator                    |
 
 Four routes. Creating a share also creates the accounts it is for, which is
 decision 2 of #94 and the lifecycle in `docs/guest-accounts.md`, so the create
@@ -224,6 +225,54 @@ written out.
 segment request already in flight. The record survives so that an operator can
 still see who was invited to what, which is `docs/personal-data.md`, and the
 record is deleted by the retention rule instead.
+
+### POST /ShareLinks/Key/Rotate
+
+Replaces the install's keyed-hash key, and stops every share on the server.
+
+**Input.** Nothing. There is no body and no parameter: the call does one thing
+and the one thing is not configurable.
+
+**Who may call it.** An administrator, under the server's own elevation policy.
+
+**What it answers.**
+
+| Case                                         | Answer                                      |
+| -------------------------------------------- | ------------------------------------------- |
+| The shares were stopped and the key replaced | `200`, the count and `Rotated`              |
+| The shares were stopped and the key was not  | `500`, the count and `SharesStoppedKeyKept` |
+| The store could not be read or written       | `500`, no body, and nothing was changed     |
+
+The body of the first two carries `SharesStopped`, which is how many live shares
+this call stopped, and `Outcome`, which is which of the two cases it was. The
+count is the number an operator needs: every link that had been handed out has
+stopped working and this is how many of them there were.
+
+**Why the answer carries a state and not only a number.** A rotation is two
+writes, to the records and to the key file, and the store's half cannot land
+partly done: every live record is stopped in one act or none of them is. The pair
+can. `SharesStoppedKeyKept` is that state and it says exactly what is true of the
+server: the links no longer resolve, because the records refuse them, and the key
+that may have leaked is still on disk. Pressing rotate again retries the key
+write and stops nothing further, because nothing is left live to stop.
+
+**Why the records are stopped first.** The other order leaves a store full of
+records that read live and resolve for nobody, which is the reading the state
+column exists to prevent, and it is what a failed second write would make
+permanent.
+
+**What else it does.** It disables the guest accounts this plugin made that no
+live share names any more, and ends their server sessions, which is what revoking
+each of those shares one at a time would have done. A rotation that stopped every
+share and left every guest watching would behave differently from the revocation
+it is a bulk form of.
+
+**What it does not do.** It does not delete a record, it does not touch an
+account this plugin did not create, and it cannot be undone. It also does not
+cover a share created in the moment between the two writes: that share is issued
+under the old key, is not among the records this call stopped, and stops
+resolving anyway when the key lands. The store and the key file are two things
+and no lock spans them.
 
 ## What this page does not cover
 

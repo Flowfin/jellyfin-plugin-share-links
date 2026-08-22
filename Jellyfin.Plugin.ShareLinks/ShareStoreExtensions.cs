@@ -199,6 +199,97 @@ public static class ShareStoreExtensions
         return outcome;
     }
 
+    /// <summary>
+    /// Stops every share that is still live, in one act, because the key they were issued under is being replaced (#243).
+    /// </summary>
+    /// <param name="store">The store holding the shares.</param>
+    /// <param name="stoppedByUserId">The account pressing rotate.</param>
+    /// <param name="stoppedAt">The instant the rotation happens at, which is also the instant each record's state is judged against.</param>
+    /// <param name="logger">Where the revocation lines go (#27).</param>
+    /// <param name="reason">Free text written against every record this stops.</param>
+    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <returns>The records this call stopped, and the store as it stands afterwards.</returns>
+    /// <remarks>
+    /// <para>
+    /// Rotating the key stops every share whether the records say so or not,
+    /// because every hash was computed under the key that is being replaced. What
+    /// this adds is that the records say so. A store left holding records that
+    /// read live and resolve for nobody is the state <see cref="ShareState"/>
+    /// exists against, and it is also what makes the accounts and the sessions
+    /// unreachable: which guest has nothing left to watch is answered from
+    /// whether a live record still names them, so a rotation that changed no
+    /// record would end no session and disable no account.
+    /// </para>
+    /// <para>
+    /// One <see cref="IShareStore.MutateAsync"/> and not one call per record. A
+    /// loop over <see cref="RevokeAsync"/> would be as many writes as there are
+    /// shares, and a fault in the middle of it is the half-stopped store this is
+    /// written to make impossible: here either every live record is stopped or
+    /// none is.
+    /// </para>
+    /// <para>
+    /// A record that had already stopped is left exactly as it was, which is
+    /// <see cref="RevokeAsync"/>'s rule rather than a second one. It keeps its
+    /// instant, its reason and its revoker, and it is not counted, because it was
+    /// not stopped by this.
+    /// </para>
+    /// <para>
+    /// What this does not do is touch the key. This type is written over records
+    /// and knows nothing about a file; the caller is what puts the two halves in
+    /// an order and what names the state where only one of them landed.
+    /// </para>
+    /// </remarks>
+    public static async Task<ShareRotationStop> StopEveryLiveShareAsync(
+        this IShareStore store,
+        Guid stoppedByUserId,
+        DateTimeOffset stoppedAt,
+        ILogger logger,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentException.ThrowIfNullOrEmpty(reason);
+
+        var stopped = new List<ShareRecord>();
+
+        var written = await store.MutateAsync(
+            current =>
+            {
+                // Reset per pass rather than only once outside, for the reason
+                // RevokeAsync gives: a store that hands the callback the records a
+                // second time must not leave the first pass's list standing.
+                stopped.Clear();
+
+                var next = new List<ShareRecord>(current.Count);
+                for (var index = 0; index < current.Count; index++)
+                {
+                    var record = current[index];
+                    if (record.RevokedAt is not null || !ShareBounds.IsLive(record, stoppedAt))
+                    {
+                        next.Add(record);
+                        continue;
+                    }
+
+                    var revoked = Revoked(record, stoppedByUserId, stoppedAt, reason);
+                    stopped.Add(revoked);
+                    next.Add(revoked);
+                }
+
+                return next;
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        // After the write, for the reason AddAsync gives about its own line: a
+        // line saying a share was revoked is a line an operator reads as a share
+        // that has stopped, and a mutation that threw stopped nothing.
+        for (var index = 0; index < stopped.Count; index++)
+        {
+            ShareLog.Revoked(logger, stopped[index].Id, ShareRevocation.Revoked);
+        }
+
+        return new ShareRotationStop(stopped, written);
+    }
+
     // The same record with the revocation written on it. Field by field rather
     // than by a copy helper, for the reason ShareRecord.Upgraded gives about
     // itself: a field added to the type and forgotten here would be dropped from
