@@ -145,6 +145,24 @@
                         <tbody id="ShareLinksShareRows"></tbody>
                     </table>
 
+                    <h2>The keyed hash secret</h2>
+
+                    <p>The server keeps one secret and every share link is checked against it. Replacing it is what to reach for when the secret itself may have leaked: a copy of the data folder in the wrong hands, a backup restored somewhere it should not have been, or a support bundle that turned out to include it. To stop one link that went to the wrong person, revoke that share instead.</p>
+
+                    <p><strong>Pressing this stops every live share on this server at once, and there is no way back.</strong> Every link that has been handed out stops working, every share in the table above is marked revoked, and the guests this plugin made for them are signed out and disabled. No link can be reissued, because only a keyed hash of each token was ever written down.</p>
+
+                    <p id="ShareLinksRotateWarning"></p>
+
+                    <div class="inputContainer">
+                        <button is="emby-button" type="button" id="ShareLinksRotateKey" class="raised block">
+                            <span>Replace the secret and stop every share</span>
+                        </button>
+                    </div>
+
+                    <p id="ShareLinksRotateMessage"></p>
+
+                    <p>The count above is read from the table when this page last loaded it, so it is what was live then rather than what is live at the moment of the press. The number the server answers with is the one taken as the shares were stopped, and that is the one to believe.</p>
+
                     <p>What is not here. The link is not, and cannot be: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked, and the table above is a listing rather than a way back to what a create answered. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own; which of the ceilings that apply actually wins is decided elsewhere and is not on this page.</p>
                 </div>
             </div>
@@ -154,8 +172,8 @@
             (function () {
                 "use strict";
 
-                // The plugin's own identifier, and the two routes it serves to an
-                // administrator. All three are compared against the compiled assembly by
+                // The plugin's own identifier, and the routes it serves to an
+                // administrator. All of them are compared against the compiled assembly by
                 // ConfigurationPageTests, so a renamed route or a changed identifier reds
                 // the suite rather than leaving a page that asks the server for something
                 // that is not there.
@@ -163,6 +181,7 @@
                 var createShare = "ShareLinks/Shares";
                 var listShares = "ShareLinks/Shares";
                 var revokeShare = "ShareLinks/Shares/{shareId}/Revoke";
+                var rotateKey = "ShareLinks/Key/Rotate";
 
                 var page = document.querySelector("#ShareLinksConfigPage");
 
@@ -237,6 +256,16 @@
                     });
 
                     page.querySelector("#ShareLinksSharesMessage").textContent = shares.length === 0 ? "The server holds no shares." : "";
+
+                    // What the rotation control says before it is pressed is counted off
+                    // the same listing the table was drawn from, rather than being a
+                    // second question asked of the server. An operator is told what
+                    // pressing it would cost against the rows in front of them.
+                    var live = shares.filter(function (share) {
+                        return share.State === "Live";
+                    }).length;
+
+                    page.querySelector("#ShareLinksRotateWarning").textContent = live === 1 ? "One share is live and would stop." : live + " shares are live and would stop.";
                 }
 
                 // What a create answered is held nowhere: it is written into the panel
@@ -353,6 +382,36 @@
                         });
                 }
 
+                function rotate() {
+                    Dashboard.showLoadingMsg();
+                    page.querySelector("#ShareLinksRotateMessage").textContent = "";
+
+                    return ApiClient.ajax({
+                        type: "POST",
+                        url: ApiClient.getUrl(rotateKey),
+                        dataType: "json",
+                    })
+                        .then(function (rotated) {
+                            page.querySelector("#ShareLinksRotateMessage").textContent = "The secret was replaced. Shares stopped: " + text(rotated.SharesStopped) + ".";
+                        })
+                        .catch(function () {
+                            // The half-landed state is a refusal to this call, so what
+                            // reaches here is either it or a store that could not be
+                            // written. The two are told apart by the table rather than by
+                            // a number this page invents: a rotation that got as far as
+                            // the records leaves every row revoked, and one that did not
+                            // leaves them live.
+                            page.querySelector("#ShareLinksRotateMessage").textContent = "The rotation did not finish. The table below is what actually happened to the shares, and the server log says which step failed.";
+                        })
+                        .finally(function () {
+                            // Either way the table is redrawn, because either way it may
+                            // have changed and an operator deciding what to do next reads
+                            // it rather than the sentence above.
+                            load();
+                            Dashboard.hideLoadingMsg();
+                        });
+                }
+
                 page.addEventListener("pageshow", function () {
                     // Opening the page again is not a second showing of what a create
                     // answered. The panel starts empty every time.
@@ -372,6 +431,10 @@
                     event.preventDefault();
                     create();
                     return false;
+                });
+
+                page.querySelector("#ShareLinksRotateKey").addEventListener("click", function () {
+                    rotate();
                 });
 
                 page.querySelector("#ShareLinksCopyLink").addEventListener("click", function () {

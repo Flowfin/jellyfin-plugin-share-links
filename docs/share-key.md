@@ -79,10 +79,32 @@ data folder in the wrong hands, a backup restored somewhere it should not have
 been, or a support bundle that turned out to include it. Revoking one share is #46
 and is the control for a link that went to the wrong person.
 
-Where an operator presses it, and where they are shown the number, is the
-administrator surface in #67 and #70. The routes that create, list and revoke a
-share are there; none of them rotates, and no page shows the number, so today the
-count is still returned to a caller that has not been written.
+Where an operator presses it is `POST /ShareLinks/Key/Rotate`, and where they are
+shown the number is the configuration page, which says how many shares are live
+before the press and how many stopped after it (#243). `docs/api.md` is where the
+route's answers are written out.
+
+A rotation is two writes and they are made in one order. Every live record is
+stopped first, in one act, and the key is replaced after that. The other order
+would leave a store full of records that read live and resolve for nobody, which
+is the reading `ShareState` exists to prevent, and a failure between the two
+writes would make it permanent. Stopping the records first fails the other way:
+the shares are stopped, which is what the operator asked for, and the key that
+may have leaked is still on disk. That state has a name of its own,
+`SharesStoppedKeyKept`, and pressing rotate again retries the write that failed.
+
+Stopping the records is not decoration on top of replacing the key. Which guest
+has nothing left to watch is answered from whether a live record still names
+them, so a rotation that changed no record would end no session and disable no
+account, and it would behave differently from revoking those same shares one at a
+time. It does neither: the guests of every stopped share are signed out and
+disabled, exactly as `docs/revocation.md` describes for one share.
+
+What the two writes do not cover is a share created between them. It is issued
+under the old key, is not among the records the rotation stopped, and stops
+resolving anyway when the key lands, so it is the one record a rotation can leave
+reading live and resolving for nobody. The store and the key file are two things
+and no lock spans them. This is stated rather than defended against.
 
 ## What this does not settle
 

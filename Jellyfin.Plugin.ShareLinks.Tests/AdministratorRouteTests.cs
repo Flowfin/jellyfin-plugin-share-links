@@ -92,10 +92,12 @@ public sealed class AdministratorRouteTests : IDisposable
     private string StorePath => Path.Combine(_directory, PluginServiceRegistrator.StoreFileName);
 
     /// <summary>
-    /// Both administrator actions are reached only under the server's own
+    /// Every administrator action is reached only under the server's own
     /// elevation policy. This is #67's second clause, asserted over the compiled
     /// attribute rather than over the source, because an attribute that is
-    /// missing looks exactly like one that is present in a diff.
+    /// missing looks exactly like one that is present in a diff. The set is
+    /// written out rather than counted, so an action added here without an
+    /// attribute of its own reds this rather than being judged by nothing (#243).
     /// </summary>
     [Fact]
     public void EveryAdministratorActionIsReachedOnlyUnderTheServersOwnElevationPolicy()
@@ -103,7 +105,7 @@ public sealed class AdministratorRouteTests : IDisposable
         var judged = RoutePolicy.Judge(typeof(ShareLinksAdminController));
 
         Assert.Equal(
-            new[] { "Create", "List", "Revoke" },
+            new[] { "Create", "List", "Revoke", "RotateKey" },
             judged.Select(action => action.Action).OrderBy(name => name, StringComparer.Ordinal).ToArray());
 
         foreach (var action in judged)
