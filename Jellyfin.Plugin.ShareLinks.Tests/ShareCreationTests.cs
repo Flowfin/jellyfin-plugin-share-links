@@ -661,6 +661,7 @@ public sealed class ShareCreationTests : IDisposable
             store,
             _keyFile,
             _server.Manager(),
+            ServerConfigurations.WithNoCeiling(),
             _server.Library(),
             configuration,
             ContextFor(caller),
@@ -726,6 +727,13 @@ public sealed class ShareCreationTests : IDisposable
     public IUserManager Manager()
         {
             var manager = new Mock<IUserManager>(MockBehavior.Strict);
+
+            // The create answers with a summary, and a summary carries the ceiling
+            // in force for each account it names (#64), which is read off the
+            // account row. An account this fake does not hold answers null, which
+            // is the same thing a server says about an account it does not have.
+            manager.Setup(m => m.GetUserById(It.IsAny<Guid>()))
+                .Returns((Guid id) => Remaining.FirstOrDefault(user => user.Id == id));
 
             manager.Setup(m => m.GetUserByName(It.IsAny<string>()))
                 .Returns((string name) => Remaining.FirstOrDefault(user => string.Equals(user.Username, name, StringComparison.OrdinalIgnoreCase)));

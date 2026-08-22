@@ -104,17 +104,44 @@ public sealed class ShareSummary
     public long? MaxBitrateBitsPerSecond { get; init; }
 
     /// <summary>
+    /// Gets the ceiling actually in force for each account this share names, and which of the three ceilings produced it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="MaxBitrateBitsPerSecond"/> is what the operator typed onto this
+    /// share; this is what a guest of it would be held to. The two differ
+    /// whenever the account's own remote client limit or the server's is lower,
+    /// and the whole of #64 is that an operator who can only see the first lowers
+    /// it, sees the column move, and nothing changes for anybody.
+    /// </para>
+    /// <para>
+    /// One entry per invited account and not one number, because the answer is
+    /// per account. <see cref="GuestCeilings"/> is where it is computed and where
+    /// the instant it is true at is argued.
+    /// </para>
+    /// </remarks>
+    public required IReadOnlyList<GuestCeiling> AppliedCeilings { get; init; }
+
+    /// <summary>
     /// Reads one record into what the administrator surface may see.
     /// </summary>
     /// <param name="record">The record.</param>
     /// <param name="now">The instant the state is read at.</param>
+    /// <param name="appliedCeilings">What each invited account would be capped at, from <see cref="GuestCeilings.Of"/>.</param>
     /// <returns>The summary.</returns>
-    public static ShareSummary Of(ShareRecord record, DateTimeOffset now)
+    /// <remarks>
+    /// The ceilings are handed in rather than computed here. They need every
+    /// record in the store and two values read off the server, and a type that
+    /// reached for those would be a summary that cannot be built from a record.
+    /// </remarks>
+    public static ShareSummary Of(ShareRecord record, DateTimeOffset now, IReadOnlyList<GuestCeiling> appliedCeilings)
     {
         ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(appliedCeilings);
 
         return new ShareSummary
         {
+            AppliedCeilings = appliedCeilings,
             Id = record.Id,
             ItemId = record.ItemId,
             InvitedUserIds = record.InvitedUserIds,
