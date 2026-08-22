@@ -76,6 +76,109 @@ public class ShareResolutionTests
     }
 
     /// <summary>
+    /// A share the server no longer holds the item of is refused, and it is
+    /// refused by the decision rather than by the route that supplies the
+    /// question (#39).
+    /// </summary>
+    /// <remarks>
+    /// Driven here on the overload that takes the key as bytes, so what is
+    /// asserted is the decision alone: no key file, no store and no controller
+    /// stand between the answer and the assertion.
+    /// </remarks>
+    [Fact]
+    public void AShareWhoseItemTheServerNoLongerHoldsIsRefusedByTheDecision()
+    {
+        var records = new[] { ARecord() };
+
+        var result = ShareResolution.Resolve(
+            records,
+            Key,
+            "a-token",
+            Invited,
+            PluginStatus.Active,
+            At(Expiry.AddTicks(-1)),
+            _ => false);
+
+        Assert.Equal(ShareRefusal.ItemGone, result.Refusal);
+        Assert.False(result.IsResolved);
+    }
+
+    /// <summary>
+    /// The same decision with the item still there resolves, so the refusal
+    /// above is the answer to the question and not a routine that refuses
+    /// whenever it is asked one.
+    /// </summary>
+    [Fact]
+    public void TheSameDecisionResolvesWhileTheServerStillHoldsTheItem()
+    {
+        var records = new[] { ARecord() };
+
+        var result = ShareResolution.Resolve(
+            records,
+            Key,
+            "a-token",
+            Invited,
+            PluginStatus.Active,
+            At(Expiry.AddTicks(-1)),
+            _ => true);
+
+        Assert.True(result.IsResolved);
+        Assert.Equal(ShareRefusal.None, result.Refusal);
+    }
+
+    /// <summary>
+    /// The item question is not asked of a refusal, whichever of the earlier
+    /// reasons produced it. A caller who was refused anyway does not make the
+    /// server look anything up, and a token naming a live share must not cost
+    /// more than one naming nothing (#26).
+    /// </summary>
+    [Fact]
+    public void NoRefusalReachesTheItemQuestion()
+    {
+        var asked = 0;
+        var records = new[] { ARecord(), ARecord(token: "revoked-token", revokedAt: Expiry.AddDays(-1)) };
+
+        bool Count(Guid _)
+        {
+            asked++;
+            return true;
+        }
+
+        var live = At(Expiry.AddTicks(-1));
+        ShareResolution.Resolve(records, Key, "not-the-token", Invited, PluginStatus.Active, live, Count);
+        ShareResolution.Resolve(records, Key, "a-token", Stranger, PluginStatus.Active, live, Count);
+        ShareResolution.Resolve(records, Key, "a-token", null, PluginStatus.Active, live, Count);
+        ShareResolution.Resolve(records, Key, "revoked-token", Invited, PluginStatus.Active, live, Count);
+        ShareResolution.Resolve(records, Key, "a-token", Invited, PluginStatus.Active, At(Expiry), Count);
+        ShareResolution.Resolve(records, Key, "a-token", Invited, PluginStatus.Disabled, live, Count);
+        ShareResolution.Resolve(records, Key, string.Empty, Invited, PluginStatus.Active, live, Count);
+
+        Assert.Equal(0, asked);
+
+        ShareResolution.Resolve(records, Key, "a-token", Invited, PluginStatus.Active, live, Count);
+
+        Assert.Equal(1, asked);
+    }
+
+    /// <summary>
+    /// A decision handed no way to ask about the item refuses to be made at
+    /// all, rather than treating the absent question as a yes.
+    /// </summary>
+    [Fact]
+    public void TheItemQuestionIsRequiredWhereTheOverloadTakingItIsUsed()
+    {
+        var records = new[] { ARecord() };
+
+        Assert.Throws<ArgumentNullException>(() => ShareResolution.Resolve(
+            records,
+            Key,
+            "a-token",
+            Invited,
+            PluginStatus.Active,
+            At(Expiry.AddTicks(-1)),
+            theServerStillHoldsTheItem: null!));
+    }
+    /// <summary>
     /// A revoked share reports revocation even where it has also expired. The
     /// order is argued on the routine: revocation is the answer that does not
     /// depend on a clock, and a clock is the thing that steps.
