@@ -104,10 +104,14 @@ jobs:
           ls -la "$plugin_dir"
           chmod -R 0777 test/e2e
 
-      - name: Generate the item the observations are made against
+      - name: Generate the items the observations are made against
         # Generated rather than committed: a video in the tree is bytes nobody
-        # reviews, and this one only has to exist and carry a bitrate above the
-        # cap the share is given.
+        # reviews, and these only have to exist and carry a bitrate above the cap
+        # the share is given.
+        #
+        # Two of them. One is what the share names and the other is what the guest
+        # must not reach, and a library holding only the shared item cannot tell a
+        # confinement that works from one that was never asked a question.
         #
         # With the server image's own ffmpeg rather than the runner's, which is
         # not there: `ffmpeg: command not found` on the first run of this job.
@@ -116,18 +120,19 @@ jobs:
         # the build the server itself would transcode with.
         run: |
           set -euo pipefail
-          folder="test/e2e/media/movies/An Observation (2026)"
-          mkdir -p "$folder"
-          docker run --rm --user 0:0 \
-            -v "$PWD/test/e2e/media:/out" \
-            --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg \
-            "$JELLYFIN_IMAGE" \
-            -hide_banner -loglevel error -y \
-            -f lavfi -i "testsrc=size=640x480:rate=25" \
-            -t 6 -c:v libx264 -preset ultrafast -b:v 3000k -pix_fmt yuv420p \
-            "/out/movies/An Observation (2026)/An Observation (2026).mkv"
+          for name in "An Observation (2026)" "Another Observation (2026)"; do
+            mkdir -p "test/e2e/media/movies/$name"
+            docker run --rm --user 0:0 \
+              -v "$PWD/test/e2e/media:/out" \
+              --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg \
+              "$JELLYFIN_IMAGE" \
+              -hide_banner -loglevel error -y \
+              -f lavfi -i "testsrc=size=640x480:rate=25" \
+              -t 6 -c:v libx264 -preset ultrafast -b:v 3000k -pix_fmt yuv420p \
+              "/out/movies/$name/$name.mkv"
+          done
           sudo chmod -R 0777 test/e2e/media
-          ls -la "$folder"
+          ls -laR test/e2e/media/movies
 
       - name: Start the server
         run: |

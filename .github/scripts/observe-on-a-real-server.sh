@@ -140,20 +140,26 @@ case "$status" in
   *) fail "the library could not be added: $status $(body)" ;;
 esac
 
+# Both of them, because the second is what the guest must not reach and a
+# library holding one item cannot tell a confinement that works from one that was
+# never asked a question.
 item=""
+other=""
 for attempt in $(seq 1 90); do
-  status=$(call GET "/Items?userId=$operator_id&includeItemTypes=Movie&recursive=true&fields=MediaSources" operator "$token")
+  status=$(call GET "/Items?userId=$operator_id&includeItemTypes=Movie&recursive=true&fields=MediaSources&sortBy=SortName" operator "$token")
   if [ "$status" = "200" ]; then
     item=$(body | jq -r '.Items[0].Id // empty')
-    if [ -n "$item" ]; then
-      echo "the item appeared after $((attempt * 2))s: $item"
-      body | jq -r '.Items[0] | "\(.Name) bitrate=\(.MediaSources[0].Bitrate // "unknown")"'
+    other=$(body | jq -r '.Items[1].Id // empty')
+    if [ -n "$item" ] && [ -n "$other" ]; then
+      echo "both items appeared after $((attempt * 2))s"
+      body | jq -r '.Items[] | "  \(.Id) \(.Name) bitrate=\(.MediaSources[0].Bitrate // "unknown")"'
       break
     fi
   fi
   sleep 2
 done
-[ -n "$item" ] || fail "no movie appeared in the library within 180 seconds"
+[ -n "$item" ] && [ -n "$other" ] || fail "the two movies did not both appear in the library within 180 seconds"
+[ "$item" != "$other" ] || fail "the library answered with one item twice, so there is nothing to be refused"
 
 say "creating a share, which is what mints the guest account"
 status=$(call POST /ShareLinks/Shares operator "$token" \
@@ -243,5 +249,23 @@ status=$(call GET "/Videos/$item/stream?static=true&videoBitRate=$((cap / 2))" "
 echo "stream asking for $((cap / 2)) -> $status"
 [ "$status" != "404" ] || fail "a stream request inside the ceiling was refused too, so the refusal is not about the ceiling"
 echo "OK: the request above the ceiling was refused and the one inside it was not"
+
+say "OBSERVATION 3: what the guest cannot reach (#44, #47, #52)"
+# The widening the whole plugin exists against, asked of a real server rather
+# than of a filter holding a fabricated authorization context. Whether the server
+# runs the filter at all is the server's own pipeline ordering, and nothing in
+# the suite reaches it.
+status=$(call GET "/Items/$item?userId=$guest_id" "guest-1" "$guest_token")
+echo "the item the share names -> $status"
+[ "$status" = "200" ] || fail "the guest could not reach the item their own share names: $status $(body)"
+
+status=$(call GET "/Items/$other?userId=$guest_id" "guest-1" "$guest_token")
+echo "the other item in the same library -> $status"
+[ "$status" = "404" ] || fail "the guest reached an item no share of theirs names: $status"
+
+status=$(call GET "/Items?userId=$guest_id&includeItemTypes=Movie&recursive=true" "guest-1" "$guest_token")
+echo "a listing that would enumerate the library -> $status"
+[ "$status" = "404" ] || fail "the guest enumerated the library: $status"
+echo "OK: the shared item was reached, the other one was not, and the listing was refused"
 
 say "every observation this script makes was made"
