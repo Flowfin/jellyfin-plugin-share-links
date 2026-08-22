@@ -29,6 +29,14 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// from its caller, so a test hands it an instant and no test ever sleeps.
 /// </para>
 /// <para>
+/// What is registered is the machine clock inside a <see cref="MonotonicClock"/>,
+/// so what the running plugin judges an expiry against never steps backwards.
+/// That is one line here rather than a rule every reader of a clock has to
+/// remember, and it is the only place it could be: a wrapper applied at one of
+/// the three readers would leave the other two disagreeing with it about what
+/// time it is.
+/// </para>
+/// <para>
 /// The two file names are decided here rather than in the types that read them.
 /// <see cref="ShareStore"/> and <see cref="ShareKeyFile"/> each take a path,
 /// which is what lets a test point them at a temporary directory; deciding where
@@ -64,7 +72,13 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         serviceCollection.AddSingleton<IShareStore>(_ => new ShareStore(InTheDataFolder(StoreFileName)));
         serviceCollection.AddSingleton(_ => new ShareKeyFile(InTheDataFolder(KeyFileName)));
-        serviceCollection.AddSingleton(TimeProvider.System);
+        // The machine clock, wrapped so that it never goes backwards (#79). The
+        // wrapping happens here because this is the line the whole plugin's idea
+        // of the time comes out of: every route takes TimeProvider from the
+        // container, so clamping it once clamps expiry, the sweep and the
+        // listing together rather than one of the three. MonotonicClock carries
+        // what that costs and what it still does not cover.
+        serviceCollection.AddSingleton<TimeProvider>(new MonotonicClock(TimeProvider.System));
         serviceCollection.AddSingleton<IPluginConfigurationSource>(_ => new PluginConfigurationSource());
 
         // The one request-path surface (#239). Registered here because this is the
