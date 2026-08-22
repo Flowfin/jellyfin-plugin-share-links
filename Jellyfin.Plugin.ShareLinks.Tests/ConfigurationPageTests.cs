@@ -410,6 +410,54 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
+    /// The view names the ceiling that is actually in force, which is #64's second
+    /// clause.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three things, because dropping any one of them leaves the column saying
+    /// something an operator would act wrongly on. The column has to be there; it
+    /// has to be written off the member the listing answers with, rather than from
+    /// the record's own number that is already in the column beside it; and it has
+    /// to carry the name of the ceiling that produced it, because the whole of
+    /// this issue is somebody lowering a number that was never the one holding.
+    /// </para>
+    /// <para>
+    /// What this cannot see is the rendered page. Nothing here reaches a browser,
+    /// and the remarks at the top of this file say so of every claim in it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheViewNamesTheCeilingThatIsInForce()
+    {
+        Assert.Contains(nameof(ShareSummary.AppliedCeilings), ValuesThePageReadsOffAShare(), StringComparer.Ordinal);
+        Assert.Contains("<th scope=\"col\">In force</th>", Page(), StringComparison.Ordinal);
+        Assert.Contains("cap.Applied", Page(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The two ways of having no ceiling are two sentences on the page rather than
+    /// one blank.
+    /// </summary>
+    /// <remarks>
+    /// An account with no ceiling set anywhere and an account this plugin does not
+    /// cap at all are repaired in opposite directions: the first by setting one,
+    /// the second by understanding that the filter never stands in front of an
+    /// account it did not make. A column that showed both as empty would send an
+    /// operator to the wrong repair, which is the failure this page's own
+    /// paragraph about the state column is written against.
+    /// </remarks>
+    [Fact]
+    public void TheViewTellsTheTwoKindsOfNoCeilingApart()
+    {
+        var page = Page();
+
+        Assert.Contains(nameof(GuestVerdict.NotAGuestOfThisPlugin), page, StringComparison.Ordinal);
+        Assert.Contains("no ceiling is set anywhere", page, StringComparison.Ordinal);
+        Assert.Contains("caps nothing", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The revocation instant is on the administrator view, which is #46's third
     /// clause. An operator looking for a link somebody says has stopped working
     /// needs to see when it was stopped, and the state alone does not carry it: a

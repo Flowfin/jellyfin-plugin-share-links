@@ -155,11 +155,11 @@ Every share the store holds, with what each one is doing now.
 | The store could not be read | `500`, no body, and a warning in the server log |
 
 A row carries the share's identifier, the item, the invited accounts, who made it
-and when, when it expires, what it is doing now, and the revocation fields where
-something revoked it. It does not carry the token and it does not carry the keyed
-hash of the token. The hash does not open a share, but it is the value the
-resolution compares against, and a route handing it out is a route handing out
-what an offline search needs.
+and when, when it expires, what it is doing now, the ceilings in force, and the
+revocation fields where something revoked it. It does not carry the token and it
+does not carry the keyed hash of the token. The hash does not open a share, but it
+is the value the resolution compares against, and a route handing it out is a
+route handing out what an offline search needs.
 
 The link is not there either, and cannot be. Only the keyed hash is written down,
 so this plugin cannot produce a link a second time even when asked.
@@ -176,6 +176,35 @@ rather than stored:
 
 A share revoked after it had already expired reads as `Expired`, because expiry
 is what stopped it. The revoker, the reason and the instant are still on the row.
+
+`MaxBitrateBitsPerSecond` is the share's own ceiling, which is the number an
+operator typed onto it. `AppliedCeilings` is what a guest of it would actually be
+held to, one entry per invited account, because the ceiling is a per-account
+question and a record names a list:
+
+| Field    | What it carries                                                   |
+| -------- | ----------------------------------------------------------------- |
+| `UserId` | The invited account the entry is about                            |
+| `Reach`  | What the request-path filter would decide for that account        |
+| `Cap`    | `BitsPerSecond`, and `Applied` naming every ceiling sitting at it |
+
+`Applied` is a set rather than one name. Two ceilings can sit at the same value
+and both apply, and reporting one of them would mean an operator who lowers the
+other sees the same number and concludes their change did nothing. Its members are
+`Share`, `Account` and `ServerRemoteClientLimit`.
+
+`Reach` is carried beside the number because there are two ways to have none.
+`NotAGuestOfThisPlugin` is an invited account this plugin did not create: the
+filter does not stand in front of it, so no ceiling of this plugin's reaches it at
+all. `Reaches` with `BitsPerSecond` absent is an account the filter does cover and
+for which nobody has set a ceiling anywhere. The two are repaired in opposite
+directions.
+
+The entries are computed at the instant the listing was read, in the same way the
+state is. The ceiling a guest meets is worked out again when they ask to play
+something, out of the same three values as they stand then, so a value somebody
+moves in between is a disagreement between this answer and a later request rather
+than a fault in either.
 
 An unreadable store is an error here and a `404` on the guest route, and that
 difference is deliberate. A fault told to a guest is a fault told to whoever holds
