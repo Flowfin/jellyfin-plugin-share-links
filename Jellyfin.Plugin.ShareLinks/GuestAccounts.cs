@@ -140,7 +140,17 @@ public static class GuestAccounts
         for (var index = 0; index < accounts.Count; index++)
         {
             var account = accounts[index];
-            var policy = GuestPolicy.Create(TheCeilingToKeep(users.GetUserById(account)?.MaxActiveSessions ?? 0));
+
+            // Over the account where there is one, because a policy is written
+            // onto an account field by field and two of those fields are the
+            // account's own providers, which refuse null in the database. An
+            // account the server does not answer for is still written to, which
+            // is this file's own decision and has a test: what the server does
+            // with a policy for an account it does not hold is the server's, and
+            // it does not reach those two fields to find them empty.
+            var policy = users.GetUserById(account) is { } user
+                ? GuestPolicy.For(user, TheCeilingToKeep(user.MaxActiveSessions))
+                : GuestPolicy.Create(TheCeilingToKeep(0));
             policy.IsDisabled = true;
 
             await users.UpdatePolicyAsync(account, policy).ConfigureAwait(false);

@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Model.Users;
@@ -147,9 +148,60 @@ public static class GuestPolicy
     /// <param name="maxActiveSessions">How many sessions the guest may hold at once.</param>
     /// <returns>The policy.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The ceiling is outside the bounds.</exception>
+    /// <remarks>
+    /// A policy for nobody in particular. Writing one to an account is
+    /// <see cref="For"/>'s job and not this one's, for the reason written there.
+    /// </remarks>
     public static UserPolicy Create(int maxActiveSessions)
     {
         var policy = new UserPolicy();
+        Apply(policy, maxActiveSessions);
+        return policy;
+    }
+
+    /// <summary>
+    /// The same policy, carried over the account it is about to be written to.
+    /// </summary>
+    /// <param name="account">The account the policy is for.</param>
+    /// <param name="maxActiveSessions">How many sessions the guest may hold at once.</param>
+    /// <returns>The policy.</returns>
+    /// <exception cref="ArgumentNullException">The account is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The ceiling is outside the bounds.</exception>
+    /// <remarks>
+    /// <para>
+    /// A POLICY IS NOT ONLY THE SWITCHES THIS PLUGIN DECIDES. The server writes a
+    /// policy onto an account field by field, and two of those fields are the
+    /// account's authentication provider and its password reset provider, which
+    /// the policy is expected to be carrying already. Both refuse null in the
+    /// database, so a policy built from nothing and handed to
+    /// <c>UpdatePolicyAsync</c> does not narrow an account: it fails the write
+    /// and takes the whole request down with it.
+    /// </para>
+    /// <para>
+    /// Measured rather than reasoned about. Against a real server the create
+    /// route answered `500` and the log said
+    /// `SQLite Error 19: NOT NULL constraint failed: Users.AuthenticationProviderId`,
+    /// so no share could be created at all. Against a doubled user manager the
+    /// same call passes, because a double takes the policy and writes it nowhere,
+    /// which is why this was found by the job in #237 rather than by the suite.
+    /// </para>
+    /// <para>
+    /// The ceiling already on the account is carried in as well, so
+    /// <see cref="Apply"/>'s narrowing rule reads the account rather than a number
+    /// the caller remembered to look up.
+    /// </para>
+    /// </remarks>
+    public static UserPolicy For(User account, int maxActiveSessions)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        var policy = new UserPolicy
+        {
+            AuthenticationProviderId = account.AuthenticationProviderId,
+            PasswordResetProviderId = account.PasswordResetProviderId,
+            MaxActiveSessions = account.MaxActiveSessions,
+        };
+
         Apply(policy, maxActiveSessions);
         return policy;
     }

@@ -84,6 +84,21 @@ account-level ceiling and belongs to #61 and #62, which decide where the cap is
 enforced and what its bounds are. Setting it here would decide a number those
 issues own.
 
+Two fields are carried rather than decided, and they are not switches at all. A
+policy is written onto an account field by field, and among the fields the server
+copies across are the account's authentication provider and its password reset
+provider. Both refuse to be empty in the server's database, so a policy that
+arrives without them does not narrow the account: it fails the write and takes the
+whole request down with it. `GuestPolicy.For` builds the policy over the account it
+is about to be written to, which is where those two come from.
+
+That was measured rather than reasoned about. Against a real server the create
+route answered `500` and the log said
+`NOT NULL constraint failed: Users.AuthenticationProviderId`, so no share could be
+created at all; against a doubled user manager the same call passes, because a
+double takes the policy and writes it nowhere. #259 is where it was written down
+and #237 is the job that met it.
+
 ## How many sessions one guest may hold
 
 `MaxActiveSessions` is the account switch that bounds this, and it is set rather

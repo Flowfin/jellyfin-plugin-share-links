@@ -688,14 +688,22 @@ public sealed class AdministratorRouteTests : IDisposable
     }
 
     // The policy a disable writes, compared against the policy the create writes
-    // for the same ceiling, member by member. Exactly IsDisabled may differ.
+    // for the same account and the same ceiling, member by member. Exactly
+    // IsDisabled may differ.
+    //
+    // Over an account rather than over nothing, because the two provider
+    // identifiers are carried from the account a policy is written to and a
+    // baseline that carried neither would report a difference of two fields that
+    // both paths now fill the same way.
     //
     // Reflection rather than a list of properties, because a switch added to
     // GuestPolicy and forgotten here is the way this assertion stops covering what
     // it says it covers.
     private static void AssertIsTheGuestPolicyWithNothingButTheSwitchMoved(UserPolicy written, int ceiling)
     {
-        var asCreated = GuestPolicy.Create(ceiling);
+        var asCreated = GuestPolicy.For(
+            new User("a guest", "provider", "reset") { Id = Guid.NewGuid(), MaxActiveSessions = ceiling },
+            ceiling);
 
         Assert.True(written.IsDisabled, "the account was not disabled, so the end of its last live share did nothing to it.");
         Assert.False(asCreated.IsDisabled, "the guest policy now disables the accounts the create makes, and this comparison would then report a difference of nothing.");
