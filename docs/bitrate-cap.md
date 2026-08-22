@@ -153,9 +153,13 @@ repository today, and the reflection test that proves the plugin's own action se
 closed, `RoutePolicy`, judges what this plugin exposes rather than what the server
 does.
 
-Whether the reported ceiling reaches a client on the operator's own network. Not
-measured. Measuring it needs a running server rather than a package, and the
-manual check #65 asks for is where it is answered.
+Whether the reported ceiling reaches a client. Still not measured, and narrower
+than it was. The harness in #237 asks a real server for playback information as
+the guest, with a ceiling above the one in force, and the server answers with the
+source rather than a transcode plan, because the request carries no device
+profile. An answer with no plan in it holds no lowered ceiling to read, so what
+that run shows on this leg is that the request is answered and nothing more. A
+client is what sends a profile, and no client was involved.
 
 Anything after the stream has started. A cap decides what is served, not what
 happens to it afterwards, and `docs/threat-model.md` already accepts that a guest
@@ -166,9 +170,23 @@ writes no bitrate value onto the account, so an operator who sets one there is
 adding a fourth ceiling rather than overwriting the plugin's. It is read as one of
 the three inputs above and it can only lower the result, never raise it.
 
-Nothing here was measured against a running server. The reported ceiling the
-interception would set is a name that exists in the packages this plugin compiles
-against, and the surface the refusal would sit behind is another:
+THIS PARAGRAPH SAID NOTHING HERE WAS MEASURED AGAINST A RUNNING SERVER, AND THAT
+IS NO LONGER TRUE OF THE REFUSAL LEG. The harness #237 built runs against a real
+Jellyfin with the packaged plugin installed, and on a share capped at the lowest
+ceiling this plugin accepts, carrying an item the server reports as above it:
+
+    stream asking for 8000000, the ceiling being 200000 -> 404
+    stream asking for 100000 -> 200
+
+So the refusal reaches a request the server would otherwise have served, and a
+request inside the ceiling is not caught by it. That is the leg this page said had
+to be driven. It was found by building the harness rather than by re-reading this
+page, and the sentence is corrected rather than deleted because what it claimed is
+still true of everything below it.
+
+The names the two legs rest on are in the packages this plugin compiles against,
+which is the reading this paragraph carried before and which the run above does
+not replace:
 
     grep -ac 'MaxStreamingBitrate' ~/.nuget/packages/jellyfin.model/10.11.11/lib/net9.0/MediaBrowser.Model.dll
     1
@@ -201,12 +219,18 @@ refusal turns away a request for bytes above the ceiling in force:
 
     git grep -n 'ReportingACeiling\|ServingAStream' -- Jellyfin.Plugin.ShareLinks/ConfinedRoutes.cs
 
-The third clause of #61 is still not met by this document, and what is left of it
-is narrower than it was. `AStreamRequestAboveTheCeilingIsRefused` drives the
-impolite path against the filter, which is the half this page said had to be
-driven; what no test here shows is a stream, because showing one needs a media
-file, a transcoder and a running server. That is #65's manual check and #237's
-harness, and this page claims neither.
+The third clause of #61 is met, and by two things rather than one.
+`AStreamRequestAboveTheCeilingIsRefused` drives the impolite path against the
+filter, which is the half this page said had to be driven, and the boundary either
+side of every ceiling is walked one bit at a time under #65. The harness in #237
+then drives the same path against a real server, where the request above the
+ceiling is refused and the one inside it is served.
+
+What neither shows is the bytes of a stream. Showing those needs a player, and
+`docs/refused-tests.md` refuses that test by name. What is claimed here is that a
+request above the cap is refused before the server serves anything, on a server
+rather than only against a double, which is what the clause asks and is not the
+same sentence as a measurement of what came out.
 
 ## What this page said before
 
