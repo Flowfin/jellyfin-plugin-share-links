@@ -29,21 +29,39 @@ pass every test here.
 
 ### Any item other than the one named on the record
 
-Nothing holds this. The mechanism is chosen and not built, and the suite asserts
-the absence rather than leaving it to be discovered:
+Held on the routes this plugin stands in front of. The filter
+`docs/guest-confinement.md` chose under #52 is built (#239), and each of #44's
+five widening attempts is a row of a theory named after the relationship it
+attacks:
 
 ```
-git grep -n 'public void ThisPluginCarriesNoFilterYet' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementTests.cs
+git grep -n 'public async Task EachOfTheFiveWideningsIsRefused' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs
+git grep -n 'public async Task TheSharedItemIsReachedByTheAccountTheShareNames' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs
 ```
 
-`docs/guest-confinement.md` is the choice under #52, and the filter it names is
-what this line waits for.
+The second is what stops the first from being satisfied by a filter that refuses
+everything.
+
+What this does not hold is a route nobody added to `ConfinedRoutes`. That set
+belongs to the server, the server's route table is not in the packages this
+plugin compiles against, and the list is maintained by hand. Not judged is a
+separate answer from reached, and the suite says so:
+
+```
+git grep -n 'public async Task APathTheListDoesNotReachIsNotJudged' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs
+```
+
+Whether the server applies the filter to any request at all is a registration on
+the server's own pipeline. There is no server here and no claim about it is made
+in either direction.
 
 ### Any listing, search or collection that would enumerate other items
 
-Nothing holds this, for the same reason and behind the same filter. These are
-#44's five widening attempts, and `docs/guest-confinement.md` lists them as what
-any mechanism chosen there has to answer.
+Held on the routes this plugin stands in front of, by the same filter and the
+same test. A route that lists, searches or browses names no item to compare, so a
+guest of this plugin is refused it rather than having the answer filtered, and
+three of #44's five widenings are exactly those routes. The bound is the one
+above: a listing route nobody added to the list is one this plugin does not see.
 
 ### Any administrator route of this plugin
 

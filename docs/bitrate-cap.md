@@ -195,14 +195,18 @@ at playback with a warning at creation. Under this choice that condition is
 reached when even the lowest playable version is above the cap, because the
 ordinary case is a transcode down to the reported ceiling.
 
-The third clause of #61 is not met by this document. Nothing in the plugin touches
-either mechanism:
+Both mechanisms are built, on the one request-path surface #239 created. The
+interception lowers the ceiling a playback information request asked for, and the
+refusal turns away a request for bytes above the ceiling in force:
 
-    git grep -nE 'MaxStreamingBitrate|PlaybackInfo|IMediaSourceManager' origin/master -- Jellyfin.Plugin.ShareLinks/ ; echo "exit=$?"
-    exit=1
+    git grep -n 'ReportingACeiling\|ServingAStream' -- Jellyfin.Plugin.ShareLinks/ConfinedRoutes.cs
 
-Nothing in the tree enforces a bitrate ceiling today. This is the decision the
-enforcement is built against.
+The third clause of #61 is still not met by this document, and what is left of it
+is narrower than it was. `AStreamRequestAboveTheCeilingIsRefused` drives the
+impolite path against the filter, which is the half this page said had to be
+driven; what no test here shows is a stream, because showing one needs a media
+file, a transcoder and a running server. That is #65's manual check and #237's
+harness, and this page claims neither.
 
 ## What this page said before
 

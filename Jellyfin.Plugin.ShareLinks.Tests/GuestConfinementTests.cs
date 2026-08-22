@@ -73,13 +73,13 @@ public class GuestConfinementTests
     }
 
     [Fact]
-    public void ThisPluginCarriesNoFilterYet()
+    public void ThisPluginCarriesTheFilterTheComparisonChose()
     {
-        // The page decides which mechanism is built and is not the building of
-        // it. A page that read as a description of working code would be the
-        // worse failure, so the absence is asserted rather than left to be
-        // inferred, and the first filter to land reds this and sends whoever
-        // wrote it to the section that says what the choice does not cover.
+        // This test asserted the absence of a filter until #239 built one, and it
+        // is replaced rather than deleted for the reason it existed: what it holds
+        // is that the page and the tree agree about whether the chosen mechanism
+        // is built. It now holds the other direction, so a filter deleted or
+        // renamed reds this and sends whoever did it to the page.
         var filters = typeof(Plugin).Assembly
             .GetTypes()
             .Where(type => typeof(IFilterMetadata).IsAssignableFrom(type))
@@ -88,8 +88,13 @@ public class GuestConfinementTests
             .ToArray();
 
         Assert.True(
-            filters.Length == 0,
-            "This plugin now carries " + string.Join(", ", filters)
-            + ", so docs/guest-confinement.md describes a mechanism that has been built and its last section says it has not.");
+            filters.Contains(nameof(GuestConfinementFilter), StringComparer.Ordinal),
+            "docs/guest-confinement.md describes a filter of this plugin's own as built, and the assembly carries "
+            + (filters.Length == 0 ? "no filter at all" : string.Join(", ", filters)));
+
+        // One and not two. #44's decision of 2026-08-20 is a single request-path
+        // surface carrying both guest confinement and the bitrate ceiling, and two
+        // registrations are the drift that decision exists against.
+        Assert.Single(filters);
     }
 }

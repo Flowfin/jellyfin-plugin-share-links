@@ -105,16 +105,30 @@ suite rather than leaving two lists that disagree.
 
 ### Any item other than the one named on the record
 
-**Not held by a test here.** The mechanism is chosen and not built.
-`docs/guest-confinement.md` chooses an authorization filter of this plugin's own
-under #52 and says plainly that the filter does not exist, and the suite asserts
-that absence rather than leaving it to be discovered: `ThisPluginCarriesNoFilterYet`.
+**Held in part.** On the routes this plugin stands in front of. The filter
+`docs/guest-confinement.md` chose under #52 is built (#239), and each of #44's
+five widening attempts is a test naming the relationship it attacks:
+`EachOfTheFiveWideningsIsRefused`. The item the record names is reached by the
+account it names, `TheSharedItemIsReachedByTheAccountTheShareNames`, so the
+refusals are not a filter that refuses everything.
+
+In part, because the routes the filter sits on are a list this
+repository maintains by hand, and the server's route table is not in the packages
+this plugin compiles against. A route nobody added is one this plugin is not
+standing in front of, which is the accepted cost `docs/guest-confinement.md`
+records, and it is a separate answer rather than a permission:
+`APathTheListDoesNotReachIsNotJudged`. Whether the server puts this filter in
+front of a request at all is a registration on the server's own pipeline and was
+not measured.
 
 ### Any listing, search or collection that would enumerate other items
 
-**Not held by a test here.** The same absence and the same filter. These are the
-five widening attempts #44 names, and none of them is a request this plugin sees
-until something confines the account.
+**Held in part.** On the same routes and by the same filter. A route that lists,
+searches or browses names no item to compare, so a guest of this plugin is
+refused it outright rather than having the answer filtered. Three of #44's five
+widenings are exactly those routes and are rows of the same theory as the line
+above, `EachOfTheFiveWideningsIsRefused`. The same bound applies: a listing route nobody added to the list is one
+this plugin does not see.
 
 ### Any administrator route of this plugin
 
