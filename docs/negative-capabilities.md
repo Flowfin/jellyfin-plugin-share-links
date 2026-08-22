@@ -13,10 +13,23 @@ a statement about routes rather than about capabilities or about visibility.
 
 ## How to read a line
 
-A line is not evidence. Five of the nine below have a test that fails when the
-thing holding them is removed, and the rest do not, so the status is written into
-the line rather than left to be inferred from its presence. A list whose lines all
-look alike reads as coverage, and most of this list is not coverage yet.
+A line is not evidence. Some of the lines below have a test that fails when the
+thing holding them is removed and some do not, so every line opens with its own
+verdict rather than leaving the reader to infer one from its presence. A list
+whose lines all look alike reads as coverage, and part of this list is not
+coverage.
+
+Three verdicts and no fourth. **Held** means a test named in the line fails when
+the thing behind it is removed. **Held in part** means one half of the line has
+such a test and the other half does not, and the line says which is which. **Not
+held** means no test here can hold it, and the line says whose refusal it is
+instead. The split is derived rather than written down, because a count written
+into the document it is a count of goes stale in the direction that flatters it:
+
+    grep -A2 '^### ' docs/negative-capabilities.md | grep -oE '^(Held in part|Held|Not held)' | sort | uniq -c
+
+`NegativeCapabilityTests` reads those verdicts and refuses a line that carries
+none of them.
 
 Where a line is held by a switch on the guest account rather than by a refusal in
 this plugin, that is said in the line. The distinction matters and it is the same
@@ -29,7 +42,8 @@ pass every test here.
 
 ### Any item other than the one named on the record
 
-Held on the routes this plugin stands in front of. The filter
+Held in part. On the routes this plugin stands in front of, and the part that is
+not held is named at the end of this line. The filter
 `docs/guest-confinement.md` chose under #52 is built (#239), and each of #44's
 five widening attempts is a row of a theory named after the relationship it
 attacks:
@@ -57,11 +71,18 @@ in either direction.
 
 ### Any listing, search or collection that would enumerate other items
 
-Held on the routes this plugin stands in front of, by the same filter and the
-same test. A route that lists, searches or browses names no item to compare, so a
-guest of this plugin is refused it rather than having the answer filtered, and
-three of #44's five widenings are exactly those routes. The bound is the one
-above: a listing route nobody added to the list is one this plugin does not see.
+Held in part. On the routes this plugin stands in front of, by the same filter
+and the same test, which is named here as well rather than referred to, so that a
+rename reaches both lines:
+
+```
+git grep -n 'public async Task EachOfTheFiveWideningsIsRefused' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs
+```
+
+A route that lists, searches or browses names no item to compare, so a guest of
+this plugin is refused it rather than having the answer filtered, and three of
+#44's five widenings are exactly those routes. The bound is the one above: a
+listing route nobody added to the list is one this plugin does not see.
 
 ### Any administrator route of this plugin
 
@@ -97,11 +118,13 @@ repository judges another assembly.
 ### The creation, editing or revocation of any share
 
 Held. Creating, listing, revoking and rotating all sit on one controller carrying
-the server's elevation policy, and the test named under the administrator line
-above asserts the verdict on every action of it. This line said the create route
+the server's elevation policy, and the test under the administrator line above
+asserts the verdict on every action of it. It is named here as well rather than
+referred to, so that a rename reaches both lines. This line said the create route
 was absent until #67 landed it:
 
 ```
+git grep -n 'public void EveryAdministratorActionIsReachedOnlyUnderTheServersOwnElevationPolicy' -- Jellyfin.Plugin.ShareLinks.Tests/AdministratorRouteTests.cs
 git grep -n 'HttpPost("Shares")' -- Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
 ```
 
@@ -147,11 +170,14 @@ name.
 
 ```
 git grep -n 'EnableContentDownloading\|EnableMediaConversion\|EnableSyncTranscoding' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+git grep -n 'public void TheGuestGetsTheValueTheDocumentDecided' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
 ```
 
-`docs/guest-capabilities.md` is where each of the three is argued. If a per-share
-download option is ever offered, this line becomes the one #47 wrote and needs
-what that document decides.
+`docs/guest-capabilities.md` is where each of the three is argued, and the second
+command names the theory that drives every switch that document decides against
+the policy this plugin writes, so a value changed here without the document
+changing reds the suite. If a per-share download option is ever offered, this line
+becomes the one #47 wrote and needs what that document decides.
 
 ### Any route belonging to another plugin
 
@@ -163,11 +189,11 @@ this is written down rather than left as a line quietly without a test.
 
 ### No route can move the expiry of an existing record
 
-Collected here from #45, whose last clause is this sentence, because a statement
-about every route belongs on this list rather than alone in an issue about
-boundaries.
+Held, for the routines that make a record out of a record. Collected here from
+#45, whose last clause is this sentence, because a statement about every route
+belongs on this list rather than alone in an issue about boundaries.
 
-Held, for the routines that make a record out of a record. `ExpiryPolicy` reads
+`ExpiryPolicy` reads
 the compiled plugin for every routine that takes a record and answers with one,
 drives each of them twice with a neighbouring instant on each side of the
 record's own, and refuses one whose answer expires at anything but the instant it
@@ -201,19 +227,29 @@ pass a single run.
 
 ## What is checked, and what is not
 
-Five lines are held by a test that fails when the thing behind it is removed: this
-plugin's administrator routes, the creation and revocation routes that exist, the
-three switches about other people's sessions, the download route, and the expiry
-instant. Those tests are named in the lines above and run in the ordinary suite.
+This section carried a count of held and unheld lines until the count went stale.
+It said five were held and four were not, with two of the four waiting on the
+confinement filter and one on the create route; both of those landed, both lines
+above were rewritten to say so, and the count under them was not. A hand count in
+the document it is a count of is the failure mode this whole page exists against,
+so it is derived now rather than written:
 
-Four are not. Two wait on the confinement filter in #52, one waits on the create
-route in #67 to finish the set it names, and one is a statement about the server's
-own authorization that nothing here can judge.
+    grep -A2 '^### ' docs/negative-capabilities.md | grep -oE '^(Held in part|Held|Not held)' | sort | uniq -c
 
-Nothing reads this page. `LimitsTests` requires every document under `docs/` to be
-accounted for in `docs/limits.md`, so this page arriving uncollected would red the
-suite, and that is the whole of what any run judges about it. Whether a line here
-still matches the test it names, and whether the list is complete, is what the
-review is for. #47 is where
-the remaining lines are owed and it stays open until each one has a test that
-fails when its check is removed.
+What a line's verdict means is fixed under `## How to read a line` above, and
+`NegativeCapabilityTests` refuses a line that carries none of the three, refuses a
+held line that names no test, and resolves every test a held line names against
+the compiled test assembly. So a replacement renamed away reds the suite instead
+of leaving this page naming it, which is the same guard `docs/refused-tests.md`
+carries and for the same reason.
+
+What no run judges is the part that matters most and it is unchanged. Whether the
+test a line names actually holds the sentence above it is an argument, and the
+review is where a wrong pairing is caught. Whether the list is complete is the
+same kind of question, and nothing here can answer it: a capability nobody wrote
+down is invisible to this page and to the test that reads it.
+
+#47 is where the lines with no test are owed. Each of the three is a refusal
+belonging to the server's own authorization over its own routes or to an assembly
+this repository does not compile against, so each is written down with that
+reason rather than left as a line quietly without a test.
