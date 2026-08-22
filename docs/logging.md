@@ -103,6 +103,18 @@ Information, the level an operator reads without asking for it:
   than a sentence assembled from the request, and no share name, for the reason
   the section above gives.
 
+The codes are the members of `ShareRefusal`, and they are not listed here, because
+a list in a document drifts against the type that decides it:
+
+    git grep -n '= [0-9]*,$' Jellyfin.Plugin.ShareLinks/ShareRefusal.cs
+
+Each one carries what it means where it is declared. One of them is worth a
+sentence here anyway, because it is the only code that is not about the token or
+the caller: `ItemGone` says the server no longer holds the item the record names
+(#39), so an operator who meets it looks at the library rather than at the link,
+and the share is not repaired by re-sending it. `docs/gone.md` is the decision
+behind it.
+
 The invited accounts are not named in any of those lines. The association between
 a person and a title is what the administrator view holds and what
 `docs/personal-data.md` accounts

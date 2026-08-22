@@ -27,6 +27,14 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// store is the route's job and deciding is this routine's.
 /// </para>
 /// <para>
+/// The item question of #39 is held to that same shape rather than allowed to
+/// break it. It arrives as a delegate the route supplies, so this routine still
+/// reads nothing itself; what it does do is call out once, on a resolution that
+/// has already said yes, and the caller of that delegate is reaching the server.
+/// So the sentence above is about this file and not about the request: a guest
+/// request now touches the library as well as this plugin's own store.
+/// </para>
+/// <para>
 /// The order the conditions are taken in, and why it is this order.
 /// </para>
 /// <para>
@@ -61,6 +69,13 @@ namespace Jellyfin.Plugin.ShareLinks;
 /// Then the caller: signed in, and named by the record. The identity is a
 /// parameter that comes from the server's request context, never from anything in
 /// the link, which is #53 and is the property the whole design rests on.
+/// </para>
+/// <para>
+/// Last, on the overloads that are given something to ask with, whether the server
+/// still holds the item the record names (#39). It is last because it is the only
+/// question here that costs a call into the server, and a token naming a live share
+/// that cost more than one naming nothing would be the difference #26 exists to
+/// remove. <c>docs/gone.md</c> is the decision behind it.
 /// </para>
 /// <para>
 /// What this routine does not do. It does not say what the caller may then do
@@ -193,6 +208,105 @@ public static class ShareResolution
         }
 
         return new ShareResolutionResult(share, ShareRefusal.None);
+    }
+
+    /// <summary>
+    /// Decides whether a presented token resolves a share for this caller, and
+    /// then whether the server still holds the item it names (#39).
+    /// </summary>
+    /// <param name="records">Every record in the store, as the route read them.</param>
+    /// <param name="keyFile">The file the install's key is kept in.</param>
+    /// <param name="presentedToken">The token out of the request, or <c>null</c> when the request carried none.</param>
+    /// <param name="callerUserId">The account the server identified the caller as, or <c>null</c> when it identified nobody.</param>
+    /// <param name="pluginStatus">The plugin's own status, as the server holds it.</param>
+    /// <param name="clock">The clock expiry is judged against.</param>
+    /// <param name="theServerStillHoldsTheItem">Answers whether an item identifier still names something on this server.</param>
+    /// <returns>The share, or the reason there is not one.</returns>
+    public static ShareResolutionResult Resolve(
+        IReadOnlyList<ShareRecord> records,
+        ShareKeyFile keyFile,
+        string? presentedToken,
+        Guid? callerUserId,
+        PluginStatus pluginStatus,
+        TimeProvider clock,
+        Func<Guid, bool> theServerStillHoldsTheItem)
+    {
+        ArgumentNullException.ThrowIfNull(theServerStillHoldsTheItem);
+
+        return AndTheItemIsStillThere(
+            Resolve(records, keyFile, presentedToken, callerUserId, pluginStatus, clock),
+            theServerStillHoldsTheItem);
+    }
+
+    /// <summary>
+    /// Decides whether a presented token resolves a share for this caller, and
+    /// then whether the server still holds the item it names (#39).
+    /// </summary>
+    /// <param name="records">Every record in the store, as the route read them.</param>
+    /// <param name="key">The install's key, as <see cref="ShareTokenHash"/> takes it.</param>
+    /// <param name="presentedToken">The token out of the request, or <c>null</c> when the request carried none.</param>
+    /// <param name="callerUserId">The account the server identified the caller as, or <c>null</c> when it identified nobody.</param>
+    /// <param name="pluginStatus">The plugin's own status, as the server holds it.</param>
+    /// <param name="clock">The clock expiry is judged against.</param>
+    /// <param name="theServerStillHoldsTheItem">Answers whether an item identifier still names something on this server.</param>
+    /// <returns>The share, or the reason there is not one.</returns>
+    /// <remarks>
+    /// <para>
+    /// The overloads without this argument decide everything a record and a caller
+    /// can settle between them and ask the server nothing, which is what keeps the
+    /// decision table a test rather than a deployment. What they cannot answer is
+    /// whether the item is still there, so a route that has a server to ask calls
+    /// this one and a route that calls the shorter one sends its caller to
+    /// whatever address the record names.
+    /// </para>
+    /// <para>
+    /// The question is a delegate rather than a server interface because this
+    /// routine reads nothing and is a function of its arguments: the route holds
+    /// the server and this holds the decision. What it costs is one library lookup
+    /// on a guest request that had otherwise touched only this plugin's own store,
+    /// and it is paid only where the answer is about to be yes.
+    /// </para>
+    /// </remarks>
+    public static ShareResolutionResult Resolve(
+        IReadOnlyList<ShareRecord> records,
+        ReadOnlySpan<byte> key,
+        string? presentedToken,
+        Guid? callerUserId,
+        PluginStatus pluginStatus,
+        TimeProvider clock,
+        Func<Guid, bool> theServerStillHoldsTheItem)
+    {
+        ArgumentNullException.ThrowIfNull(theServerStillHoldsTheItem);
+
+        return AndTheItemIsStillThere(
+            Resolve(records, key, presentedToken, callerUserId, pluginStatus, clock),
+            theServerStillHoldsTheItem);
+    }
+
+    // Asked last, and only of a resolution that had already said yes. Two reasons,
+    // and the second is the one worth writing down. It is the only question here
+    // that costs a call into the server, so asking it earlier would make a token
+    // naming a live share measurably more expensive than one naming nothing, and
+    // #26 is the rule that the two must not be told apart. And the answer is not
+    // wanted for a caller who was refused anyway: an uninvited caller learning
+    // that the item behind somebody else's share was removed is a fact about the
+    // library handed to somebody outside it.
+    //
+    // It answers whether the item exists and never whether this caller may see it.
+    // docs/gone.md is where those are kept apart: folding them into one reason
+    // makes a permissions problem read as a deleted item, or the reverse.
+    private static ShareResolutionResult AndTheItemIsStillThere(
+        ShareResolutionResult resolution,
+        Func<Guid, bool> theServerStillHoldsTheItem)
+    {
+        if (resolution.Share is not { } share)
+        {
+            return resolution;
+        }
+
+        return theServerStillHoldsTheItem(share.ItemId)
+            ? resolution
+            : new ShareResolutionResult(null, ShareRefusal.ItemGone);
     }
 
     // A membership test written out rather than a Contains call, so that the one

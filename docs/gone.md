@@ -5,28 +5,60 @@ accounts, and every one of those can vanish underneath it while the record stays
 exactly as it was written. Each case gets an answer here rather than arriving as a
 null reference in whichever routine meets it first.
 
-What the tree does today is the failure this document is written against. The
-decision reads the record and nothing else:
+This page was written before anything here could ask the server a question, and it
+said so. That half has changed for the item and has not changed for the accounts,
+so the two are now in different states and the sections below say which is which.
 
-    git grep -n 'ItemId' origin/master -- Jellyfin.Plugin.ShareLinks/ShareResolution.cs ; echo "exit=$?"
-    exit=1
+The guest route asks the library whether the item is still there, and refuses when
+it is not:
+
+    git grep -n 'TheServerStillHoldsTheItem' origin/master -- Jellyfin.Plugin.ShareLinks/
+
+What no route does is find out on its own. Nothing tells this plugin that an item
+was removed, so the answer is derived when a guest presents a token and at no other
+moment. Row T23 of `docs/threat-model.md` is where that sits.
+
+Two commands this page rested on have been corrected rather than deleted, because
+what they returned is the argument for the sections below. It said the decision
+reads the record and nothing else, with `ILibraryManager` and `IUserManager`
+appearing nowhere in the plugin, and gave that second command's exit status as 1.
+It stopped being 1 when the create route began asking whether an item exists,
+before this page was touched, so a page saying it was measured was reporting a
+reading that had gone stale. The command and what it returns today:
 
     git grep -nE 'ILibraryManager|IUserManager' origin/master -- Jellyfin.Plugin.ShareLinks/ ; echo "exit=$?"
-    exit=1
 
-Nothing asks the server whether the item still exists, so a share whose item a
-library scan removed still resolves, and the guest is sent to an address that names
-nothing:
-
-    git grep -n 'return Redirect(TheItemsAddress' origin/master -- Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:128:        return Redirect(TheItemsAddress(share.ItemId));
-
-That is row T23 of `docs/threat-model.md`, and this document is the half of it that
-can be settled before the lookups exist.
+`IUserManager` is what is still absent on the resolution path, and it is what the
+accounts section below still waits for.
 
 ## The item is gone
 
 The share refuses. It is not deleted, and it does not repair itself.
+
+That is built. `ShareRefusal.ItemGone` is the reason, and it is decided in
+`ShareResolution` beside every other reason rather than at the route, so a second
+guest route would inherit it instead of having to remember it:
+
+    git grep -n 'ItemGone' origin/master -- Jellyfin.Plugin.ShareLinks/
+
+The question is asked last, after everything the record and the caller can settle
+between them. Two reasons, and the second is the one worth writing down. It is the
+only question in the decision that costs a call into the server, so asking it
+earlier would make a token naming a live share measurably more expensive than one
+naming nothing, and #26 is the rule that those two may not be told apart. And a
+caller who was refused anyway has no business making the server look anything up:
+an uninvited caller learning that the item behind somebody else's share was removed
+is a fact about the library handed to somebody outside it. Both halves are asserted
+in `GuestRouteTests.ACallerRefusedBeforeTheItemQuestionDoesNotMakeTheServerLookAnythingUp`.
+
+What it costs is one library lookup on a guest request that had otherwise touched
+only this plugin's own store, paid on the requests that were about to succeed. That
+is a real change in what the guest path reaches and it has not been measured on a
+running server.
+
+The lookup answers whether the item exists and never whether this caller may see
+it. Those are different questions with different answers, and one reason carrying
+both would make a permissions problem read as a deleted item, or the reverse.
 
 A guest sees the one refusal every other failure gives. Which refusal a caller met
 is what #26 exists to keep out of the answer, and "the item you were sent was
@@ -77,24 +109,26 @@ operator delete an account to fix something a toggle would have fixed.
 
 ## What this does not settle
 
-Where the item is asked about, and what asking costs on a path that otherwise only
-reads its own store, belongs with the routes. The administrator view is #67 and #70;
-whether the resolution itself asks the server about the item, or whether a refusal
-for a missing item is derived where the view is built, is a shape question for those
-issues rather than one this document takes from the side.
+Where the item is asked about was the open question here and is answered: in the
+resolution, with its own reason. What is left is the operator's half of the accounts
+section above.
+
+The administrator listing says which records still resolve, and it says it from the
+record alone:
+
+    git grep -n 'public static ShareSummary Of' origin/master -- Jellyfin.Plugin.ShareLinks/ShareSummary.cs
+
+So it separates live from expired and from revoked, and a share whose invited
+accounts are all gone is still shown as live, because nothing on that route asks the
+server about an account. `ShareState` says in its own words that it has three values
+and no fourth, so making the listing say it is not a field to add but an argument to
+have, and it is the one this page's accounts section is waiting on rather than a
+gap somebody can fill quietly.
 
 Nothing is written to a record when its target goes. Nothing tells this plugin that
 an item was removed or that an account was deleted, so a stored deadness would be a
 value that goes stale silently, and every state above is derived when something asks.
-
-The words an operator reads have to agree with the refusal codes `docs/logging.md`
-commits to, which are a fixed code rather than a sentence assembled from the request.
-The set those codes come from is `ShareRefusal`, and it carries no member for a
-missing item today.
-
-The tests #39's second clause asks for, a missing item, a deleted account and a
-disabled account, need a server interface this plugin references nowhere, which is
-the second command at the top of this page. This document is the decision. The guards
-arrive with the lookups, and until they do a share whose item is gone still resolves.
+The item is derived on the guest request and nowhere else, which means an operator
+reading the listing learns nothing about it until somebody presents the token.
 
 Nothing here was measured against a running server.

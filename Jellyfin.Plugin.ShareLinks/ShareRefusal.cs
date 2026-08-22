@@ -68,4 +68,23 @@ public enum ShareRefusal
     /// The caller is signed in and is not one of the accounts the share names.
     /// </summary>
     CallerNotInvited = 7,
+
+    /// <summary>
+    /// The server no longer holds the item the record names (#39).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Last of the reasons, and last on purpose. It is the only one that asks the
+    /// server a question, so it is asked once everything the record and the caller
+    /// can settle has been settled, and a caller who was never entitled to the
+    /// share does not make the server look anything up.
+    /// </para>
+    /// <para>
+    /// It says the item is gone and never why, and it is not a permission answer.
+    /// <c>docs/gone.md</c> is where that is argued: an item removed by a scan and
+    /// an item this caller may not see are different questions, and one reason
+    /// carrying both would make a permissions problem read as a deleted film.
+    /// </para>
+    /// </remarks>
+    ItemGone = 9,
 }
