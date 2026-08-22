@@ -223,16 +223,13 @@ public sealed class GuestConfinementFilter : IAsyncAuthorizationFilter
         request.Query = new QueryCollection(lowered);
     }
 
-    // The account's own remote client limit, read off the account row the server
-    // holds. Two ways of saying "no ceiling" reach this: an account the server
-    // does not know, and a field nobody has set. Both read as absent rather than
-    // as a ceiling of nothing, which is EffectiveBitrate.FromServerValue's rule
-    // for the same field on the server configuration.
+    // Both readings are ServerCeilings' and not this type's, because the
+    // administrator listing needs the same two numbers read the same way (#64). A
+    // second copy here is how the surface that describes the ceiling comes to
+    // disagree with the surface that applies it.
     private long? TheAccountsOwnCeiling(Guid account)
-        => _userManager.GetUserById(account)?.RemoteClientBitrateLimit is { } limit
-            ? EffectiveBitrate.FromServerValue(limit)
-            : null;
+        => ServerCeilings.OfAccount(_userManager, account);
 
     private long? TheServersOwnCeiling()
-        => EffectiveBitrate.FromServerValue(_serverConfiguration.Configuration.RemoteClientBitrateLimit);
+        => ServerCeilings.OfServer(_serverConfiguration);
 }
