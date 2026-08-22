@@ -96,8 +96,11 @@ so a server nobody creates a share on never sweeps and holds what it held. That 
 the direction that matters for the ceiling, because a share cannot be created
 without a sweep happening first, and it is the wrong direction for prompt
 deletion. The timer belongs with a scheduled task and there is none in this tree.
-`docs/expiry.md` leans on the sweep to bound its backwards-clock residual, and
-this paragraph is the size of that lean.
+`docs/expiry.md` leaned on the sweep to bound its backwards-clock residual and
+this paragraph was the size of that lean. It does not any more: the clock that
+page is judged against is clamped so that it never steps backwards on a running
+server, and the sweep is a second answer there rather than the bound. What the
+lean is still the size of is the restart case that clamp does not reach.
 
 `ShareStore.MutateAsync` is the general seam and is not bounded. Nothing refuses a
 future caller that appends a record through it, and the invariant lint reads the
