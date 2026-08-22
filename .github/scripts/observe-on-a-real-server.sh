@@ -268,4 +268,43 @@ echo "a listing that would enumerate the library -> $status"
 [ "$status" = "404" ] || fail "the guest enumerated the library: $status"
 echo "OK: the shared item was reached, the other one was not, and the listing was refused"
 
+say "OBSERVATION 4: the routes a guest is refused by the server (#47)"
+# Three lines of docs/negative-capabilities.md say the refusal belongs to the
+# server's own authorization over its own routes, and that no test in this
+# repository can hold them. That is true of a test. It is not a reason to leave
+# the claim unread: what this plugin contributes is an account that is not an
+# administrator, and whether the server then refuses is a question a running
+# server answers.
+#
+# Every route below is one the server itself gates behind elevation, read out of
+# its own source at the version this runs against rather than assumed. A route
+# gated behind ordinary authentication is a different claim and is printed below
+# instead of asserted.
+#
+# What is asserted is that the answer is not the resource. Which refusal a server
+# gives is the server's own, so a run demanding a particular status would red on a
+# server that chose the other for a reason that has nothing to do with this
+# plugin.
+for route in \
+  "/ScheduledTasks" \
+  "/Plugins/$plugin/Configuration" \
+  "/System/Info/Storage" \
+  "/System/Logs" \
+  "/ShareLinks/Shares"; do
+  status=$(call GET "$route" "guest-1" "$guest_token")
+  echo "$route -> $status"
+  [ "$status" != "200" ] || fail "the guest was served $route, which the server gates behind elevation"
+done
+echo "OK: none of the five answered the guest with the resource"
+
+# And one that is not gated behind elevation upstream, printed rather than
+# asserted. An invited guest is a signed-in account on the operator's server, so
+# everything the server gives an ordinary account it gives them. This is the
+# nearest route to the administrator surface that is not part of it.
+status=$(call GET "/System/Configuration" "guest-1" "$guest_token")
+echo "/System/Configuration -> $status"
+if [ "$status" = "200" ]; then
+  echo "NOT REFUSED, AND NOT A DEFECT OF THIS PLUGIN: the server gates reading its configuration behind ordinary authentication rather than behind elevation, so an invited guest reads it like any signed-in account. Writing it is gated behind elevation. docs/limits.md carries this where an operator meets it."
+fi
+
 say "every observation this script makes was made"

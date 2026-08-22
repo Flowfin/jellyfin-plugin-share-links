@@ -213,6 +213,35 @@ which is what drops a stuck reading.
 
 ## The guest
 
+### An invited guest is a signed-in account, and reads what any account reads
+
+A share reaches one item, and that bound is this plugin's. It is not a bound on
+everything else a signed-in account can ask the server for, because an invited
+guest signs in to the server like anybody else and the server answers them like
+anybody else. The nearest example to the administrator surface, seen on a real
+server rather than argued: the guest is served the server's configuration, which
+the server gates behind ordinary authentication rather than behind elevation.
+Writing it is gated behind elevation, and so are the scheduled tasks, the logs,
+the storage figures, this plugin's configuration and this plugin's own
+administrator routes, none of which answered the guest with anything.
+
+```
+/ScheduledTasks -> 403
+/Plugins/a3703f07-f83d-49a0-a09f-50b890a2baac/Configuration -> 403
+/System/Info/Storage -> 403
+/System/Logs -> 403
+/ShareLinks/Shares -> 403
+/System/Configuration -> 200
+```
+
+That is #47's line about the server's own administrator routes read against a
+running server rather than against this plugin's account switches, and it is
+`.github/scripts/observe-on-a-real-server.sh` that reads it.
+
+**What an operator does.** Reads the guest as somebody they have given a server
+account to, with one item shared, rather than as somebody who can see only that
+item. Where that is too much, the answer is not this plugin.
+
 ### The session ceiling belongs to the account, not to the share
 
 `GuestMaxActiveSessions` is written onto the account, so a guest invited to two
