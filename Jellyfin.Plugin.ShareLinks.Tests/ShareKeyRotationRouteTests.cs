@@ -94,10 +94,10 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var token = ShareTokens.Mint();
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { Live(issued, token) }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { Live(issued, token) }, CancellationToken.None);
 
         var before = ShareResolution.Resolve(
-            await store.ReadAsync(CancellationToken.None).ConfigureAwait(false),
+            await store.ReadAsync(CancellationToken.None),
             issued,
             token,
             Invited,
@@ -106,14 +106,14 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
 
         Assert.True(before.IsResolved);
 
-        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None);
 
         var rotated = Assert.IsType<ShareKeyRotated>(Assert.IsType<OkObjectResult>(answer.Result).Value);
         Assert.Equal(ShareKeyRotationOutcome.Rotated, rotated.Outcome);
         Assert.Equal(1, rotated.SharesStopped);
 
         var after = ShareResolution.Resolve(
-            await store.ReadAsync(CancellationToken.None).ConfigureAwait(false),
+            await store.ReadAsync(CancellationToken.None),
             keyFile.Read(),
             token,
             Invited,
@@ -148,14 +148,14 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var revoked = Live(key, ShareTokens.Mint(), revokedAt: Now.AddDays(-2));
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { live, expired, revoked }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { live, expired, revoked }, CancellationToken.None);
 
-        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None);
 
         var rotated = Assert.IsType<ShareKeyRotated>(Assert.IsType<OkObjectResult>(answer.Result).Value);
         Assert.Equal(1, rotated.SharesStopped);
 
-        var records = await store.ReadAsync(CancellationToken.None).ConfigureAwait(false);
+        var records = await store.ReadAsync(CancellationToken.None);
 
         // The one that had already been revoked keeps the revoker and the instant
         // it had. A rotation that rewrote it would be claiming to have stopped a
@@ -183,11 +183,11 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var key = keyFile.Read();
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { Live(key, ShareTokens.Mint()) }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { Live(key, ShareTokens.Mint()) }, CancellationToken.None);
 
-        await Controller(store, keyFile).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        await Controller(store, keyFile).RotateKey(CancellationToken.None);
 
-        var record = Assert.Single(await store.ReadAsync(CancellationToken.None).ConfigureAwait(false));
+        var record = Assert.Single(await store.ReadAsync(CancellationToken.None));
 
         Assert.Equal(Operator, record.RevokedByUserId);
         Assert.Equal("the keyed hash secret was rotated", record.RevocationReason);
@@ -207,7 +207,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var token = ShareTokens.Mint();
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { Live(issued, token) }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { Live(issued, token) }, CancellationToken.None);
 
         // A directory standing where the key file goes. The write fails, and the
         // read that would have failed first is never made, because rotation
@@ -215,7 +215,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var occupied = Path.Combine(_directory, "occupied");
         Directory.CreateDirectory(occupied);
 
-        var answer = await Controller(store, new ShareKeyFile(occupied)).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(store, new ShareKeyFile(occupied)).RotateKey(CancellationToken.None);
 
         var refused = Assert.IsType<ObjectResult>(answer.Result);
         Assert.Equal(StatusCodes.Status500InternalServerError, refused.StatusCode);
@@ -228,7 +228,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         // stopped, so the link does not open even though the key it was issued
         // under is still the key on disk.
         var after = ShareResolution.Resolve(
-            await store.ReadAsync(CancellationToken.None).ConfigureAwait(false),
+            await store.ReadAsync(CancellationToken.None),
             issued,
             token,
             Invited,
@@ -251,7 +251,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var keyFile = new ShareKeyFile(KeyPath);
         var before = keyFile.Read();
 
-        var answer = await Controller(new AStoreThatCannotBeWritten(), keyFile).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(new AStoreThatCannotBeWritten(), keyFile).RotateKey(CancellationToken.None);
 
         var refused = Assert.IsType<StatusCodeResult>(answer.Result);
         Assert.Equal(StatusCodes.Status500InternalServerError, refused.StatusCode);
@@ -275,14 +275,14 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var second = Live(key, ShareTokens.Mint(), invited: AnotherInvited, pluginCreated: true);
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { first, second }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { first, second }, CancellationToken.None);
 
         var sessions = new RecordingSessions();
         var accounts = new RecordingAccounts();
         accounts.Carries[Invited] = 1;
         accounts.Carries[AnotherInvited] = 1;
 
-        await Controller(store, keyFile, Operator, sessions, accounts).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        await Controller(store, keyFile, Operator, sessions, accounts).RotateKey(CancellationToken.None);
 
         Assert.Equal(new[] { Invited, AnotherInvited }, sessions.Revoked);
         Assert.Equal(new[] { Invited, AnotherInvited }, accounts.Written);
@@ -302,13 +302,13 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         var key = keyFile.Read();
 
         using var store = new ShareStore(StorePath);
-        await store.MutateAsync(_ => new[] { Live(key, ShareTokens.Mint()) }, CancellationToken.None).ConfigureAwait(false);
+        await store.MutateAsync(_ => new[] { Live(key, ShareTokens.Mint()) }, CancellationToken.None);
 
-        var answer = await Controller(store, keyFile, caller: null).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(store, keyFile, caller: null).RotateKey(CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<StatusCodeResult>(answer.Result).StatusCode);
         Assert.Equal(key, keyFile.Read());
-        Assert.Null(Assert.Single(await store.ReadAsync(CancellationToken.None).ConfigureAwait(false)).RevokedAt);
+        Assert.Null(Assert.Single(await store.ReadAsync(CancellationToken.None)).RevokedAt);
     }
 
     /// <summary>
@@ -325,7 +325,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
 
         using var store = new ShareStore(StorePath);
 
-        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None).ConfigureAwait(false);
+        var answer = await Controller(store, keyFile).RotateKey(CancellationToken.None);
 
         var rotated = Assert.IsType<ShareKeyRotated>(Assert.IsType<OkObjectResult>(answer.Result).Value);
         Assert.Equal(0, rotated.SharesStopped);
@@ -427,7 +427,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         public Task<IReadOnlyList<ShareRecord>> MutateAsync(
             Func<IReadOnlyList<ShareRecord>, IReadOnlyList<ShareRecord>> change,
             CancellationToken cancellationToken = default)
-            => throw new ShareStoreUnwritableException("a path", "the write failed", null);
+            => throw new ShareStoreUnwritableException("a path", "the write failed");
     }
 
     // The accounts a server holds, as far as this route can see them, and which
