@@ -225,7 +225,14 @@ Writing it is gated behind elevation, and so are the scheduled tasks, the logs,
 the storage figures, this plugin's configuration and this plugin's own
 administrator routes, none of which answered the guest with anything.
 
-PLACEHOLDER-FOR-THE-RUN
+```
+/ScheduledTasks -> 403
+/Plugins/a3703f07-f83d-49a0-a09f-50b890a2baac/Configuration -> 403
+/System/Info/Storage -> 403
+/System/Logs -> 403
+/ShareLinks/Shares -> 403
+/System/Configuration -> 200
+```
 
 That is #47's line about the server's own administrator routes read against a
 running server rather than against this plugin's account switches, and it is
