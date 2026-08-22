@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
@@ -230,6 +232,7 @@ public sealed class GuestRouteTests : IDisposable
             await Bytes(await Ask(store, "expired-token", Invited)),
             await Bytes(await Ask(store, "a-token", Invited, status: PluginStatus.Disabled)),
             await Bytes(await Ask(store, presentedToken: string.Empty, Invited)),
+            await Bytes(await Ask(store, "a-token", Invited, library: ALibraryHolding())),
         };
 
         Assert.Single(written.Distinct(StringComparer.Ordinal));
@@ -239,6 +242,84 @@ public sealed class GuestRouteTests : IDisposable
         Assert.Equal("404 headers:[] body:[]", written[0]);
     }
 
+    /// <summary>
+    /// A share whose item the server no longer holds is refused rather than
+    /// answered with an address that names nothing (#39).
+    /// </summary>
+    /// <remarks>
+    /// The caller here is signed in and invited and the token is live, so every
+    /// other condition says yes. What refuses is the library, and the guest is
+    /// told the same nothing every other refusal gives.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AShareWhoseItemTheServerNoLongerHoldsIsRefused()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord() });
+
+        var answer = await Ask(store, "a-token", Invited, library: ALibraryHolding());
+
+        Assert.IsType<NotFoundResult>(answer);
+        Assert.Equal("404 headers:[] body:[]", await Bytes(answer));
+    }
+
+    /// <summary>
+    /// The same share, with the item still there, resolves. Without this the test
+    /// above is satisfied by a route that refuses everything.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheSameShareResolvesWhileTheServerStillHoldsTheItem()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord() });
+
+        var redirect = Assert.IsType<RedirectResult>(
+            await Ask(store, "a-token", Invited, library: ALibraryHolding(Item)));
+
+        Assert.Equal("/web/#/details?id=" + Item.ToString("N"), redirect.Url);
+    }
+
+    /// <summary>
+    /// A caller who was refused before the item question was reached does not
+    /// make the server look anything up.
+    /// </summary>
+    /// <remarks>
+    /// Two things at once, and both are why the question is asked last. A token
+    /// naming a live share must not cost measurably more than one naming nothing,
+    /// which is #26; and an uninvited caller learning that the item behind
+    /// another caller's share was removed is a fact about the library handed to
+    /// somebody outside it.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACallerRefusedBeforeTheItemQuestionDoesNotMakeTheServerLookAnythingUp()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(),
+            ARecord(token: "revoked-token", revokedAt: Now.AddDays(-1)),
+            ARecord(token: "expired-token", expiresAt: Now.AddDays(-1)),
+        });
+
+        var library = new ALibraryThatRemembersWhatItWasAsked();
+
+        await Ask(store, "no-such-token", Invited, library: library.AsManager());
+        await Ask(store, "a-token", Stranger, library: library.AsManager());
+        await Ask(store, "a-token", caller: null, library: library.AsManager());
+        await Ask(store, "revoked-token", Invited, library: library.AsManager());
+        await Ask(store, "expired-token", Invited, library: library.AsManager());
+
+        Assert.Empty(library.Asked);
+
+        // And the invited caller on a live share does reach it, so the emptiness
+        // above is the order and not a route that never asks.
+        await Ask(store, "a-token", Invited, library: library.AsManager());
+
+        Assert.Equal(new[] { Item }, library.Asked);
+    }
     /// <summary>
     /// A store that cannot be read is a refusal like any other rather than an
     /// error page. The caller learns nothing either way, and a fault told to a
@@ -387,20 +468,23 @@ public sealed class GuestRouteTests : IDisposable
         IShareStore store,
         string presentedToken,
         Guid? caller,
-        PluginStatus status = PluginStatus.Active)
-        => Ask(store, presentedToken, ContextFor(caller), status);
+        PluginStatus status = PluginStatus.Active,
+        ILibraryManager? library = null)
+        => Ask(store, presentedToken, ContextFor(caller), status, library);
 
     private async Task<ActionResult> Ask(
         IShareStore store,
         string presentedToken,
         IAuthorizationContext authorization,
-        PluginStatus status = PluginStatus.Active)
+        PluginStatus status = PluginStatus.Active,
+        ILibraryManager? library = null)
     {
         var controller = new ShareLinksGuestController(
             store,
             _keyFile,
             authorization,
             ManagerSaying(status),
+            library ?? ALibraryHolding(Item),
             At(Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {
@@ -408,6 +492,37 @@ public sealed class GuestRouteTests : IDisposable
         };
 
         return await controller.Open(presentedToken, CancellationToken.None);
+    }
+
+    // The server's answer about an item, faked by identity alone: what an item
+    // really is belongs to the server, and this route reaches no further than
+    // whether one is there (#39).
+    private static ILibraryManager ALibraryHolding(params Guid[] items)
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => items.Contains(id) ? new Folder { Id = id } : null);
+        return library.Object;
+    }
+
+    // A library that records every identifier it was asked about, so a test can
+    // assert that the server was not asked at all rather than only that the
+    // answer was ignored.
+    private sealed class ALibraryThatRemembersWhatItWasAsked
+    {
+        public List<Guid> Asked { get; } = new List<Guid>();
+
+        public ILibraryManager AsManager()
+        {
+            var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+            library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+                .Returns((Guid id) =>
+                {
+                    Asked.Add(id);
+                    return new Folder { Id = id };
+                });
+            return library.Object;
+        }
     }
 
     private static TimeProvider At(DateTimeOffset instant) => new FixedClock(instant);

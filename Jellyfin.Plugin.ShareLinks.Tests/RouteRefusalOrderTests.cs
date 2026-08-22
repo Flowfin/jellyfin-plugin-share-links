@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -235,6 +237,7 @@ public sealed class RouteRefusalOrderTests : IDisposable
             _keyFile,
             AnAuthorizationContextSaying(signedIn),
             AManagerListingNothing(),
+            ALibraryThatHoldsEveryItem(),
             new FixedClock(Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {
@@ -313,4 +316,16 @@ public sealed class RouteRefusalOrderTests : IDisposable
                 AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
         }
     }
+
+    // The server saying it still holds whatever a record names (#39). What an item
+    // really is belongs to the server; nothing on this route reaches past whether
+    // it is there, so identity is the whole fake.
+    private static ILibraryManager ALibraryThatHoldsEveryItem()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => new Folder { Id = id });
+        return library.Object;
+    }
+
 }

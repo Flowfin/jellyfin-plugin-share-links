@@ -101,14 +101,16 @@ matters, and reads a ceiling on a share as a number nothing yet acts on.
 
 ## The item a share names
 
-### A share whose item is gone still resolves
+### A share whose item is gone still reads as live in the listing
 
-Nothing asks the server whether the item is still there, so a share whose item a
-library scan removed sends the guest to an address naming nothing. `docs/gone.md`
-is #39's decision, and the answer there is a refusal once the lookups exist.
+A guest is refused. The resolution asks the server whether the item is still there
+and answers `ItemGone` when it is not, which is #39 and `docs/gone.md`. What no
+route does is notice on its own: the administrator listing reads a record's state
+off the record, so a share whose item a library scan removed is shown as live until
+somebody presents the token and the refusal reaches the log.
 
-**What an operator does.** Revokes the share when the item goes. The plugin does
-not notice on its own.
+**What an operator does.** Revokes the share when the item goes. The listing will
+not show it, and the log line naming `ItemGone` is where it surfaces otherwise.
 
 ### An item that comes back is not re-bound
 

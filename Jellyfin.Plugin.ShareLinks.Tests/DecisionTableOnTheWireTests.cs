@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
@@ -187,6 +189,7 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
             [ShareRefusal.Expired] = new Situation(_keyFile, "a-token", Invited, PluginStatus.Active, After),
             [ShareRefusal.CallerNotSignedIn] = new Situation(_keyFile, "a-token", null, PluginStatus.Active, Before),
             [ShareRefusal.CallerNotInvited] = new Situation(_keyFile, "a-token", Stranger, PluginStatus.Active, Before),
+            [ShareRefusal.ItemGone] = new Situation(_keyFile, "a-token", Invited, PluginStatus.Active, Before, TheServerHoldsTheItem: false),
         };
 
         var everyReason = Enum.GetValues<ShareRefusal>().Where(reason => reason != ShareRefusal.None);
@@ -204,7 +207,8 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
                 situation.Token,
                 situation.Caller,
                 situation.Status,
-                At(situation.Now));
+                At(situation.Now),
+                _ => situation.TheServerHoldsTheItem);
 
             Assert.Equal(reason, decided.Refusal);
             Assert.Equal(TheRefusal, await Bytes(await Ask(store, situation).ConfigureAwait(true)).ConfigureAwait(true));
@@ -284,6 +288,7 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
             situation.KeyFile,
             ContextFor(situation.Caller),
             ManagerSaying(situation.Status),
+            situation.TheServerHoldsTheItem ? ALibraryThatHoldsEveryItem() : ALibraryHoldingNothing(),
             At(situation.Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {
@@ -358,7 +363,8 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
         string? Token,
         Guid? Caller,
         PluginStatus Status,
-        DateTimeOffset Now);
+        DateTimeOffset Now,
+        bool TheServerHoldsTheItem = true);
 
     private sealed class FixedClock : TimeProvider
     {
@@ -368,4 +374,25 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
 
         public override DateTimeOffset GetUtcNow() => _instant;
     }
+
+    // The server saying it still holds whatever a record names (#39). What an item
+    // really is belongs to the server; nothing on this route reaches past whether
+    // it is there, so identity is the whole fake.
+    private static ILibraryManager ALibraryThatHoldsEveryItem()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => new Folder { Id = id });
+        return library.Object;
+    }
+
+    // The server after a scan removed what the record names (#39).
+    private static ILibraryManager ALibraryHoldingNothing()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid _) => null);
+        return library.Object;
+    }
+
 }

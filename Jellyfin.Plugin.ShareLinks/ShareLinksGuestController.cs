@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Plugins;
 using Microsoft.AspNetCore.Authorization;
@@ -55,6 +56,7 @@ public class ShareLinksGuestController : ControllerBase
     private readonly ShareKeyFile _keyFile;
     private readonly IAuthorizationContext _authorizationContext;
     private readonly IPluginManager _pluginManager;
+    private readonly ILibraryManager _libraryManager;
     private readonly TimeProvider _clock;
     private readonly ILogger<ShareLinksGuestController> _logger;
 
@@ -65,6 +67,7 @@ public class ShareLinksGuestController : ControllerBase
     /// <param name="keyFile">The file the install's keyed-hash key is kept in.</param>
     /// <param name="authorizationContext">The server's own answer to who is asking.</param>
     /// <param name="pluginManager">The server's own answer to what this plugin's status is.</param>
+    /// <param name="libraryManager">The server's own answer to whether an item is still there (#39).</param>
     /// <param name="clock">The clock an expiry is judged against.</param>
     /// <param name="logger">Where this route's two lines go (#27).</param>
     public ShareLinksGuestController(
@@ -72,6 +75,7 @@ public class ShareLinksGuestController : ControllerBase
         ShareKeyFile keyFile,
         IAuthorizationContext authorizationContext,
         IPluginManager pluginManager,
+        ILibraryManager libraryManager,
         TimeProvider clock,
         ILogger<ShareLinksGuestController> logger)
     {
@@ -79,6 +83,7 @@ public class ShareLinksGuestController : ControllerBase
         _keyFile = keyFile;
         _authorizationContext = authorizationContext;
         _pluginManager = pluginManager;
+        _libraryManager = libraryManager;
         _clock = clock;
         _logger = logger;
     }
@@ -117,7 +122,14 @@ public class ShareLinksGuestController : ControllerBase
             return TheOnlyRefusal();
         }
 
-        var resolution = ShareResolution.Resolve(records, _keyFile, token, caller, StatusOfThisPlugin(), _clock);
+        var resolution = ShareResolution.Resolve(
+            records,
+            _keyFile,
+            token,
+            caller,
+            StatusOfThisPlugin(),
+            _clock,
+            TheServerStillHoldsTheItem);
         if (resolution.Share is not { } share)
         {
             ShareLog.Refused(_logger, resolution.Refusal);
@@ -127,6 +139,13 @@ public class ShareLinksGuestController : ControllerBase
         ShareLog.Resolved(_logger, share);
         return Redirect(TheItemsAddress(share.ItemId));
     }
+
+    // The server's answer to whether an item identifier still names something,
+    // handed to the decision rather than read inside it (#39). A share whose item
+    // a scan removed is refused here rather than redirected to an address that
+    // names nothing, and the guest is told the same nothing every other refusal
+    // gives, which is #26.
+    private bool TheServerStillHoldsTheItem(Guid itemId) => _libraryManager.GetItemById(itemId) is not null;
 
     /// <summary>
     /// The address the web client shows one item at.

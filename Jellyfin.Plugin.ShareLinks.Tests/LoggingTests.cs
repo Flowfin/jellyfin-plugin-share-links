@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Plugins;
 using Microsoft.AspNetCore.Http;
@@ -229,6 +231,7 @@ public sealed class LoggingTests : IDisposable
             ShareRefusal.CallerNotSignedIn,
             ShareRefusal.CallerNotInvited,
             ShareRefusal.PluginNotActive,
+            ShareRefusal.ItemGone,
         })
         {
             _log.Lines.Clear();
@@ -349,7 +352,8 @@ public sealed class LoggingTests : IDisposable
             store,
             token,
             caller,
-            reason == ShareRefusal.PluginNotActive ? PluginStatus.Disabled : PluginStatus.Active).ConfigureAwait(true);
+            reason == ShareRefusal.PluginNotActive ? PluginStatus.Disabled : PluginStatus.Active,
+            reason == ShareRefusal.ItemGone ? ALibraryHoldingNothing() : ALibraryThatHoldsEveryItem()).ConfigureAwait(true);
     }
 
     private ShareRecord[] Records(ShareRefusal reason) => reason switch
@@ -376,13 +380,15 @@ public sealed class LoggingTests : IDisposable
         IShareStore store,
         string presentedToken,
         Guid? caller,
-        PluginStatus status = PluginStatus.Active)
+        PluginStatus status = PluginStatus.Active,
+        ILibraryManager? library = null)
     {
         var controller = new ShareLinksGuestController(
             store,
             _keyFile,
             ContextFor(caller),
             ManagerSaying(status),
+            library ?? ALibraryThatHoldsEveryItem(),
             At(Now),
             _log.For<ShareLinksGuestController>())
         {
@@ -493,4 +499,25 @@ public sealed class LoggingTests : IDisposable
                 => _inner.Log(logLevel, eventId, state, exception, formatter);
         }
     }
+
+    // The server saying it still holds whatever a record names (#39). What an item
+    // really is belongs to the server; nothing on this route reaches past whether
+    // it is there, so identity is the whole fake.
+    private static ILibraryManager ALibraryThatHoldsEveryItem()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => new Folder { Id = id });
+        return library.Object;
+    }
+
+    // The server after a scan removed what the record names (#39).
+    private static ILibraryManager ALibraryHoldingNothing()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid _) => null);
+        return library.Object;
+    }
+
 }
