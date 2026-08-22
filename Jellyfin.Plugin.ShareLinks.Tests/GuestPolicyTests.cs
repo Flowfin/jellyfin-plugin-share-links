@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.ShareLinks;
 using MediaBrowser.Model.Users;
 using Xunit;
@@ -150,5 +151,80 @@ public class GuestPolicyTests
         {
             Assert.Equal(expected, (bool)typeof(UserPolicy).GetProperty(name)!.GetValue(wide)!);
         }
+    }
+
+    /// <summary>
+    /// A policy written for an account carries that account's authentication and
+    /// password reset providers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not a switch this plugin decides, which is exactly why it is asserted. The
+    /// server writes a policy onto an account field by field, and these two are
+    /// among the fields it writes; both refuse null in its database, so a policy
+    /// that arrives without them does not narrow the account, it fails the write.
+    /// </para>
+    /// <para>
+    /// Measured on a running server rather than argued: the create route answered
+    /// 500 with `NOT NULL constraint failed: Users.AuthenticationProviderId` in
+    /// the log, and no share could be made at all. A doubled user manager takes a
+    /// policy and writes it nowhere, so nothing here saw it until the job in #237
+    /// did.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void APolicyForAnAccountCarriesThatAccountsProviders()
+    {
+        var account = new User("a guest", "an authentication provider", "a reset provider")
+        {
+            Id = Guid.NewGuid(),
+        };
+
+        var policy = GuestPolicy.For(account, GuestPolicy.DefaultMaxActiveSessions);
+
+        Assert.Equal("an authentication provider", policy.AuthenticationProviderId);
+        Assert.Equal("a reset provider", policy.PasswordResetProviderId);
+    }
+
+    /// <summary>
+    /// The ceiling already on the account is what the narrowing rule reads, so a
+    /// policy written for an account carrying a lower one keeps the lower one.
+    /// </summary>
+    /// <remarks>
+    /// The same rule <see cref="GuestPolicy.Apply"/> holds, asserted through the
+    /// routine the callers use, because that is where the account's own number is
+    /// picked up and a caller that looked it up by hand is what this replaced.
+    /// </remarks>
+    [Fact]
+    public void APolicyForAnAccountNarrowsToTheCeilingAlreadyOnIt()
+    {
+        var account = new User("a guest", "provider", "reset")
+        {
+            Id = Guid.NewGuid(),
+            MaxActiveSessions = 2,
+        };
+
+        Assert.Equal(2, GuestPolicy.For(account, 7).MaxActiveSessions);
+        Assert.Equal(2, GuestPolicy.For(account, 2).MaxActiveSessions);
+    }
+
+    /// <summary>
+    /// An account carrying the server's own no-ceiling takes the one asked for.
+    /// </summary>
+    [Fact]
+    public void APolicyForAnAccountCarryingNoCeilingTakesTheOneAskedFor()
+    {
+        var account = new User("a guest", "provider", "reset") { Id = Guid.NewGuid() };
+
+        Assert.Equal(7, GuestPolicy.For(account, 7).MaxActiveSessions);
+    }
+
+    /// <summary>
+    /// There is no policy for no account.
+    /// </summary>
+    [Fact]
+    public void APolicyForNoAccountIsRefused()
+    {
+        Assert.Throws<ArgumentNullException>(() => GuestPolicy.For(null!, GuestPolicy.DefaultMaxActiveSessions));
     }
 }
