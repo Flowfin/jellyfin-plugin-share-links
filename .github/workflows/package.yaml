@@ -19,9 +19,12 @@ concurrency:
 
 env:
   DOTNET_VERSION: "9.0.316"
-  # Pinned for the same reason the SDK is: what judges one pull request has to be
-  # what judges the next.
-  JPRM_VERSION: "1.1.0"
+  # The packaging tool is not named here. It is pinned by hash, with its whole
+  # transitive closure, in `.github/jprm-requirements.txt`, and a version in this
+  # block as well would be a second place to change and a second place to forget
+  # (#241). The interpreter is pinned beside it because the hash of a compiled
+  # wheel is an answer to a question that includes the ABI tag.
+  PYTHON_VERSION: "3.12"
   CYCLONEDX_VERSION: "6.2.0"
   DOTNET_NOLOGO: "true"
   DOTNET_CLI_TELEMETRY_OPTOUT: "true"
@@ -45,8 +48,44 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Install JPRM
-        run: pip install --disable-pip-version-check "jprm==${JPRM_VERSION}"
+        # `--require-hashes` rather than a version: a version pin fixes which
+        # release is asked for and not which bytes arrive, and this is the job that
+        # builds the archive an operator installs. pip refuses a partial set, so the
+        # file carries the whole transitive closure rather than the one package this
+        # step is named after. `--only-binary` keeps the answer to "which bytes" a
+        # wheel, so a source distribution published later cannot arrive at the hash
+        # check as a different kind of thing.
+        run: |
+          set -euo pipefail
+          pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r .github/jprm-requirements.txt
+          echo "What the pinned set installed:"
+          pip freeze --disable-pip-version-check
+
+      - name: Prove the pin refuses a wrong hash
+        # The step above passing means today's bytes match what is written down. It
+        # says nothing about whether different bytes would have been refused, and a
+        # hash check that accepts anything is a version pin with more lines. Every
+        # hash in a copy of the file is replaced with zeroes, and the job reds if pip
+        # installs from it anyway.
+        run: |
+          set -euo pipefail
+          sed -E 's/--hash=sha256:[0-9a-f]{64}/--hash=sha256:0000000000000000000000000000000000000000000000000000000000000000/' .github/jprm-requirements.txt > /tmp/probe-requirements.txt
+          if ! grep -q -- '--hash=sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/probe-requirements.txt; then
+            echo "::error::The probe file carries no corrupted hash, so this step would pass whatever pip did."
+            exit 1
+          fi
+          if pip install --disable-pip-version-check --require-hashes --only-binary=:all: --dry-run --ignore-installed -r /tmp/probe-requirements.txt > /tmp/probe-hash.log 2>&1; then
+            echo "::error::pip accepted a requirements file whose hashes are wrong. The packaging tool is not pinned by hash."
+            exit 1
+          fi
+          echo "pip refused the corrupted hashes, as it must:"
+          grep -E 'DO NOT MATCH THE HASHES|Expected sha256|Got ' /tmp/probe-hash.log | head -5
 
       - name: Build the plugin package
         run: |
