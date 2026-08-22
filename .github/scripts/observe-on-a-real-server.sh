@@ -155,8 +155,13 @@ say "creating a share, which is what mints the guest account"
 status=$(call POST /ShareLinks/Shares operator "$token" \
   "{\"ItemId\":\"$item\",\"GuestNames\":[\"Observed Guest\"],\"MaxBitrateMbps\":1}")
 [ "$status" = "200" ] || fail "the share was not created: $status $(body)"
-guest=$(body | jq -r '.Guests[0].UserName')
-guest_password=$(body | jq -r '.Guests[0].Password')
+# The names the answer actually uses. `GuestCredential` carries `Name` and
+# `Credential`, and asking it for a user name and a password read `null` twice
+# and turned the first sign-in into a 401 that looked like a ceiling refusal.
+guest=$(body | jq -r '.Guests[0].Name')
+guest_password=$(body | jq -r '.Guests[0].Credential')
+[ "$guest" != "null" ] && [ -n "$guest" ] || fail "the answer named no guest: $(body)"
+[ "$guest_password" != "null" ] && [ -n "$guest_password" ] || fail "the answer carried no credential: $(body)"
 share=$(body | jq -r '.Share.Id')
 echo "share $share, guest $guest"
 
