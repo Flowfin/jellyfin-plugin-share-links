@@ -268,4 +268,27 @@ echo "a listing that would enumerate the library -> $status"
 [ "$status" = "404" ] || fail "the guest enumerated the library: $status"
 echo "OK: the shared item was reached, the other one was not, and the listing was refused"
 
+say "OBSERVATION 4: the routes a guest is refused by the server (#47)"
+# Three lines of docs/negative-capabilities.md say the refusal belongs to the
+# server's own authorization over its own routes, and that no test in this
+# repository can hold them. That is still true of a test. It is not a reason to
+# leave the claim unread: what this plugin contributes is an account that is not
+# an administrator, and whether the server then refuses is a question a running
+# server answers.
+#
+# What is asserted is that the answer is not the resource. The code the server
+# picks between refusing and pretending the route is not there is the server's
+# own, so a run that demanded one of them would red on a server that chose the
+# other for a reason that has nothing to do with this plugin.
+for route in \
+  "/System/Configuration" \
+  "/Plugins/$plugin/Configuration" \
+  "/ScheduledTasks" \
+  "/ShareLinks/Shares"; do
+  status=$(call GET "$route" "guest-1" "$guest_token")
+  echo "$route -> $status"
+  [ "$status" != "200" ] || fail "the guest was served $route, which is a route no share names"
+done
+echo "OK: none of the four answered the guest with the resource"
+
 say "every observation this script makes was made"
