@@ -411,15 +411,15 @@ public sealed class GuestConfinementFilterTests
         Assert.Null(at.Result);
         Assert.Null(above.Result);
 
-        Assert.Equal(
-            (ceiling - 1).ToString(CultureInfo.InvariantCulture),
-            below.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
-        Assert.Equal(
-            ceiling.ToString(CultureInfo.InvariantCulture),
-            at.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
-        Assert.Equal(
-            ceiling.ToString(CultureInfo.InvariantCulture),
-            above.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
+        Assert.True(
+            Asked(below) == (ceiling - 1).ToString(CultureInfo.InvariantCulture),
+            "one bit below " + source + " ceiling was rewritten, and it asked for something it may have: " + Asked(below));
+        Assert.True(
+            Asked(at) == ceiling.ToString(CultureInfo.InvariantCulture),
+            "exactly at " + source + " ceiling was rewritten: " + Asked(at));
+        Assert.True(
+            Asked(above) == ceiling.ToString(CultureInfo.InvariantCulture),
+            "one bit above " + source + " ceiling was not lowered to it: " + Asked(above));
     }
 
     /// <summary>
@@ -539,6 +539,11 @@ public sealed class GuestConfinementFilterTests
             ["videoBitRate"] = "not a number",
         })));
     }
+
+    // What a request is asking for after the filter has had it, which is the
+    // whole of what the interception leg does to one.
+    private static string Asked(AuthorizationFilterContext context)
+        => context.HttpContext.Request.Query["maxStreamingBitrate"].ToString();
 
     // A path built from a template, with a real identifier where the template
     // wants one. The identifier is the shared item's, so a template in the item
