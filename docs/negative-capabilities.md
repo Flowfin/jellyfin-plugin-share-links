@@ -96,10 +96,18 @@ repository judges another assembly.
 
 ### The creation, editing or revocation of any share
 
-Held for the routes that exist. Listing and revoking sit on a controller carrying
+Held. Creating, listing, revoking and rotating all sit on one controller carrying
 the server's elevation policy, and the test named under the administrator line
-above asserts the verdict on both. There is no create route in the tree, so the
-line is not yet held across the whole of what it names. #67 is where it arrives.
+above asserts the verdict on every action of it. This line said the create route
+was absent until #67 landed it:
+
+```
+git grep -n 'HttpPost("Shares")' -- Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+```
+
+The set that test compares against is written out rather than counted, so a fifth
+action added without an attribute of its own reds the suite instead of joining a
+line that says it is held.
 
 ### Any other user's data, sessions or playback state
 
@@ -111,8 +119,16 @@ them:
 git grep -n 'EnableSharedDeviceControl\|EnableRemoteControlOfOtherUsers\|SyncPlayAccess' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
 ```
 
-Another account's data is confinement rather than a switch, so that half of the
-line sits behind #52 with the first two lines above.
+Another account's data is confinement rather than a switch, and that half is the
+filter's since #239, on the routes its list names:
+
+```
+git grep -n 'public async Task EachOfTheFiveWideningsIsRefused' -- Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs
+```
+
+In part rather than held, because the three switches above are asked for rather
+than enforced here, and because the filter reaches only the routes its own list
+names.
 
 ### The plugin configuration
 

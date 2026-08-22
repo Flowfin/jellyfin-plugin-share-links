@@ -149,11 +149,13 @@ for and not about what is enforced.
 
 ### The creation, editing or revocation of any share
 
-**Held in part.** Listing and revoking sit on a controller carrying the server's
-elevation policy, and the verdict on both is asserted by
-`EveryAdministratorActionIsReachedOnlyUnderTheServersOwnElevationPolicy`. There
-is no create route in the tree, so the line is not held across the whole of what
-it names, and #67 is where the rest of it arrives.
+**Held.** Creating, listing, revoking and rotating all sit on one controller
+carrying the server's elevation policy, and the verdict on every action of it is
+asserted by name rather than counted:
+`EveryAdministratorActionIsReachedOnlyUnderTheServersOwnElevationPolicy`. This
+line said the create route was absent until #67 landed it, and it named #67 as
+where the rest would arrive; the set the test compares against is written out, so
+a fifth action added without an attribute of its own reds the suite.
 
 ### Any other user's data, sessions or playback state
 
@@ -161,8 +163,10 @@ it names, and #67 is where the rest of it arrives.
 and joining a synchronised playback group are refused on the account this plugin
 asks for: `TheGuestGetsTheValueTheDocumentDecided`,
 `TheGuestCannotJoinASynchronisedPlaybackGroup`. Reaching another account's data
-is confinement rather than a switch, so that half of the line sits behind #52
-with the first two lines above.
+is confinement rather than a switch, and that half is now the filter's:
+`EachOfTheFiveWideningsIsRefused`. In part, because the switches are asked for
+rather than enforced here, and because the filter reaches only the routes its own
+list names.
 
 ### The plugin configuration
 
