@@ -205,15 +205,30 @@ this plugin compiles against, and `GuestConfinementTests` asserts each one still
 exists, so a server line that renames or drops one reds the suite rather than
 leaving this page describing a mechanism nobody can use.
 
-Not measured. The behaviour of either candidate against a running server. The
-filter's own decisions are driven directly by `GuestConfinementFilterTests`, which
-is what #239 built; what no run here shows is a server applying the filter, which
-is a clause of #52 this page does not satisfy.
-Demonstrating either one needs a running server with a library on it and an account
-making requests against it, and `docs/testing.md` fixes that the suite here needs
-no server, no network and no media file, which `.github/workflows/headless.yml`
-proves rather than asserts. So the comparison above is an argument from what the
-server's API says it does, and it is not evidence of what a server does.
+MEASURED SINCE #237, AND THIS PARAGRAPH SAID NO RUN SHOWED A SERVER APPLYING THE
+FILTER. One does. The job brings up a real Jellyfin with the packaged plugin
+installed, a library carrying two items, and a share naming one of them, and asks
+as the invited guest:
+
+    the item the share names -> 200
+    the other item in the same library -> 404
+    a listing that would enumerate the library -> 404
+
+So the server does run the filter, and the filter refuses the widening on a server
+rather than in a test. The `200` carries as much as the two refusals: a
+confinement that also refused the item the share names would be a share that does
+not work, and nothing in this repository could tell the two apart.
+
+Not measured. What the server would do on a route `ConfinedRoutes` does not name.
+The run walks three paths inside the list, and a path outside it is not judged by
+this plugin at all, which is the accepted cost written under the choice above
+rather than something the run narrows. The suite's own side of this is unchanged:
+`GuestConfinementFilterTests` drives the filter's decisions directly, and
+`docs/testing.md` fixes that the suite needs no server, no network and no media
+file, which `.github/workflows/headless.yml` proves rather than asserts.
+
+The other candidate was never run against a server and is not going to be: it is
+the one this page did not choose.
 
 The upstream defect named under the first candidate is carried from #52 and was
 not reproduced.
