@@ -105,18 +105,28 @@ jobs:
           chmod -R 0777 test/e2e
 
       - name: Generate the item the observations are made against
-        # ffmpeg is on the runner, so the media file is generated rather than
-        # committed: a video in the tree is bytes nobody reviews, and this one
-        # only has to exist and carry a bitrate above the cap the share is given.
+        # Generated rather than committed: a video in the tree is bytes nobody
+        # reviews, and this one only has to exist and carry a bitrate above the
+        # cap the share is given.
+        #
+        # With the server image's own ffmpeg rather than the runner's, which is
+        # not there: `ffmpeg: command not found` on the first run of this job.
+        # Installing one would add a package to the runner and a second version
+        # of the tool to reason about, and the image this job already pins ships
+        # the build the server itself would transcode with.
         run: |
           set -euo pipefail
           folder="test/e2e/media/movies/An Observation (2026)"
           mkdir -p "$folder"
-          ffmpeg -hide_banner -loglevel error -y \
+          docker run --rm --user 0:0 \
+            -v "$PWD/test/e2e/media:/out" \
+            --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg \
+            "$JELLYFIN_IMAGE" \
+            -hide_banner -loglevel error -y \
             -f lavfi -i "testsrc=size=640x480:rate=25" \
             -t 6 -c:v libx264 -preset ultrafast -b:v 3000k -pix_fmt yuv420p \
-            "$folder/An Observation (2026).mkv"
-          chmod -R 0777 test/e2e/media
+            "/out/movies/An Observation (2026)/An Observation (2026).mkv"
+          sudo chmod -R 0777 test/e2e/media
           ls -la "$folder"
 
       - name: Start the server
