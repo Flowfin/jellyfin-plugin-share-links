@@ -163,7 +163,8 @@ guest_password=$(body | jq -r '.Guests[0].Credential')
 [ "$guest" != "null" ] && [ -n "$guest" ] || fail "the answer named no guest: $(body)"
 [ "$guest_password" != "null" ] && [ -n "$guest_password" ] || fail "the answer carried no credential: $(body)"
 share=$(body | jq -r '.Share.Id')
-echo "share $share, guest $guest"
+guest_id=$(body | jq -r '.Guests[0].UserId')
+echo "share $share, guest $guest, account $guest_id"
 
 say "OBSERVATION 1: at and past the session ceiling (#56)"
 # The ceiling is written onto the account the plugin made, and it is the server
@@ -196,11 +197,17 @@ say "OBSERVATION 2: the cap on a real server (#65)"
 # playback information request asked for; the refusal leg turns away a request
 # for bytes above the ceiling in force, which is the client that never asks
 # politely and the one the seam tests cannot reach.
+#
+# Asked as the guest's own account and not the operator's. A caller naming
+# somebody else's account on this route is refused by the server before anything
+# this plugin does is reached: 403, with `Error processing request: Forbidden` in
+# the server's log, which the first run of this step read as something about the
+# cap.
 status=$(call POST "/Items/$item/PlaybackInfo?maxStreamingBitrate=$above" "guest-1" "$guest_token" \
-  "{\"UserId\":\"$operator_id\",\"MaxStreamingBitrate\":$above,\"AutoOpenLiveStream\":false}")
+  "{\"UserId\":\"$guest_id\",\"MaxStreamingBitrate\":$above,\"AutoOpenLiveStream\":false}")
 echo "PlaybackInfo asking for $above -> $status"
 echo "what the server reported:"
-body | jq -c '{sources: [.MediaSources[]? | {Bitrate, SupportsDirectPlay, SupportsDirectStream, TranscodingUrl}]}' || body
+body | jq -c '{sources: [.MediaSources[]? | {Bitrate, SupportsDirectPlay, SupportsDirectStream, TranscodingUrl}]}' 2>/dev/null || body
 [ "$status" = "200" ] || fail "the playback information request was not answered: $status $(body)"
 
 status=$(call GET "/Videos/$item/stream?static=true&videoBitRate=$above" "guest-1" "$guest_token")
