@@ -29,13 +29,26 @@ it is not a copy anybody should hand a guest a link from.
 ### The feature is not finished, and what is missing is not obvious from the outside
 
 The tree holds the share record, the store, the token model, the resolution
-decision, the guest route, and the administrator routes that create, list and
-revoke a share. What it holds no page for is any of it: an operator reaches these
-by calling them, and the configuration page shows no share. That is #70, and #67
-is where the routes themselves are.
+decision, the guest route, the administrator routes that create, list and revoke a
+share, and a page that reaches all of them. The page arrived under #70 and this
+entry said there was none until it did.
+
+What is left is the release. Nothing is published, which is the entry above, so an
+operator meets any of this only on a server somebody built the plugin onto.
 
 **What an operator does.** Reads this page as the design and the open issues as the
-state. Nothing installed today shares anything.
+state. `docs/operator-guide.md` is the order the steps go in.
+
+### The operator guide has not been walked on a server
+
+`docs/operator-guide.md` is written from the tree at the commit it landed on. That
+catches a screen name or a route that is wrong and cannot catch a step that is
+missing, because whoever writes a guide supplies the missing step without noticing
+they have. #83's last clause is one person following it on a clean server, and
+#236 is where that run happens. It has not happened.
+
+**What an operator does.** Follows it, and says on #83 where it left them
+stranded. That report is the thing the page cannot produce for itself.
 
 ### A guest account ends late, and on a quiet server it does not end
 

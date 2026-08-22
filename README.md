@@ -78,15 +78,16 @@ case.
 1. Sign in as an administrator and open Share Links from the server dashboard.
 2. Pick the item. One item and only that item: not the season above an episode,
    not the library it sits in, not the next thing in the folder.
-3. Name the guest. A share names an account the operator already invited, so the
-   account exists before the share does.
+3. Name the guests, one per line. Creating the share is what creates their
+   accounts, and the credential for each is shown once beside the link.
 4. Set when it expires, and a bitrate ceiling if the uplink wants one.
 5. Copy the link. It is shown once, when the share is created.
 6. Send it to the guest yourself. The plugin sends no mail and adds nothing to
    the web client, so the link travels however the operator chooses.
 
-The guest opens the link, signs in if they are not signed in already, and lands
-on the one item the share names.
+The guest signs in with the name and credential they were sent, opens the link,
+and lands on the one item the share names. `docs/operator-guide.md` walks the
+same path with the screen each step happens on.
 
 ## Revoking a share
 
@@ -113,9 +114,13 @@ way a revoked one does.
 - `docs/versioning.md`, the version scheme and what a build from the tree
   carries.
 - `docs/testing.md`, the conditions the test suite runs under.
+- `docs/operator-guide.md`, the path from installing to revoking, with the screen
+  each step happens on.
+- `docs/limits.md`, what an operator runs into and what to do about each one.
 
-The operator guide, the security page and the configuration reference are open
-issues under the documentation milestone and are not in the tree yet.
+That list is a selection rather than the set. `docs/limits.md` is where every
+document under `docs/` has to be accounted for, and a test compares the two, so
+it is the index to read rather than this one.
 
 ## Licence
 
