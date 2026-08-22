@@ -5,3 +5,9 @@ obj/
 artifacts
 node_modules/
 StrykerOutput/
+
+# What the observation job unpacks and generates when it runs (#237). The server
+# writes its own database and logs under here, and the media file is made by
+# ffmpeg on the runner rather than committed.
+test/e2e/jellyfin/
+test/e2e/media/

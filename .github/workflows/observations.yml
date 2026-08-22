@@ -1,0 +1,160 @@
+# The observations that need a real server (#237).
+#
+# Three done-when clauses on this board say a claim has to be seen on a running
+# Jellyfin rather than against a double, and they were routed to a hand-run
+# session on the assumption that no server was available to run them against.
+# `Flowfin/jellyfin-plugin-sso` has been disproving that assumption nightly, and
+# this board already runs `docker run` in `headless.yml`, so what is new here is
+# bringing a server up rather than a build container.
+#
+# What this job proves that the suite cannot. The suite drives the decision: it
+# hands `ShareResolution` a clock and a list of records, and it hands the
+# confinement filter a fabricated authorization context. Whether the server
+# applies that filter at all is the server's own pipeline ordering, which is not
+# in the packages this plugin compiles against, and whether the session ceiling
+# the plugin writes onto an account is honoured is the server's own enforcement.
+# Both are read here off a server that was handed the packaged plugin and nothing
+# else.
+#
+# On a schedule and on a pull request that touches the harness, in the shape the
+# sibling board settled on: the per-day evidence is what makes a green run mean
+# something, and paying a container start on every push to the tree would buy a
+# second copy of a run the pull request already made.
+name: observations
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/observations.yml"
+      - ".github/scripts/observe-on-a-real-server.sh"
+  workflow_dispatch:
+
+# Deny-all at the workflow level; the job below reads the tree to build the
+# package and needs nothing else.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "9.0.316"
+  PYTHON_VERSION: "3.12"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # The server line `Directory.Build.props` compiles against, pinned by digest
+  # rather than by tag: what makes an observation on one day has to be what makes
+  # it on the next, and a tag is a name somebody else can repoint.
+  #
+  #   curl -s "https://hub.docker.com/v2/repositories/jellyfin/jellyfin/tags/10.11.11" | jq -r .digest
+  JELLYFIN_IMAGE: "jellyfin/jellyfin:10.11.11@sha256:aefb67e6a7ff1debdd154a78a7bbb780fd0c873d8639210a7f6a2016ad2b35db"
+
+jobs:
+  observe:
+    name: Observations on a real Jellyfin
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install JPRM
+        # The same pinned set `package.yaml` installs, and for the same reason.
+        # The observation is worth making against the archive an operator
+        # installs rather than against a build directory, because what a server
+        # loads is a directory of files somebody unpacked.
+        run: |
+          set -euo pipefail
+          pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r .github/jprm-requirements.txt
+
+      - name: Build the plugin package
+        run: |
+          set -euo pipefail
+          mkdir -p ./artifacts
+          jprm --verbosity=debug plugin build . --output ./artifacts
+          ls -l ./artifacts
+
+      - name: Install the package where the server reads its plugins
+        # Unpacked into a bind mount rather than installed through the
+        # catalogue, because the catalogue is a network route this job does not
+        # need and the bytes are the same either way. World-writable so the
+        # container's own user can write the plugin's configuration back.
+        run: |
+          set -euo pipefail
+          plugin_dir="test/e2e/jellyfin/config/plugins/ShareLinks"
+          mkdir -p "$plugin_dir" test/e2e/jellyfin/cache test/e2e/media/movies
+          unzip -o ./artifacts/*.zip -d "$plugin_dir"
+          ls -la "$plugin_dir"
+          chmod -R 0777 test/e2e
+
+      - name: Generate the item the observations are made against
+        # Generated rather than committed: a video in the tree is bytes nobody
+        # reviews, and this one only has to exist and carry a bitrate above the
+        # cap the share is given.
+        #
+        # With the server image's own ffmpeg rather than the runner's, which is
+        # not there: `ffmpeg: command not found` on the first run of this job.
+        # Installing one would add a package to the runner and a second version
+        # of the tool to reason about, and the image this job already pins ships
+        # the build the server itself would transcode with.
+        run: |
+          set -euo pipefail
+          folder="test/e2e/media/movies/An Observation (2026)"
+          mkdir -p "$folder"
+          docker run --rm --user 0:0 \
+            -v "$PWD/test/e2e/media:/out" \
+            --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg \
+            "$JELLYFIN_IMAGE" \
+            -hide_banner -loglevel error -y \
+            -f lavfi -i "testsrc=size=640x480:rate=25" \
+            -t 6 -c:v libx264 -preset ultrafast -b:v 3000k -pix_fmt yuv420p \
+            "/out/movies/An Observation (2026)/An Observation (2026).mkv"
+          sudo chmod -R 0777 test/e2e/media
+          ls -la "$folder"
+
+      - name: Start the server
+        run: |
+          set -euo pipefail
+          docker run -d --name jellyfin \
+            -p 127.0.0.1:8096:8096 \
+            -v "$PWD/test/e2e/jellyfin/config:/config" \
+            -v "$PWD/test/e2e/jellyfin/cache:/cache" \
+            -v "$PWD/test/e2e/media:/media:ro" \
+            -e JELLYFIN_LOG_DIR=/config/log \
+            "$JELLYFIN_IMAGE"
+          docker ps
+
+      - name: Make the observations
+        run: bash .github/scripts/observe-on-a-real-server.sh http://127.0.0.1:8096
+
+      - name: What the server said
+        # Always, because a failed observation is read out of the server's log
+        # and not out of the step that failed, and because a green run is where
+        # the plugin's own log lines are checked by eye for the first time.
+        if: always()
+        run: |
+          set -euo pipefail
+          docker logs jellyfin 2>&1 | tail -300 || true
+          echo "===== what the plugin wrote ====="
+          docker logs jellyfin 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
+
+      - name: Stop the server
+        if: always()
+        run: docker rm -f jellyfin || true
