@@ -93,10 +93,20 @@ a row named after the relationship it attacks. What that is not is a demonstrati
 it shows what this plugin decides, and it shows nothing about a server applying the
 decision, which still needs a running one.
 
-**Replacement, owed.** #237. The harness that brings a real Jellyfin up is where a
-run could watch the filter turn a widening away on a server rather than in a test,
-and `docs/guest-confinement.md` says in its own section that no such run has been
-made.
+**Recorded, and not a test.** #237. The harness brings a real Jellyfin up with the
+packaged plugin installed, a library carrying two items and a share naming one of
+them, and asks as the invited guest:
+
+```
+the item the share names -> 200
+the other item in the same library -> 404
+a listing that would enumerate the library -> 404
+```
+
+That is the widening turned away on a server rather than in a test, which is what
+this line was owed. What it does not cover is a route `ConfinedRoutes` does not
+name; `docs/guest-confinement.md` carries that as the accepted cost of the choice
+rather than as something this run narrows.
 
 ### A test that revocation stops a segment request already in flight
 
@@ -125,11 +135,28 @@ repository measured.
 **Why it is refused.** Same three, for the same reason as the transcode line: a
 real file, a real transcoder and a real client.
 
-**Replacement, owed.** #65. One check by hand, recorded with what was played and
-what the server reported, and with whether the ceiling reached a client on the
-operator's own network. The seam below it is `EffectiveBitrateTests` above; what
-the manual check covers is the step from the number this plugin computes to the
-stream a guest receives, and where that step is enforced is #61.
+**Replacement, landed.** `EffectiveBitrateTests`, `GuestConfinementFilterTests`.
+The arithmetic that takes the lowest of the caps that apply, and both legs of the
+filter that applies it, driven with numbers and a fabricated request. The boundary
+either side of every ceiling is walked one bit at a time, which is #65's second
+clause.
+
+**Recorded beside them, and not a test.** The check #65 asks for is made by the
+job in #237 rather than by hand, which is where it moved. On a share capped at the
+lowest ceiling this plugin accepts, carrying an item the server reports as above
+it:
+
+```
+the server says the source carries 646337, and the ceiling is 200000
+stream asking for 8000000, the ceiling being 200000 -> 404
+stream asking for 100000 -> 200
+```
+
+What is still not covered is the half this line's refusal is named after: nothing
+measured the bytes of a stream, and the reported ceiling was not seen reaching a
+client, because the request the job makes carries no device profile and the server
+answers it with the source rather than a transcode plan. `docs/bitrate-cap.md`
+carries both.
 
 ## What is checked, and what is not
 
