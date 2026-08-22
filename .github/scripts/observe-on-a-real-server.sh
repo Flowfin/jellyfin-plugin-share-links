@@ -107,7 +107,11 @@ say "the server loaded the plugin"
 status=$(call GET /Plugins operator "$token")
 [ "$status" = "200" ] || fail "the plugin list could not be read: $status"
 body | jq -r '.[] | "\(.Id) \(.Name) \(.Version) \(.Status)"'
-body | jq -e --arg id "$plugin" '[.[] | select((.Id | ascii_downcase) == $id)] | length == 1' >/dev/null ||
+# The identifier is compared with its dashes taken out of both sides. The server
+# writes a plugin's identifier without them and the source fixes it with them, so
+# comparing the two as written finds nothing and says the plugin is absent while
+# the line above it says Active.
+body | jq -e --arg id "${plugin//-/}" '[.[] | select((.Id | ascii_downcase | gsub("-"; "")) == $id)] | length == 1' >/dev/null ||
   fail "the server did not load this plugin. What it loaded is listed above."
 
 say "configuring the plugin the way an operator would"
