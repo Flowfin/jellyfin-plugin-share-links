@@ -87,11 +87,16 @@ server line that renames or drops one reds the suite instead of leaving
 `docs/guest-confinement.md` describing a mechanism nobody can use. It asserts
 nothing about how either mechanism behaves.
 
-**Replacement, owed.** #239. The filter this repository chose does not exist yet, so
-there is no behaviour here to demonstrate, and the first thing a run against a real
-server could watch is the one that issue builds. The choice itself was taken from
-what the server's API says it does, and `docs/guest-confinement.md` says so in its
-section on what was measured.
+**Replacement, landed.** `GuestConfinementFilterTests`. The filter #239 built is
+driven directly with a request context, and each of #44's five widening attempts is
+a row named after the relationship it attacks. What that is not is a demonstration:
+it shows what this plugin decides, and it shows nothing about a server applying the
+decision, which still needs a running one.
+
+**Replacement, owed.** #237. The harness that brings a real Jellyfin up is where a
+run could watch the filter turn a widening away on a server rather than in a test,
+and `docs/guest-confinement.md` says in its own section that no such run has been
+made.
 
 ### A test that revocation stops a segment request already in flight
 

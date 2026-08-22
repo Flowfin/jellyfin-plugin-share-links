@@ -138,8 +138,65 @@ that sits as a residual.
 by the server's own authentication never arrives, and a request the server answers
 outside the pipeline this filter is on is not covered by it.
 
-**The filter itself.** It does not exist. This page decides which mechanism is
-built and is not the building of it.
+**A route the filter never sees at all.** The section below enumerates the routes
+it does sit on and says what that enumeration cannot promise.
+
+## The filter, and the routes it sits on
+
+Built under #239. `GuestConfinementFilter` is one authorization filter, registered
+once on the server's request pipeline, carrying both this page's question and the
+bitrate ceiling of `docs/bitrate-cap.md`. One registration and not two, which is
+the decision recorded on #44: two surfaces that answer from the store at different
+moments are two answers that can disagree.
+
+What it decides is `GuestConfinement.Decide`, which takes records and an account
+and returns a verdict and a ceiling. That routine is reachable with no request at
+all, which is what lets every case below be driven under `docs/testing.md`'s rule.
+
+### The routes it judges
+
+Two families, kept apart because they are answered differently. The list is in
+`ConfinedRoutes` and is reproduced by running:
+
+```
+git grep -n 'NamingOneItem\|Enumerating' -- Jellyfin.Plugin.ShareLinks/ConfinedRoutes.cs
+```
+
+A route that **names one item** is checked: the identifier in the path is compared
+against the items the live records naming this account name. Everything under such
+a path is judged against the same item, so an image, a segment or a playback
+request inherits the answer given to the item itself.
+
+A route that **lists, searches or browses** names no item to compare, so a guest
+of this plugin is refused it outright. That is where three of #44's five widenings
+live: the collection, the search, the neighbours. The alternative would be this
+plugin filtering the server's own answer, which is a much larger surface and a
+much easier one to get subtly wrong.
+
+### What the enumeration does not cover
+
+**A route nobody added.** The server's route table is not in the packages this
+plugin compiles against, so no reading of this tree derives the list. It is
+maintained by hand, it is not complete, and a path it does not reach is NOT JUDGED
+rather than permitted. Those are separate answers in the code and separate answers
+in the suite, so a reader counting what the filter refuses cannot read a hole as
+something that was looked at.
+
+**A series and its episodes.** A series is in the enumerating family, so sharing
+one does not let a guest list its episodes. That follows from the record naming
+one item and from #44's fifth widening being exactly that walk, and it means what
+this plugin shares usefully today is an item a client plays directly.
+
+**Whether the server applies the filter at all.** It is added to the options the
+server builds its pipeline from. Whether that pipeline is built after plugin
+services are registered is the server's own order, it is not in the packages this
+plugin compiles against, and no test here reaches a server. No claim is made in
+either direction.
+
+**An account this plugin did not create.** It is not confined, deliberately.
+Confining an account somebody already uses would take their own library away from
+them because an operator shared one item with them, and membership is read from
+`PluginCreatedUserIds` for that reason.
 
 ## What was measured here and what was not
 
@@ -148,8 +205,10 @@ this plugin compiles against, and `GuestConfinementTests` asserts each one still
 exists, so a server line that renames or drops one reds the suite rather than
 leaving this page describing a mechanism nobody can use.
 
-Not measured. The behaviour of either candidate. Neither has a spike branch with a
-working demonstration, which is a clause of #52 this page does not satisfy.
+Not measured. The behaviour of either candidate against a running server. The
+filter's own decisions are driven directly by `GuestConfinementFilterTests`, which
+is what #239 built; what no run here shows is a server applying the filter, which
+is a clause of #52 this page does not satisfy.
 Demonstrating either one needs a running server with a library on it and an account
 making requests against it, and `docs/testing.md` fixes that the suite here needs
 no server, no network and no media file, which `.github/workflows/headless.yml`

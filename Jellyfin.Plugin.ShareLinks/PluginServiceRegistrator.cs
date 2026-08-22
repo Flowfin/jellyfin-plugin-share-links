@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.ShareLinks;
@@ -65,6 +66,24 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton(_ => new ShareKeyFile(InTheDataFolder(KeyFileName)));
         serviceCollection.AddSingleton(TimeProvider.System);
         serviceCollection.AddSingleton<IPluginConfigurationSource>(_ => new PluginConfigurationSource());
+
+        // The one request-path surface (#239). Registered here because this is the
+        // file that knows what a running server looks like, and added to the
+        // pipeline rather than to a controller: what it confines is the server's
+        // routes and not this plugin's, so there is no attribute to hang it on.
+        //
+        // Scoped rather than singleton. It reads the store and the clock per
+        // request, and a singleton holding a request's authorization context is
+        // the shape that answers one request with another request's account.
+        //
+        // WHETHER THE SERVER APPLIES IT IS NOT MEASURED HERE. This adds a filter to
+        // the options the server builds its pipeline from; whether that pipeline is
+        // built after plugin services are registered is the server's own order, it
+        // is not in the packages this plugin compiles against, and no test in this
+        // repository reaches a server. docs/guest-confinement.md carries the same
+        // sentence where a reader of the decision meets it.
+        serviceCollection.AddScoped<GuestConfinementFilter>();
+        serviceCollection.Configure<MvcOptions>(options => options.Filters.Add<GuestConfinementFilter>());
     }
 
     /// <summary>
