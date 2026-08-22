@@ -671,7 +671,7 @@ public class ShareLinksAdminController : ControllerBase
     private async Task<GuestCredential> TheGuestAccountFor(string name, PluginConfiguration configuration)
     {
         var account = await _userManager.CreateUserAsync(name).ConfigureAwait(false);
-        await _userManager.UpdatePolicyAsync(account.Id, GuestPolicy.Create(GuestPolicy.MaxActiveSessionsFrom(configuration))).ConfigureAwait(false);
+        await _userManager.UpdatePolicyAsync(account.Id, GuestPolicy.For(account, GuestPolicy.MaxActiveSessionsFrom(configuration))).ConfigureAwait(false);
 
         var credential = ShareTokens.Mint();
         await _userManager.ChangePassword(account.Id, credential).ConfigureAwait(false);

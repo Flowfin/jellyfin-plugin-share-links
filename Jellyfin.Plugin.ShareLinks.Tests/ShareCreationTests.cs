@@ -218,6 +218,17 @@ public sealed class ShareCreationTests : IDisposable
         Assert.True(policy.IsHidden);
         Assert.Equal(GuestPolicy.Create(GuestPolicy.DefaultMaxActiveSessions).EnableContentDownloading, policy.EnableContentDownloading);
 
+        // The two fields the policy carries rather than decides. The server
+        // writes a policy onto the account field by field and both of these are
+        // among them, both refusing null in its database, so a policy that
+        // arrives without them fails the write and takes the create with it. On a
+        // real server that was a 500 and no share at all; here it is two
+        // assertions, and the reason they are here is #237's job rather than
+        // anything this suite could have noticed on its own.
+        Assert.Equal(account.AuthenticationProviderId, policy.AuthenticationProviderId);
+        Assert.Equal(account.PasswordResetProviderId, policy.PasswordResetProviderId);
+        Assert.False(string.IsNullOrEmpty(policy.AuthenticationProviderId));
+
         // Something to sign in with, drawn by the routine that draws token bytes
         // rather than by a second source of secret material in this plugin.
         Assert.Equal(_server.Credentials[account.Id], guest.Credential);
