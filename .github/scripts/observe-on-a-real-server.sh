@@ -62,10 +62,15 @@ call() {
 body() { cat /tmp/observation-body; }
 
 say "waiting for the server to answer"
+# A server that is still migrating its database answers every route with a
+# splash page and a 503, so waiting for any answer at all is waiting for the
+# wrong thing: the first run of this script took that page for a started server
+# and walked the whole wizard into it. What is waited for is the public
+# information route answering as itself, which is JSON carrying a version.
 answered=no
 for attempt in $(seq 1 180); do
-  if curl -fsS "$base/System/Info/Public" >/dev/null 2>&1; then
-    echo "answered after ${attempt}s"
+  if curl -fsS "$base/System/Info/Public" 2>/dev/null | jq -e '.Version' >/dev/null 2>&1; then
+    echo "answered as itself after ${attempt}s"
     answered=yes
     break
   fi
