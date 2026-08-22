@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MediaBrowser.Model.Plugins;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
@@ -128,31 +129,94 @@ public class ClockBoundaryTests
     }
 
     /// <summary>
-    /// A clock that steps backwards makes an expired share live again, which is
-    /// what <c>docs/expiry.md</c> says it does.
+    /// A share once refused as expired is still refused after the clock steps
+    /// backwards, with its record still in the store.
     /// </summary>
     /// <remarks>
-    /// This asserts the documented behaviour rather than the absence of it. The
-    /// document weighs the alternative, a flag persisted the first time a share is
-    /// seen expired, and refuses it: it costs a store write on a read path and it
-    /// is still wrong for a share that expired while the server was down. So the
-    /// residual is accepted, and a test asserting that a backwards step cannot
-    /// revive a share would contradict the decision rather than guard it. What
-    /// bounds the residual is the sweep, which the next test is about.
+    /// <para>
+    /// The retention is the default ninety days rather than the zero the bound
+    /// below stands at, so nothing has removed the record and the refusal is the
+    /// share being expired rather than there being no share. Those two are
+    /// different answers and only one of them is what this asserts: a test run at
+    /// a retention of zero would pass with the expiry comparison deleted.
+    /// </para>
+    /// <para>
+    /// The clock the decision reads is <see cref="MonotonicClock"/> over the
+    /// stepped one, which is what the running plugin holds. The step underneath
+    /// is a real backwards step of two hours from an hour past the instant, so
+    /// the reading a bare clock would give is an hour before the expiry and the
+    /// share would answer again.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void AClockThatStepsBackwardsMakesAnExpiredShareLiveAgain()
+    public void AShareOnceRefusedAsExpiredIsStillRefusedAfterTheClockStepsBackwards()
     {
-        var records = new[] { ARecord() };
-        var clock = new SteppableClock(Expiry.AddHours(1));
+        var bounds = new ShareBounds(100, 10, 30, ShareBounds.DefaultExpiredShareRetentionDays);
+        var underneath = new SteppableClock(Expiry.AddHours(1));
+        var clock = new MonotonicClock(underneath);
+        IReadOnlyList<ShareRecord> records = new[] { ARecord() };
 
         var whileExpired = Resolve(records, clock);
 
-        clock.Step(TimeSpan.FromHours(-2));
-        var afterTheStepBack = Resolve(records, clock);
+        underneath.Step(TimeSpan.FromHours(-2));
+        var afterTheSweep = bounds.Retained(records, clock.GetUtcNow());
+        var afterTheStepBack = Resolve(afterTheSweep, clock);
 
         Assert.Equal(ShareRefusal.Expired, whileExpired.Refusal);
-        Assert.True(afterTheStepBack.IsResolved);
+        Assert.Single(afterTheSweep);
+        Assert.Equal(ShareRefusal.Expired, afterTheStepBack.Refusal);
+        Assert.True(underneath.GetUtcNow() < Expiry);
+    }
+
+    /// <summary>
+    /// The clock the plugin hands its routes is the one that does not step
+    /// backwards.
+    /// </summary>
+    /// <remarks>
+    /// The test above proves the type and this one proves the wiring, which are
+    /// two different claims: a clamp nothing is registered with holds nothing.
+    /// The registration is read out of the service collection rather than out of
+    /// a built provider, because building one would construct the store and the
+    /// key file and ask the server where its data folder is.
+    /// </remarks>
+    [Fact]
+    public void TheClockThePluginRegistersIsTheOneThatDoesNotStepBackwards()
+    {
+        var services = new ServiceCollection();
+
+        new PluginServiceRegistrator().RegisterServices(services, null!);
+
+        var registered = Assert.Single(services, service => service.ServiceType == typeof(TimeProvider));
+        Assert.IsType<MonotonicClock>(registered.ImplementationInstance);
+    }
+
+    /// <summary>
+    /// A clock that has stepped backwards underneath reports the instant it had
+    /// already reported, and starts moving again only once the clock underneath
+    /// has caught up with it.
+    /// </summary>
+    /// <remarks>
+    /// The property on its own, without a share in the way. The last reading is
+    /// what says the clamp releases rather than sticking: a clock that never
+    /// moved again would also pass the two assertions before it.
+    /// </remarks>
+    [Fact]
+    public void AClockClampedForwardReleasesOnceTheOneUnderneathHasCaughtUp()
+    {
+        var underneath = new SteppableClock(Expiry);
+        var clock = new MonotonicClock(underneath);
+
+        var atTheInstant = clock.GetUtcNow();
+
+        underneath.Step(TimeSpan.FromHours(-3));
+        var afterTheStepBack = clock.GetUtcNow();
+
+        underneath.Step(TimeSpan.FromHours(4));
+        var afterTheClockUnderneathPassedIt = clock.GetUtcNow();
+
+        Assert.Equal(Expiry, atTheInstant);
+        Assert.Equal(Expiry, afterTheStepBack);
+        Assert.Equal(Expiry.AddHours(1), afterTheClockUnderneathPassedIt);
     }
 
     /// <summary>
@@ -160,9 +224,10 @@ public class ClockBoundaryTests
     /// back.
     /// </summary>
     /// <remarks>
-    /// This is the bound on the residual above, and it is the reason the sweep
-    /// interval is where that residual actually lives: a record that is gone is
-    /// not compared against any clock.
+    /// The second answer to the same question, and it holds without the clamp
+    /// above: a record the sweep has dropped is compared against no clock at
+    /// all. It stands at a retention of zero, which is why it is not what the
+    /// clause about a backwards step closes on.
     /// </remarks>
     [Fact]
     public void AClockThatStepsBackwardsDoesNotBringBackWhatTheSweepRemoved()

@@ -5,20 +5,24 @@ awkward part is answered here rather than discovered by the first routine that
 meets it.
 
 The clock is a seam, and the routines these rules bind read it from there rather
-than from the machine. Every file in the plugin that names one, on `origin/master`
-at `3cf7149`:
+than from the machine. Every file in the plugin that names one, at `eb44deb`:
 
-    git grep -ln 'TimeProvider' origin/master -- Jellyfin.Plugin.ShareLinks/
-    origin/master:Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareResolution.cs
+    git grep -ln 'TimeProvider' eb44deb -- Jellyfin.Plugin.ShareLinks/
+    eb44deb:Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs
+    eb44deb:Jellyfin.Plugin.ShareLinks/MonotonicClock.cs
+    eb44deb:Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
+    eb44deb:Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
+    eb44deb:Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs
+    eb44deb:Jellyfin.Plugin.ShareLinks/ShareResolution.cs
 
-The registrator supplies the machine clock once, the two routes take it and hand
+The registrator supplies the machine clock once and wraps it in `MonotonicClock`
+on the way out, the routes and the request filter take what it supplies and hand
 it on, and `ShareResolution` is where a rule on this page meets it. This paragraph
 said the opposite until 2026-08-17: it claimed no file in the tree read a clock,
-and pasted a command whose exit status was 1. The command returns the four files
-above. It was found by re-running it rather than by reading it.
+and pasted a command whose exit status was 1. It listed four files until this
+change and the command returns six, because the request filter and the clamp are
+both later than the paste. It was found by re-running the command rather than by
+reading it, which is the same way the first version of it was found to be wrong.
 
 Reading the machine clock directly is still refused everywhere else, so a routine
 added after this sentence takes the seam whether or not it remembers to:
@@ -100,24 +104,44 @@ revoked, not because of any comparison against a clock, so no clock movement
 revives it. That is the property revocation has to keep and it is why revocation
 is a recorded state rather than an expiry set to now (#46).
 
-Expiry is affected, and the honest statement is that a backwards step can make an
-expired share live again. What bounds it is the sweep: once the sweep has removed
-an expired record, no clock movement brings it back, because there is nothing left
-to compare. Between the instant and the sweep, a step larger than the elapsed time
-makes the share live again for the difference.
+Expiry was affected, and is not any more. The clock this plugin judges an expiry
+against never moves backwards: `MonotonicClock` wraps the machine clock at the one
+line it enters the tree, remembers the highest instant it has handed out, and
+hands that one out again while the machine reads earlier. A share once refused as
+expired stays refused, with its record still in the store and at any retention.
 
-That residual is accepted, and the alternative was weighed. Persisting a flag when
-a share is first seen expired would close it, at the price of a store write on a
-read path, and it would still be wrong for a share that expired while the server
-was down. The bound worth keeping small is the sweep interval, which is where this
-residual actually lives.
+THIS PAGE SAID THE OPPOSITE UNTIL #79 CLOSED, AND THE PARAGRAPH IS REPLACED
+RATHER THAN SOFTENED. It said the honest statement was that a backwards step can
+make an expired share live again, that the sweep bounded it, and that the residual
+was accepted because the alternative weighed - persisting a flag the first time a
+share is seen expired - cost a store write on a read path and was still wrong for
+a share that expired while the server was down. That weighing was against the only
+alternative on the table at the time. Clamping the clock is a third answer and it
+costs neither: nothing is written anywhere, and a share that expired while the
+server was down is refused when the server comes back because the machine clock
+has moved on.
+
+TWO THINGS THE CLAMP DOES NOT COVER, AND BOTH STAY NEGATIVE. The high-water mark
+lives in the object, so a restart asks the machine again and believes whatever it
+is told: a clock stepped backwards while the server was down, or stepped backwards
+and then restarted, revives an expired share exactly as it did before. And the
+clamp is wrong in the other direction on purpose. A clock that jumps forwards by a
+year and is then corrected leaves the plugin holding the wrong year until the
+process ends, so shares expire early and the sweep drops records early. That is
+the direction a share stops working in rather than the direction it comes back in,
+which is the one worth being wrong in for a plugin that hands out links.
+
+The sweep still removes the record, and that is now a second answer to the same
+question rather than the bound on a residual: a record retention has dropped is
+compared against no clock at all.
 
 ## What this does not settle
 
 The sweep itself, how often it runs and what it deletes, is the retention rule in
-#29 rather than this document. What this fixes is that the sweep is what bounds
-the backwards-clock case, so a sweep that never runs makes that residual
-unbounded.
+#29 rather than this document. This page used to lean on it for the backwards-clock
+case, so that a sweep which never ran made that residual unbounded; the clamp above
+carries that case now and the lean is gone. `docs/bounds.md` measured the size of
+that lean and says so where it says it.
 
 The tests these rules exist for are #45's remaining clauses and #79's: one tick
 before, the instant, one tick after, the create route refusing a lifetime past

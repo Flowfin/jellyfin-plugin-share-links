@@ -189,16 +189,27 @@ and the request is not used instead.
 **What an operator does.** Sets `PublicBaseUrl` before creating a share.
 `docs/configuration.md` carries the row and the bounds.
 
-### A clock that moves backwards brings expired shares back
+### A clock that moves backwards is only held while the server is running
 
-Expiry is compared against the clock on every request, so a backwards step larger
-than the time since a share expired makes that share live again. #45 accepts it
-rather than calling it impossible, and the bound is the sweep: a record retention
-has already removed does not come back, and a revocation is a recorded state that
-no clock movement undoes. #79 is where both halves are asserted.
+Expiry is compared against the clock on every request, and the clock the plugin
+compares against never moves backwards: it is the machine clock inside a clamp
+that hands out the highest instant it has already handed out. So a backwards step
+on a running server does not bring an expired share back, which is #79's clause
+and is asserted there.
+
+The clamp is a field rather than a file, so it starts again at every restart. A
+clock stepped backwards while the server was down, or stepped backwards and then
+restarted, revives an expired share for the size of the step, bounded by the sweep
+in the same way it was before: a record retention has already removed does not
+come back, and a revocation is a recorded state that no clock movement undoes.
+The clamp also holds a forward jump that was later corrected, until the process
+ends, which expires shares early. #45 is where the expiry rules are decided and
+`docs/expiry.md` carries both directions.
 
 **What an operator does.** Revokes rather than waiting on an expiry wherever it
-matters, because a revocation survives a clock that an expiry does not.
+matters, because a revocation survives a clock that an expiry survives only while
+the server keeps running. Restarts the server after correcting a clock forwards,
+which is what drops a stuck reading.
 
 ## The guest
 
