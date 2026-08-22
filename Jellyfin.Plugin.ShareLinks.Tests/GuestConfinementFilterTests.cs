@@ -314,6 +314,115 @@ public sealed class GuestConfinementFilterTests
     }
 
     /// <summary>
+    /// Gets the ceiling in force, one row per source it can come from, with the
+    /// share, account and server numbers that produce it (#65).
+    /// </summary>
+    /// <remarks>
+    /// The comparison a request is judged by does not read which of the three
+    /// produced the number, and that is a claim about the operator rather than an
+    /// assumption: it is handed one ceiling. Walking the boundary once per source
+    /// is what says so out loud, and it is the difference between a boundary
+    /// covered for the share and a boundary covered for each ceiling.
+    /// </remarks>
+    public static TheoryData<string, long?, int, int, long> InForce => new()
+    {
+        { "the share's", 3_000_000, 0, 0, 3_000_000 },
+        { "the account's", null, 4_000_000, 0, 4_000_000 },
+        { "the server's", null, 0, 5_000_000, 5_000_000 },
+    };
+
+    /// <summary>
+    /// A request for bytes exactly at the ceiling is served, one bit below it is
+    /// served, and one bit above it is refused (#65).
+    /// </summary>
+    /// <param name="source">Which ceiling is in force, for the failure message.</param>
+    /// <param name="share">The share's cap, or <c>null</c> where it sets none.</param>
+    /// <param name="account">The account's ceiling, zero for none.</param>
+    /// <param name="server">The server's ceiling, zero for none.</param>
+    /// <param name="ceiling">The ceiling those three produce.</param>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    /// <remarks>
+    /// The interesting values are all within one bit of the instant a refusal
+    /// starts, and the refusal is written as a strict comparison, so a boundary
+    /// that moved by one would leave every other test in this file green. At the
+    /// ceiling is the value a client that read what it was told asks for, which is
+    /// why it is the one that must not be refused.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(InForce))]
+    public async Task TheStreamBoundaryIsWalkedAtEachCeiling(
+        string source,
+        long? share,
+        int account,
+        int server,
+        long ceiling)
+    {
+        var store = Store(LiveShare(cap: share));
+
+        var below = ContextFor("/Videos/" + Shared + "/stream?videoBitRate=" + (ceiling - 1));
+        var at = ContextFor("/Videos/" + Shared + "/stream?videoBitRate=" + ceiling);
+        var above = ContextFor("/Videos/" + Shared + "/stream?videoBitRate=" + (ceiling + 1));
+
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(below);
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(at);
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(above);
+
+        Assert.True(below.Result is null, "one bit below " + source + " ceiling was refused");
+        Assert.True(at.Result is null, "exactly at " + source + " ceiling was refused, so a client that asked for what it was told cannot play");
+        Assert.True(above.Result is NotFoundResult, "one bit above " + source + " ceiling was served");
+    }
+
+    /// <summary>
+    /// A playback information request is left alone at the ceiling and below it,
+    /// and lowered to it above it (#65).
+    /// </summary>
+    /// <param name="source">Which ceiling is in force, for the failure message.</param>
+    /// <param name="share">The share's cap, or <c>null</c> where it sets none.</param>
+    /// <param name="account">The account's ceiling, zero for none.</param>
+    /// <param name="server">The server's ceiling, zero for none.</param>
+    /// <param name="ceiling">The ceiling those three produce.</param>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    /// <remarks>
+    /// The other leg of the same boundary. Lowering a request that was already
+    /// inside the ceiling would rewrite what an honest client asked for, and a
+    /// request exactly at the ceiling is the one most likely to be rewritten by a
+    /// comparison that is one bit out.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(InForce))]
+    public async Task ThePlaybackInformationBoundaryIsWalkedAtEachCeiling(
+        string source,
+        long? share,
+        int account,
+        int server,
+        long ceiling)
+    {
+        var store = Store(LiveShare(cap: share));
+
+        var below = ContextFor("/Items/" + Shared + "/PlaybackInfo?maxStreamingBitrate=" + (ceiling - 1));
+        var at = ContextFor("/Items/" + Shared + "/PlaybackInfo?maxStreamingBitrate=" + ceiling);
+        var above = ContextFor("/Items/" + Shared + "/PlaybackInfo?maxStreamingBitrate=" + (ceiling + 1));
+
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(below);
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(at);
+        await Filter(store, Guest, account, server).OnAuthorizationAsync(above);
+
+        Assert.Null(below.Result);
+        Assert.Null(at.Result);
+        Assert.Null(above.Result);
+
+        Assert.Equal(
+            (ceiling - 1).ToString(CultureInfo.InvariantCulture),
+            below.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
+        Assert.Equal(
+            ceiling.ToString(CultureInfo.InvariantCulture),
+            at.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
+        Assert.Equal(
+            ceiling.ToString(CultureInfo.InvariantCulture),
+            above.HttpContext.Request.Query["maxStreamingBitrate"].ToString());
+    }
+
+    /// <summary>
     /// A guest invited to one item under two live records is held to the tighter
     /// of the two caps. The alternative is an operator lowering a cap and a second
     /// record nobody was looking at keeping the stream where it was.
@@ -502,11 +611,18 @@ public sealed class GuestConfinementFilterTests
     private static GuestConfinementFilter Filter(IShareStore store) => Filter(store, Guest);
 
     private static GuestConfinementFilter Filter(IShareStore store, Guid caller)
+        => Filter(store, caller, accountCeiling: 0, serverCeiling: 0);
+
+    // The two ceilings that are not the share's arrive as numbers rather than as
+    // fixed zeroes, so a boundary can be walked around a ceiling whichever of the
+    // three produced it. Zero is how the server spells no ceiling at all, which
+    // is what every other test in this file passes.
+    private static GuestConfinementFilter Filter(IShareStore store, Guid caller, int accountCeiling, int serverCeiling)
         => new GuestConfinementFilter(
             store,
             ContextSaying(caller),
-            AccountsWhere(caller),
-            ServerSaying(0),
+            AccountsWhere(caller, accountCeiling),
+            ServerSaying(serverCeiling),
             At(Now),
             NullLogger<GuestConfinementFilter>.Instance);
 
@@ -530,11 +646,15 @@ public sealed class GuestConfinementFilterTests
         return context.Object;
     }
 
-    private static IUserManager AccountsWhere(Guid caller)
+    private static IUserManager AccountsWhere(Guid caller) => AccountsWhere(caller, 0);
+
+    private static IUserManager AccountsWhere(Guid caller, int ceiling)
     {
         var users = new Mock<IUserManager>();
         users.Setup(manager => manager.GetUserById(It.IsAny<Guid>()))
-            .Returns((Guid id) => id == caller ? new User("a caller", "provider", "reset") { Id = id } : null);
+            .Returns((Guid id) => id == caller
+                ? new User("a caller", "provider", "reset") { Id = id, RemoteClientBitrateLimit = ceiling }
+                : null);
         return users.Object;
     }
 
