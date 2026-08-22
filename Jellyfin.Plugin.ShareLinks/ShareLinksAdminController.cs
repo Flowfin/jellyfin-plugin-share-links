@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
@@ -77,6 +78,7 @@ public class ShareLinksAdminController : ControllerBase
     private readonly IShareStore _store;
     private readonly ShareKeyFile _keyFile;
     private readonly IUserManager _userManager;
+    private readonly IServerConfigurationManager _serverConfiguration;
     private readonly ILibraryManager _libraryManager;
     private readonly IPluginConfigurationSource _configuration;
     private readonly IAuthorizationContext _authorizationContext;
@@ -90,6 +92,7 @@ public class ShareLinksAdminController : ControllerBase
     /// <param name="store">Where the share records are kept.</param>
     /// <param name="keyFile">The file the install's keyed-hash key is kept in.</param>
     /// <param name="userManager">The server's own account management, which is what makes a guest account and what takes one away again.</param>
+    /// <param name="serverConfiguration">The server's own configuration, which is where the server-wide bitrate ceiling is read (#64).</param>
     /// <param name="libraryManager">The server's own answer to whether an item exists.</param>
     /// <param name="configuration">Where the operator's settings are read from, per request.</param>
     /// <param name="authorizationContext">The server's own answer to who is asking.</param>
@@ -100,6 +103,7 @@ public class ShareLinksAdminController : ControllerBase
         IShareStore store,
         ShareKeyFile keyFile,
         IUserManager userManager,
+        IServerConfigurationManager serverConfiguration,
         ILibraryManager libraryManager,
         IPluginConfigurationSource configuration,
         IAuthorizationContext authorizationContext,
@@ -110,6 +114,7 @@ public class ShareLinksAdminController : ControllerBase
         _store = store;
         _keyFile = keyFile;
         _userManager = userManager;
+        _serverConfiguration = serverConfiguration;
         _libraryManager = libraryManager;
         _configuration = configuration;
         _authorizationContext = authorizationContext;
@@ -331,7 +336,7 @@ public class ShareLinksAdminController : ControllerBase
 
         return Ok(new ShareCreated
         {
-            Share = ShareSummary.Of(record, now),
+            Share = Summary(written, record, now),
             Link = link,
             Guests = guests,
         });
@@ -376,7 +381,7 @@ public class ShareLinksAdminController : ControllerBase
         var listing = new List<ShareSummary>(records.Count);
         for (var index = 0; index < records.Count; index++)
         {
-            listing.Add(ShareSummary.Of(records[index], now));
+            listing.Add(Summary(records, records[index], now));
         }
 
         return Ok(listing);
@@ -504,7 +509,7 @@ public class ShareLinksAdminController : ControllerBase
             _sessionManager,
             GuestSessions.LeftWithNothingToWatch(remaining, record, now)).ConfigureAwait(false);
 
-        return Ok(ShareSummary.Of(record, now));
+        return Ok(Summary(remaining, record, now));
     }
 
     /// <summary>
@@ -628,6 +633,23 @@ public class ShareLinksAdminController : ControllerBase
             ? Ok(answer)
             : new ObjectResult(answer) { StatusCode = StatusCodes.Status500InternalServerError };
     }
+
+    // One summary, built the same way wherever this controller answers with one.
+    // The ceiling in force is a per-account answer over the whole store rather
+    // than over the record being answered about (#64), so every route that hands
+    // out a summary has to have the store's records at hand, and each of the three
+    // does. Written once, because a route that answered without the ceilings would
+    // be a surface saying nothing about the number an operator came to check.
+    private ShareSummary Summary(IReadOnlyList<ShareRecord> records, ShareRecord record, DateTimeOffset now)
+        => ShareSummary.Of(
+            record,
+            now,
+            GuestCeilings.Of(
+                records,
+                record,
+                account => ServerCeilings.OfAccount(_userManager, account),
+                ServerCeilings.OfServer(_serverConfiguration),
+                now));
 
     // One answer for a store this plugin cannot use, made in one place so that
     // the read path and the write path cannot drift into two. It carries no body,

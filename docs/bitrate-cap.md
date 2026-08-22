@@ -14,19 +14,32 @@ compiles against, at the version `Directory.Build.props` pins:
 The per-share ceiling is on the record, and it is carried and shown rather than
 acted on:
 
-    git grep -n 'MaxBitrateBitsPerSecond' origin/master -- Jellyfin.Plugin.ShareLinks/
-    origin/master:Jellyfin.Plugin.ShareLinks/BitrateCap.cs:34:/// <see cref="ShareRecord.MaxBitrateBitsPerSecond"/> already takes, and a second
-    origin/master:Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:162:                        cell(row, share.MaxBitrateBitsPerSecond);
-    origin/master:Jellyfin.Plugin.ShareLinks/EffectiveBitrate.cs:11:/// is <see cref="ShareRecord.MaxBitrateBitsPerSecond"/>; the invited account
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareRecord.cs:237:    public long? MaxBitrateBitsPerSecond { get; init; }
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareRecord.cs:293:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:226:        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareSummary.cs:104:    public long? MaxBitrateBitsPerSecond { get; init; }
-    origin/master:Jellyfin.Plugin.ShareLinks/ShareSummary.cs:128:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    git grep -n 'MaxBitrateBitsPerSecond' -- Jellyfin.Plugin.ShareLinks/
+    Jellyfin.Plugin.ShareLinks/BitrateCap.cs:34:/// <see cref="ShareRecord.MaxBitrateBitsPerSecond"/> already takes, and a second
+    Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:272:                        cell(row, share.MaxBitrateBitsPerSecond);
+    Jellyfin.Plugin.ShareLinks/EffectiveBitrate.cs:11:/// is <see cref="ShareRecord.MaxBitrateBitsPerSecond"/>; the invited account
+    Jellyfin.Plugin.ShareLinks/GuestConfinement.cs:213:                || record.MaxBitrateBitsPerSecond is not { } cap)
+    Jellyfin.Plugin.ShareLinks/ShareCreation.cs:170:            MaxBitrateBitsPerSecond = request.MaxBitrateMbps is null
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:237:    public long? MaxBitrateBitsPerSecond { get; init; }
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:293:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:317:        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    Jellyfin.Plugin.ShareLinks/ShareSummary.cs:104:    public long? MaxBitrateBitsPerSecond { get; init; }
+    Jellyfin.Plugin.ShareLinks/ShareSummary.cs:111:    /// <see cref="MaxBitrateBitsPerSecond"/> is what the operator typed onto this
+    Jellyfin.Plugin.ShareLinks/ShareSummary.cs:155:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
 
-A field, two copies from one record to another, a listing row and a cell on the
-page. So the storage side is settled and the open question is where that number
-becomes a stream that obeys it.
+A field, copies from one record to another, a listing row, a cell on the page, and
+the two places the enforcement reads it. So the storage side is settled, and where
+that number becomes a stream that obeys it is what the rest of this page decides.
+
+**The paste above did not reproduce, and it is re-run rather than repaired by
+hand.** It carried eight lines and the command returns eleven, because
+`ShareCreation` and `GuestConfinement` gained hits after it was written and the
+line numbers moved under it. It was found by running it while writing the section
+below, which needed the same command and could not cite a stale copy of it. The
+reference is dropped from the command with it: the paste is now what the command
+returns at the commit that carries this page, so a reader running it in a checkout
+of that commit gets these lines rather than whichever ones the remote has moved
+on to.
 
 Transcoding stays on for a guest, and that is a decision rather than an oversight:
 
@@ -120,10 +133,40 @@ on the instant that actually ends a share.
 
 This is not a preference between a simpler and a stricter answer. Under the
 account route the failure is quiet, in the direction of serving more than was
-asked for, and it is invisible to an operator reading the share view. Under the
+asked for, and it is invisible to an operator reading the share view, which the section below
+is what repaired for the chosen pair. Under the
 chosen pair the failure is a route somebody forgot to stand in front of, which is
 findable by enumerating the routes and is the same class of work the confinement
 filter already owes.
+
+## What the operator surface says about it
+
+The share view carries two numbers per row and they are not the same number. The
+ceiling column is the share's own, which is what an operator typed onto it. The
+in-force column is what a guest of it would actually be held to, one line per
+invited account, with the ceiling that produced it named beside the value.
+
+Both, rather than the second alone. An operator who can only see the effective
+number cannot tell a share whose own ceiling is doing nothing from one whose
+ceiling is the one holding, and the repair for those two is in different places.
+
+One line per account rather than one number per share, because the account's own
+remote client limit is the one input of the three that is not a property of the
+share. Two guests on one share have two answers, and a single number would be
+wrong for one of them without saying which.
+
+The answer is `GuestConfinement.Decide`'s, so the surface cannot disagree with the
+filter about what would be applied. That has a consequence worth stating: the
+share's own ceiling in that answer is the tightest across every live record naming
+the account for the item, so a second share nobody was looking at is part of the
+row. A per-record comparison would miss exactly that, which is this issue's own
+failure one level down.
+
+It is read at the instant the listing was read, in the same way the state column
+is. The filter reads the same three values again per request, so a value somebody
+moves in between is a disagreement between the page and the server rather than a
+fault in either. A surface that showed nothing until it could promise everything
+would show nothing.
 
 The switch on the account stays where the server put it, and this plugin does not
 write it:

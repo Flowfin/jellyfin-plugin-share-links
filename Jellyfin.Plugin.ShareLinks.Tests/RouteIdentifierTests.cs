@@ -87,16 +87,23 @@ public class RouteIdentifierTests
     /// arrives is a loop index passed along because it was already in hand.
     /// </para>
     /// <para>
-    /// So the routine is required to be a function of the record and the instant
-    /// alone. The instant is there because a state is a comparison against a
-    /// clock; it is the same value for every row of one listing and orders
-    /// nothing.
+    /// So the routine is required to be a function of the record, the instant and
+    /// the ceilings in force alone. The instant is there because a state is a
+    /// comparison against a clock; it is the same value for every row of one
+    /// listing and orders nothing.
+    /// </para>
+    /// <para>
+    /// The ceilings are there for #64 and they order nothing either: they are a
+    /// per-account answer computed from every record in the store, so the same
+    /// record produces the same list wherever it was read from. The assertion is
+    /// over the types, so a position slipped in beside them arrives as an integral
+    /// parameter and reds this whatever it is called.
     /// </para>
     /// </remarks>
     [Fact]
     public void NothingAboutWhereARecordSitsInTheStoreCanReachARow()
         => Assert.Equal(
-            new[] { typeof(ShareRecord), typeof(DateTimeOffset) },
+            new[] { typeof(ShareRecord), typeof(DateTimeOffset), typeof(IReadOnlyList<GuestCeiling>) },
             typeof(ShareSummary)
                 .GetMethod(nameof(ShareSummary.Of), BindingFlags.Public | BindingFlags.Static)!
                 .GetParameters()

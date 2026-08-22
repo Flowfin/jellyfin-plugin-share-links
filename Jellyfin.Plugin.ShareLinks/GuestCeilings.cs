@@ -1,0 +1,85 @@
+using System;
+using System.Collections.Generic;
+
+namespace Jellyfin.Plugin.ShareLinks;
+
+/// <summary>
+/// The ceiling in force for each account one share names (#64).
+/// </summary>
+/// <remarks>
+/// <para>
+/// #64's first paragraph is the failure this answers: an operator lowers a number
+/// and nothing changes, because one of the other two ceilings was the one holding
+/// and nothing said so. The share view showed the record's own number, which is
+/// what the operator just typed, so it moved every time and meant nothing.
+/// </para>
+/// <para>
+/// The answer comes out of <see cref="GuestConfinement.Decide"/> and not out of a
+/// second comparison written here, so the number an operator reads is the number
+/// the request-path filter would apply. A routine of its own would be the second
+/// copy the <c>share-decision-comes-from-one-routine</c> invariant exists
+/// against, and it would drift in exactly the direction that hides this bug: the
+/// share's own ceiling here is the tightest across every live record naming the
+/// account for the item, so a second share nobody was looking at is part of the
+/// answer and a per-record comparison would miss it.
+/// </para>
+/// <para>
+/// **This is the answer at the instant the listing was read, and it is not a
+/// promise about the instant a guest asks.** The three inputs are read from the
+/// records and from the server as they stand now; the filter reads them again per
+/// request and can get a different answer because somebody moved one in between.
+/// <see cref="ShareSummary.State"/> is read the same way and for the same reason,
+/// and that is a bound rather than a defect: a surface that showed nothing until
+/// it could promise everything would show nothing.
+/// </para>
+/// </remarks>
+public static class GuestCeilings
+{
+    /// <summary>
+    /// What each account this share names would be capped at, right now.
+    /// </summary>
+    /// <param name="records">Every record the store holds, because the answer is not this record's alone.</param>
+    /// <param name="record">The share the answers are about.</param>
+    /// <param name="accountCeiling">The remote client limit of one account, or <c>null</c> where it carries none.</param>
+    /// <param name="serverCeiling">The server configuration's remote client limit, or <c>null</c> where it carries none.</param>
+    /// <param name="now">The instant the records are judged live at.</param>
+    /// <returns>One answer per invited account, in the order the record names them.</returns>
+    /// <remarks>
+    /// The invited accounts are walked rather than the accounts this plugin made,
+    /// because the invited list is what an operator sees in the row beside this
+    /// one and an answer that silently covered a different set would be read as
+    /// covering that one. An invited account this plugin did not create comes back
+    /// as <see cref="GuestVerdict.NotAGuestOfThisPlugin"/>, which is the honest
+    /// answer: the filter does not stand in front of such an account, so no
+    /// ceiling of this plugin's reaches it.
+    /// </remarks>
+    public static IReadOnlyList<GuestCeiling> Of(
+        IReadOnlyList<ShareRecord> records,
+        ShareRecord record,
+        Func<Guid, long?> accountCeiling,
+        long? serverCeiling,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(accountCeiling);
+
+        var invited = record.InvitedUserIds;
+        var answers = new List<GuestCeiling>(invited.Count);
+        for (var index = 0; index < invited.Count; index++)
+        {
+            var account = invited[index];
+            var decision = GuestConfinement.Decide(
+                records,
+                account,
+                record.ItemId,
+                accountCeiling(account),
+                serverCeiling,
+                now);
+
+            answers.Add(new GuestCeiling(account, decision.Verdict, decision.Cap));
+        }
+
+        return answers;
+    }
+}

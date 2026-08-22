@@ -406,6 +406,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
             store,
             keyFile,
             accounts.Manager,
+            ServerConfigurations.WithNoCeiling(),
             Mock.Of<ILibraryManager>(MockBehavior.Strict),
             Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),

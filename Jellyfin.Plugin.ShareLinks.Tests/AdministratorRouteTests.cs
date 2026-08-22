@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
@@ -61,6 +62,7 @@ public sealed class AdministratorRouteTests : IDisposable
     private static readonly Guid Operator = new Guid("33333333-3333-3333-3333-333333333333");
     private static readonly Guid AnotherOperator = new Guid("44444444-4444-4444-4444-444444444444");
     private static readonly Guid Invited = new Guid("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid AnotherInvited = new Guid("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Item = new Guid("55555555-5555-5555-5555-555555555555");
 
     private readonly string _directory;
@@ -211,6 +213,7 @@ public sealed class AdministratorRouteTests : IDisposable
         => Assert.Equal(
             new[]
             {
+                "AppliedCeilings",
                 "CreatedAt",
                 "CreatedByUserId",
                 "ExpiresAt",
@@ -227,6 +230,71 @@ public sealed class AdministratorRouteTests : IDisposable
                 .Select(property => property.Name)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToArray());
+
+    /// <summary>
+    /// The listing names the ceiling in force for each account the share names,
+    /// and which of the three ceilings produced it. This is #64's second clause.
+    /// </summary>
+    /// <remarks>
+    /// The share's own ceiling is the highest of the three here on purpose. A
+    /// surface reporting the record's own number would answer 6 Mbit/s for both
+    /// guests, which is what an operator lowers and then finds nothing changed by;
+    /// the answer is 4 for the guest carrying their own limit and 5 for the one
+    /// who does not, and each says which ceiling it came from.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheListingNamesTheCeilingInForceForEachAccountAndWhichOneProducedIt()
+    {
+        using var store = new ShareStore(StorePath);
+        var accounts = new RecordingAccounts();
+        accounts.CarriesBitrateLimit[Invited] = 4_000_000;
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(invited: new[] { Invited, AnotherInvited }, pluginCreated: new[] { Invited, AnotherInvited }, cap: 6_000_000),
+        });
+
+        var answer = await Controller(store, Operator, At(Now), new RecordingSessions(), accounts, ServerConfigurations.Saying(5_000_000))
+            .List(CancellationToken.None);
+        var row = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<ShareSummary>>(Assert.IsType<OkObjectResult>(answer.Result).Value));
+
+        Assert.Equal(6_000_000, row.MaxBitrateBitsPerSecond);
+        Assert.Equal(new[] { Invited, AnotherInvited }, row.AppliedCeilings.Select(ceiling => ceiling.UserId).ToArray());
+
+        Assert.Equal(4_000_000, row.AppliedCeilings[0].Cap.BitsPerSecond);
+        Assert.Equal(BitrateCeiling.Account, row.AppliedCeilings[0].Cap.Applied);
+        Assert.Equal(GuestVerdict.Reaches, row.AppliedCeilings[0].Reach);
+
+        Assert.Equal(5_000_000, row.AppliedCeilings[1].Cap.BitsPerSecond);
+        Assert.Equal(BitrateCeiling.ServerRemoteClientLimit, row.AppliedCeilings[1].Cap.Applied);
+    }
+
+    /// <summary>
+    /// The revocation answers with the ceilings as they stand after the press,
+    /// which is nothing in force rather than the number the record still carries.
+    /// </summary>
+    /// <remarks>
+    /// The row an operator is looking at when they press revoke is replaced by
+    /// this answer, so a stale ceiling here is a stale ceiling on the screen. The
+    /// record keeps its own number, because revoking does not erase what the share
+    /// was for.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheAnswerToARevocationCarriesNoCeilingInForce()
+    {
+        using var store = new ShareStore(StorePath);
+        var share = ARecord(pluginCreated: new[] { Invited }, cap: 6_000_000);
+        await store.MutateAsync(_ => new[] { share });
+
+        var answer = await Controller(store).Revoke(share.Id, request: null, CancellationToken.None);
+        var row = Assert.IsType<ShareSummary>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+
+        Assert.Equal(6_000_000, row.MaxBitrateBitsPerSecond);
+        var ceiling = Assert.Single(row.AppliedCeilings);
+        Assert.Equal(GuestVerdict.RefusedNothingLive, ceiling.Reach);
+        Assert.Null(ceiling.Cap.BitsPerSecond);
+    }
 
     /// <summary>
     /// A store that cannot be read is an error to an operator rather than an
@@ -742,8 +810,10 @@ public sealed class AdministratorRouteTests : IDisposable
         DateTimeOffset? expiresAt = null,
         DateTimeOffset? revokedAt = null,
         IReadOnlyList<Guid>? invited = null,
-        IReadOnlyList<Guid>? pluginCreated = null) => new ShareRecord
+        IReadOnlyList<Guid>? pluginCreated = null,
+        long? cap = null) => new ShareRecord
         {
+            MaxBitrateBitsPerSecond = cap,
             SchemaVersion = ShareRecord.CurrentSchemaVersion,
             Id = Guid.NewGuid(),
             ItemId = Item,
@@ -785,10 +855,20 @@ public sealed class AdministratorRouteTests : IDisposable
             TimeProvider clock,
             RecordingSessions sessions,
             RecordingAccounts accounts)
+            => Controller(store, caller, clock, sessions, accounts, ServerConfigurations.WithNoCeiling());
+
+        private ShareLinksAdminController Controller(
+            IShareStore store,
+            Guid? caller,
+            TimeProvider clock,
+            RecordingSessions sessions,
+            RecordingAccounts accounts,
+            IServerConfigurationManager serverConfiguration)
         => new ShareLinksAdminController(
             store,
             _keyFile,
             accounts.Manager,
+            serverConfiguration,
             Mock.Of<ILibraryManager>(MockBehavior.Strict),
             Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),
@@ -816,8 +896,13 @@ public sealed class AdministratorRouteTests : IDisposable
         {
             _manager
                 .Setup(manager => manager.GetUserById(It.IsAny<Guid>()))
-                .Returns((Guid id) => Carries.TryGetValue(id, out var ceiling)
-                    ? new User("a guest", "provider", "reset") { Id = id, MaxActiveSessions = ceiling }
+                .Returns((Guid id) => Carries.ContainsKey(id) || CarriesBitrateLimit.ContainsKey(id)
+                    ? new User("a guest", "provider", "reset")
+                    {
+                        Id = id,
+                        MaxActiveSessions = Carries.TryGetValue(id, out var ceiling) ? ceiling : 0,
+                        RemoteClientBitrateLimit = CarriesBitrateLimit.TryGetValue(id, out var limit) ? limit : 0,
+                    }
                     : null);
 
             _manager
@@ -839,6 +924,12 @@ public sealed class AdministratorRouteTests : IDisposable
         public Dictionary<Guid, UserPolicy> Policies { get; } = new Dictionary<Guid, UserPolicy>();
 
         public Dictionary<Guid, int> Carries { get; } = new Dictionary<Guid, int>();
+
+        // What each account carries as its own remote client limit, which is the
+        // second of the three ceilings the listing reports (#64). Separate from
+        // Carries, because an account can carry one of the two switches and not
+        // the other and a fixture that fused them could not tell them apart.
+        public Dictionary<Guid, int> CarriesBitrateLimit { get; } = new Dictionary<Guid, int>();
     }
 
     // A session manager that answers every ask and writes down which accounts it

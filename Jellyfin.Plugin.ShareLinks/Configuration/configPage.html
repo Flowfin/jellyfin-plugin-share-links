@@ -138,6 +138,7 @@
                                 <th scope="col">State</th>
                                 <th scope="col">Expires</th>
                                 <th scope="col">Ceiling</th>
+                                <th scope="col">In force</th>
                                 <th scope="col">Revoked</th>
                                 <th scope="col"></th>
                             </tr>
@@ -163,7 +164,9 @@
 
                     <p>The count above is read from the table when this page last loaded it, so it is what was live then rather than what is live at the moment of the press. The number the server answers with is the one taken as the shares were stopped, and that is the one to believe.</p>
 
-                    <p>What is not here. The link is not, and cannot be: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked, and the table above is a listing rather than a way back to what a create answered. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own; which of the ceilings that apply actually wins is decided elsewhere and is not on this page.</p>
+                    <p>What is not here. The link is not, and cannot be: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked, and the table above is a listing rather than a way back to what a create answered. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own, which is the number that was typed onto this share. The in-force column is what a guest of it would actually be held to, one line per invited account, with the ceiling that produced it named beside the number: <code>Share</code> is this share's own, <code>Account</code> is that guest's own remote client limit, and <code>ServerRemoteClientLimit</code> is the server-wide one. Where two of them sit at the same value both are named, because lowering the one that was not named would look like a change that did nothing. An invited account this plugin did not create is not confined by it either, so no ceiling of this plugin's reaches that account and the line says so rather than showing a number.</p>
+
+                    <p>The in-force column is read at the instant the listing was, in the same way the state column is. The ceiling a guest actually meets is worked out again when they ask to play something, out of the same three values as they stand then, so a value somebody moves in between is a disagreement between this page and the server rather than a fault in either.</p>
                 </div>
             </div>
         </div>
@@ -225,6 +228,36 @@
                     return td;
                 }
 
+                // What each invited account of one share would actually be held
+                // to, as one line each. The number alone is not the answer: the
+                // whole of #64 is that an operator lowered a ceiling and nothing
+                // changed, so the name of whichever ceiling is holding is what
+                // this column is for and it is never dropped.
+                //
+                // An account with no ceiling anywhere and an account this plugin
+                // does not cap at all are different sentences rather than the same
+                // blank, because they are repaired in opposite directions.
+                function ceilingInForce(inForce) {
+                    if (inForce.Reach === "NotAGuestOfThisPlugin") {
+                        return inForce.UserId + ": not an account this plugin made, so it caps nothing";
+                    }
+
+                    if (inForce.Reach !== "Reaches") {
+                        return inForce.UserId + ": no live share of this item, so nothing is in force";
+                    }
+
+                    var cap = inForce.Cap || {};
+                    if (cap.BitsPerSecond === null || cap.BitsPerSecond === undefined) {
+                        return inForce.UserId + ": no ceiling is set anywhere";
+                    }
+
+                    return inForce.UserId + ": " + cap.BitsPerSecond + " (" + cap.Applied + ")";
+                }
+
+                function ceilingsInForce(share) {
+                    return (share.AppliedCeilings || []).map(ceilingInForce).join("; ");
+                }
+
                 function draw(shares) {
                     var rows = page.querySelector("#ShareLinksShareRows");
                     rows.textContent = "";
@@ -237,6 +270,7 @@
                         cell(row, share.State);
                         cell(row, share.ExpiresAt);
                         cell(row, share.MaxBitrateBitsPerSecond);
+                        cell(row, ceilingsInForce(share));
                         cell(row, share.RevokedAt);
 
                         var action = cell(row, "");
