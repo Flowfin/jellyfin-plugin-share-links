@@ -572,6 +572,53 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
+    /// The number a rotation answers with reaches the operator, and it reaches
+    /// them off the answer rather than out of the page (#28).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A rotation stops every live share on the server and cannot be undone, so
+    /// how many it stopped is the size of what an operator has just done. The
+    /// call already answers with that number and a page that dropped it would
+    /// leave them told that something happened and not what.
+    /// </para>
+    /// <para>
+    /// Two ways of losing it are judged here, because they fail identically on a
+    /// screen. A sentence carrying no value at all leaves the count in the
+    /// answer and nowhere else, and a value read by a name the type does not
+    /// carry writes <c>undefined</c> into that sentence. The first is caught by
+    /// requiring the count in what the message element is written with, the
+    /// second by the same member comparison the create and the listing get.
+    /// </para>
+    /// <para>
+    /// What this cannot see is whether an operator reads the sentence, or
+    /// whether the browser renders it. Nothing in this repository reaches a
+    /// browser, and the remarks at the top of this file say so of every claim
+    /// here.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheRotationTellsTheOperatorHowManySharesItStopped()
+    {
+        AssertEveryMemberRead("rotated", typeof(ShareKeyRotated));
+
+        var written = Regex.Matches(
+                Page(),
+                @"#ShareLinksRotateMessage""\)\.textContent = (?<sentence>[^;]*);")
+            .Select(match => match.Groups["sentence"].Value)
+            .ToList();
+
+        Assert.True(
+            written.Count > 0,
+            "the page writes nothing into the element that reports a rotation, so an operator who pressed it is told nothing at all.");
+
+        Assert.True(
+            written.Any(sentence => sentence.Contains(nameof(ShareKeyRotated.SharesStopped), StringComparison.Ordinal)),
+            "no sentence the page writes into the rotation message carries the count the call answers with, so an operator is told a rotation happened and not how much it stopped. What the page writes there: "
+            + string.Join(" | ", written));
+    }
+
+    /// <summary>
     /// The link comes back from one route the page calls and from no other, which
     /// is what "shown once" rests on. The page can only fail to show it again; the
     /// server has to be unable to answer with it, and a second route carrying a
