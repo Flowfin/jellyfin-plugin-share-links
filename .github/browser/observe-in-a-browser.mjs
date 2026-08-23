@@ -15,6 +15,14 @@
 // Everything is printed. Where a step asserts, it says so; where the answer is
 // recorded rather than judged, it says that too, because an observation nobody
 // can read afterwards is not one.
+//
+// What the first green run of this found is #269: the link answers 401 to a top
+// level navigation, so a guest who is signed in on the web client and clicks it
+// meets an empty page. That is recorded here rather than asserted, because
+// asserting it would make a nightly job red for as long as the answer to #269
+// is undecided, and asserting the opposite would make it red for the same
+// reason. The line the leg prints names the issue so a green run cannot be read
+// as a link that works.
 
 import { chromium } from "playwright";
 
@@ -140,7 +148,12 @@ try {
         }
         process.stdout.write("OK: the link opened in a browser reaches the item the share names\n");
     } else {
-        process.stdout.write(`NOT OBSERVED: the browser did not reach the item. What it did is above, and the body it was given was ${JSON.stringify((await page.content()).slice(0, 300))}\n`);
+        // Measured on 2026-08-23 and open as #269: a top level navigation
+        // carries no token, the route refuses it, and the guest meets an empty
+        // page. The line below says the whole of that rather than reporting a
+        // bare miss, because a reader of a green run has to be able to tell a
+        // leg that observed a refusal from one that observed nothing.
+        process.stdout.write(`NOT OBSERVED, AND THE REASON IS #269: the link answered ${openedStatus} and the browser did not reach the item. ` + `The body it was given was ${JSON.stringify((await page.content()).slice(0, 300))}. ` + `The same link answers 302 in this run when the request carries the guest's token, so what fails is the navigation and not the route.\n`);
     }
 
     say("the item no share of this guest names, addressed directly in the client");
