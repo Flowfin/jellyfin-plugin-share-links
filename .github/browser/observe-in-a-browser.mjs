@@ -68,11 +68,15 @@ try {
     say("the guest signs in on the server's own page");
     await page.goto(`${base}/web/index.html`, { waitUntil: "domcontentloaded" });
 
-    // The visual list is what the page opens on; the manual form is behind the
-    // button below it and is the only way in for an account the list does not
-    // show. Both are the client's own markup at the line this job pins.
-    await page.waitForSelector(".btnManual", { timeout: 60000 });
-    await page.click(".btnManual");
+    // The manual form is the only way in for an account the visual list does not
+    // show, and which of the two the page opens on is the client's decision
+    // rather than this job's: the first run of this leg waited on a button the
+    // page had already hidden because it was showing the form behind it. So ask
+    // what is on the page instead of assuming which half of the pair it chose.
+    await page.waitForSelector("#txtManualName, .btnManual", { timeout: 60000 });
+    if (!(await page.isVisible("#txtManualName"))) {
+        await page.click(".btnManual");
+    }
     await page.waitForSelector("#txtManualName", { state: "visible", timeout: 30000 });
     await page.fill("#txtManualName", guest);
     await page.fill("#txtManualPassword", credential);
