@@ -2,12 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- One line, and plural on purpose. The harness fuzzes the assembly an
-         operator installs, and what is packaged is the 10.11 line (#181). Plural
-         because the Jellyfin version in Directory.Build.props is now a function of
-         the target framework, and a project that sets the singular property after
-         that import is evaluated with no framework and resolves no version. -->
-    <TargetFrameworks>net9.0</TargetFrameworks>
+    <!-- Both lines, and not because the harness needs the second one. What the
+         job fuzzes is the assembly an operator installs, which is the 10.11 line,
+         and .github/workflows/fuzz.yml names that output path. The reason for the
+         second entry is that a per line build of the solution passes the framework
+         to every project in it, so a project carrying one framework fails the other
+         line's leg with NETSDK1005 (#181). Measured on the first run of that leg
+         rather than reasoned about. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <RootNamespace>Jellyfin.Plugin.ShareLinks.Fuzz</RootNamespace>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

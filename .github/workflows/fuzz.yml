@@ -125,10 +125,13 @@ jobs:
           dotnet restore Jellyfin.Plugin.ShareLinks.Fuzz/Jellyfin.Plugin.ShareLinks.Fuzz.csproj --locked-mode
 
       - name: Build the harness
+        # -f net9.0: the harness carries both server lines so that a per line build
+        # of the solution does not fail on it (#181), and what this job fuzzes is
+        # the assembly an operator installs, which is the line build.yaml names.
         run: |
           set -euo pipefail
           dotnet build Jellyfin.Plugin.ShareLinks.Fuzz/Jellyfin.Plugin.ShareLinks.Fuzz.csproj \
-            --configuration Release --no-restore -warnaserror
+            --configuration Release --no-restore -warnaserror -f net9.0
 
       - name: Install clang
         # libFuzzer comes out of the clang runtime, so this is what -fsanitize=fuzzer

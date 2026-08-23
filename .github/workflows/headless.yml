@@ -101,6 +101,13 @@ jobs:
         # the absolute paths the build wrote are the paths that exist here. The
         # cache is read-only: --no-build must not restore, and if it tries, this
         # is where that is noticed rather than in a release.
+        #
+        # -f net9.0, and this is a real bound rather than a detail (#181). The image
+        # above carries one runtime, so the net10.0 leg cannot start in it and its
+        # testhost reports that it must install .NET. What is proved offline and
+        # unprivileged is therefore the line that is packaged. The two legs run the
+        # same test code, so the property this job is about does not differ between
+        # them, but it is measured on one of them and the other is not covered here.
         run: |
           set -euo pipefail
           docker run --rm \
@@ -116,7 +123,7 @@ jobs:
             -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
             -w "$PWD" \
             "$SDK_IMAGE" \
-            dotnet test --configuration Release --no-build --verbosity normal | tee headless-output.txt
+            dotnet test --configuration Release --no-build --verbosity normal -f net9.0 | tee headless-output.txt
 
       - name: Report the number of tests run
         # A suite that runs nothing reports success, which looks exactly like a

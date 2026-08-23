@@ -399,8 +399,8 @@
       "jellyfin.plugin.sharelinks.fuzz": {
         "type": "Project",
         "dependencies": {
-          "Jellyfin.Controller": "[10.11.11, )",
-          "Jellyfin.Model": "[10.11.11, )",
+          "Jellyfin.Controller": "[12.0.0-rc5, )",
+          "Jellyfin.Model": "[12.0.0-rc5, )",
           "Jellyfin.Plugin.ShareLinks": "[0.0.0-unreleased, )",
           "SharpFuzz": "[2.3.0, )"
         }
