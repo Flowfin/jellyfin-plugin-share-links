@@ -2,7 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- Both lines, and not because the harness needs the second one. What the
+         job fuzzes is the assembly an operator installs, which is the 10.11 line,
+         and .github/workflows/fuzz.yml names that output path. The reason for the
+         second entry is that a per line build of the solution passes the framework
+         to every project in it, so a project carrying one framework fails the other
+         line's leg with NETSDK1005 (#181). Measured on the first run of that leg
+         rather than reasoned about. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <RootNamespace>Jellyfin.Plugin.ShareLinks.Fuzz</RootNamespace>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

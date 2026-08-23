@@ -18,7 +18,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: "9.0.316"
+  # Two SDKs, because the tree carries two server lines and the 12.0 packages
+  # support net10.0 only (#181). Pinned rather than a wildcard, for the reason the
+  # first line already gives: the SDK that judges a pull request is the SDK the next
+  # one is judged by.
+  DOTNET_VERSION: |
+    9.0.316
+    10.0.301
   # The packaging tool is not named here. It is pinned by hash, with its whole
   # transitive closure, in `.github/jprm-requirements.txt`, and a version in this
   # block as well would be a second place to change and a second place to forget

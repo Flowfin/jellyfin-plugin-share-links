@@ -66,7 +66,20 @@
              against it and excludes it at runtime, because the server supplies it;
              the test project needs the same assemblies present to run at all. One
              property so the two cannot drift apart. -->
-        <JellyfinVersion>10.11.11</JellyfinVersion>
+        <!-- Two lines now, and the version is a function of the target framework
+             rather than a second property somebody sets (#181). The 12.0 packages
+             support net10.0 only, so the two lines cannot share a compiled assembly
+             and the framework is already what tells them apart. Written this way, a
+             build cannot ask for the 12.0 packages at net9.0 or the other way round,
+             which is the drift a free standing version property invites.
+
+             12.0 is a release candidate and this plugin does not claim to support it.
+             The decision of 2026-08-21 on #181 is that the multi-targeting lands now
+             and that packaging, the abi floor and the readme's supported line
+             sentence wait for 12.0.0 to be released. build.yaml still names one
+             targetAbi and one framework for that reason. -->
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
     </PropertyGroup>
 
     <PropertyGroup>

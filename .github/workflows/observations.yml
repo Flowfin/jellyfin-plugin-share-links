@@ -41,7 +41,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: "9.0.316"
+  # Two SDKs, because the tree carries two server lines and the 12.0 packages
+  # support net10.0 only (#181). Pinned rather than a wildcard, for the reason the
+  # first line already gives: the SDK that judges a pull request is the SDK the next
+  # one is judged by.
+  DOTNET_VERSION: |
+    9.0.316
+    10.0.301
   PYTHON_VERSION: "3.12"
   # The same runtime the formatting job pins, for the same reason: the browser is
   # what is being pinned and a runtime moving under it is the other half of the

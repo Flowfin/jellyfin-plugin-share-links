@@ -55,10 +55,19 @@ That number is what the package offers a server and a catalogue as the line it
 was built for. Whether a particular server accepts it is the server's decision
 and not this plugin's.
 
-No other server version appears in this file, and a test refuses one that does.
-A readme naming a version the package does not carry sends somebody to install
-something that will not load, and the number is in two files rather than one only
-because a reader will not open the manifest.
+No other version of that shape appears in this file, and a test refuses one that
+does. A readme naming a version the package does not carry sends somebody to
+install something that will not load, and the number is in two files rather than
+one only because a reader will not open the manifest.
+
+The tree compiles a second line and does not support it. `Directory.Build.props`
+names a Jellyfin package version per target framework, so a build produces
+assemblies for both 10.11 and 12.0 and the checks here judge both. What that buys
+is finding out on the day it happens which of this plugin's calls move when the
+server line does. It is not a claim of support: the 12.0 line has no released
+version yet, the package this repository builds carries the one `targetAbi`
+above, and nothing here has been run against a 12.0 server. #181 is where that is
+decided and what turns the second line into a supported one.
 
 ## Installing
 

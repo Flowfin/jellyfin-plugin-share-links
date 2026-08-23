@@ -55,9 +55,13 @@ public sealed class PersonalDataTests : IDisposable
         get
         {
             var data = new TheoryData<string>();
-            foreach (var field in Fields())
+
+            // `name` rather than `field`: at net10.0 the language is C# 14, where
+            // `field` is a contextual keyword inside a property accessor and binds to
+            // the backing field instead of to this loop variable (#181).
+            foreach (var name in Fields())
             {
-                data.Add(field);
+                data.Add(name);
             }
 
             return data;
