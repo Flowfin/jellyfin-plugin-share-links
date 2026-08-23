@@ -1,0 +1,8 @@
+{
+    "name": "share-links-observation-browser",
+    "private": true,
+    "description": "The browser the observation job drives, pinned so a green run means the same thing tomorrow (#237).",
+    "dependencies": {
+        "playwright": "1.62.1"
+    }
+}
