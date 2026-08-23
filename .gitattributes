@@ -1,0 +1,12 @@
+# The fuzz seed corpus (#19) is bytes, not text. Two things follow and both are
+# what this line buys.
+#
+# git must not normalise line endings inside a seed: a seed exists to be the exact
+# input the target receives, and a carriage return silently deleted on the way
+# into the tree is a different input than the one that was committed.
+#
+# And the scanners that read tracked text must skip them. `unicode-guard.yml`
+# greps the tree with a UTF-8 pattern and fails closed when the scanner errors,
+# and one of these seeds is deliberately not valid UTF-8. Marking them binary is
+# what keeps that guard judging text and this directory out of it.
+Jellyfin.Plugin.ShareLinks.Fuzz/corpus/** binary
