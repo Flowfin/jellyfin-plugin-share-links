@@ -37,6 +37,28 @@ what was done at each step. The route tests judge what the plugin answers; wheth
 an operator following the guide arrives at a working share is an observation and
 not an assertion, and no run on a machine without a server supplies it.
 
+**Recorded, and not a test.** #237. The harness drives a real browser at the
+server: the invited guest signs in on the web client's own form, and the link is
+then opened as a top level navigation, which is what clicking one in a mail or a
+chat is.
+
+```
+the link with no identity at all -> 401
+the link carrying the guest's token -> 302
+the client left the sign-in page for #/home
+OK: the guest signed in through the client's own form
+GET .../ShareLinks/Guest/<token> in the browser -> 401
+NOT OBSERVED: the browser did not reach the item.
+the client shows for the other item: no item name
+```
+
+This refusal was expected to become unnecessary once a browser was in the job.
+It has not. What the run shows is that a guest signed in on the web client who
+clicks the link meets a refusal and an empty page, while the same link resolves
+for a request carrying the guest's token in a header, so what fails is the
+navigation rather than the route. That is #269 and it is undecided, which is why
+the leg records the answer instead of asserting either side of it.
+
 ### A test that exercises a real transcode
 
 **Why it is refused.** It needs a media file and a transcoder binary, and the rule
