@@ -174,7 +174,13 @@ guest_password=$(body | jq -r '.Guests[0].Credential')
 [ "$guest_password" != "null" ] && [ -n "$guest_password" ] || fail "the answer carried no credential: $(body)"
 share=$(body | jq -r '.Share.Id')
 guest_id=$(body | jq -r '.Guests[0].UserId')
+# The link the operator sends, taken out of the answer rather than assembled
+# here, because what observation 5 opens has to be the bytes this plugin hands
+# over and not a second construction of them.
+link=$(body | jq -r '.Link')
+[ "$link" != "null" ] && [ -n "$link" ] || fail "the answer carried no link: $(body)"
 echo "share $share, guest $guest, account $guest_id"
+echo "link $link"
 
 say "OBSERVATION 1: at and past the session ceiling (#56)"
 # The ceiling is written onto the account the plugin made, and it is the server
@@ -306,5 +312,46 @@ echo "/System/Configuration -> $status"
 if [ "$status" = "200" ]; then
   echo "NOT REFUSED, AND NOT A DEFECT OF THIS PLUGIN: the server gates reading its configuration behind ordinary authentication rather than behind elevation, so an invited guest reads it like any signed-in account. Writing it is gated behind elevation. docs/limits.md carries this where an operator meets it."
 fi
+
+say "OBSERVATION 5: the link opened in a real browser (#75)"
+# The refusal `docs/refused-tests.md` names first is a test that starts a real
+# server and drives a browser. That refusal is about the suite, which may reach
+# neither. This job already brings a server up, so the browser is the one
+# instrument left that reads what a guest meets when they click what an operator
+# sent them, and two claims in the tree are about nothing else:
+# `ShareLinksGuestController.TheItemsAddress` says its address was not measured
+# against a running web client, and `docs/operator-guide.md` says the guest signs
+# in and then opens the link.
+#
+# Two legs before the browser, because they are cheap and they say which half of
+# the answer the browser is showing.
+#
+# The link carrying no identity at all. Asserted rather than recorded: the whole
+# design rests on the server identifying the caller, so a link that resolves for
+# a request carrying nothing is the threat model gone.
+status=$(curl -sS -o /tmp/observation-body -w '%{http_code}' "$link")
+echo "the link with no identity at all -> $status"
+[ "$status" != "302" ] || fail "the link resolved for a caller the server never identified"
+
+# And the same link carrying the guest's own token in a header the server reads,
+# which is the path the route tests drive. Made once here so that whatever the
+# browser does can be read against a request that is known to resolve.
+status=$(call GET "${link#"$base"}" "guest-1" "$guest_token")
+echo "the link carrying the guest's token -> $status"
+[ "$status" = "302" ] || fail "the link did not resolve for the guest it names: $status"
+
+# The browser lives beside its own pinned dependency rather than beside this
+# script, so what drives it is the version `.github/browser/package-lock.json`
+# records and not whatever is installed on the machine. A hand run installs it
+# the way the workflow does:
+#
+#   npm --prefix .github/browser ci
+#   npx --prefix .github/browser playwright install --with-deps chromium
+browser="$(dirname "$0")/../browser"
+if [ ! -d "$browser/node_modules/playwright" ]; then
+  fail "the browser this leg drives is not installed. The two commands are in the comment above this line."
+fi
+
+OBSERVE_BASE="$base"   OBSERVE_LINK="$link"   OBSERVE_GUEST="$guest"   OBSERVE_CREDENTIAL="$guest_password"   OBSERVE_ITEM="$item"   OBSERVE_OTHER_ITEM="$other"   node "$browser/observe-in-a-browser.mjs"
 
 say "every observation this script makes was made"

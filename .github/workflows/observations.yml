@@ -29,6 +29,7 @@ on:
     paths:
       - ".github/workflows/observations.yml"
       - ".github/scripts/observe-on-a-real-server.sh"
+      - ".github/browser/**"
   workflow_dispatch:
 
 # Deny-all at the workflow level; the job below reads the tree to build the
@@ -42,6 +43,10 @@ concurrency:
 env:
   DOTNET_VERSION: "9.0.316"
   PYTHON_VERSION: "3.12"
+  # The same runtime the formatting job pins, for the same reason: the browser is
+  # what is being pinned and a runtime moving under it is the other half of the
+  # same reproducibility.
+  NODE_VERSION: "24.18.0"
   DOTNET_NOLOGO: "true"
   DOTNET_CLI_TELEMETRY_OPTOUT: "true"
   # The server line `Directory.Build.props` compiles against, pinned by digest
@@ -74,6 +79,26 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install the pinned browser
+        # `npm ci` and not `npm install`, so what drives the browser leg is the
+        # version `.github/browser/package-lock.json` records rather than
+        # whatever the registry offers today. `playwright install` then fetches
+        # the browser build that package version is tied to, so the two move
+        # together or not at all.
+        #
+        # `--with-deps` is what pulls the shared libraries Chromium needs on a
+        # bare runner. It is an apt install on the runner and nothing else, and
+        # it reaches no part of this repository.
+        run: |
+          set -euo pipefail
+          npm --prefix .github/browser ci
+          npx --prefix .github/browser playwright install --with-deps chromium
 
       - name: Install JPRM
         # The same pinned set `package.yaml` installs, and for the same reason.
