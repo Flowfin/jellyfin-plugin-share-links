@@ -481,3 +481,201 @@ jobs:
           files: ./*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # An alert when this run does not succeed (#91).
+  #
+  # A publish that fails is a release that is silently missing. The run reds in
+  # the Actions tab, an email goes to whoever pushed the tag, and the catalogue
+  # simply does not gain a version, so what an operator meets is the absence days
+  # later rather than the failure. This job leaves an issue on the board naming
+  # the run and the step, which is the one place here a person reads without
+  # going to look.
+  #
+  # IT LIVES INSIDE THIS RUN BECAUSE THE ALTERNATIVE IS REFUSED BY THE GATE. The
+  # natural shape is a separate workflow on `workflow_run`, which watches the
+  # finished run from outside and sees a cancelled one. `zizmor.yml` audits every
+  # workflow at --min-severity=low, and it refuses that trigger as
+  # `dangerous-triggers` at high severity, so a file carrying it cannot merge
+  # here. That was measured by writing it and running the gate, not assumed.
+  #
+  # WHAT THAT COSTS, AND IT IS NOT NOTHING. A job inside the run cannot report a
+  # run that never reached it. If the whole run is cancelled this job is cancelled
+  # with it, and a job that never starts because no runner is available takes this
+  # one with it too. What is covered is every way the four jobs above can finish
+  # badly, and `needs` names all four so a later job added without touching this
+  # line is the gap. The rest of the population is the case a `workflow_run`
+  # watcher would have caught and this cannot.
+  #
+  # THIS HAS NOT BEEN SEEN TO FIRE. No tag has ever been pushed to this repository
+  # and no publish run exists, so what is written here is a design and not an
+  # observation. The clause of #91 asking for a publish run deliberately made to
+  # fail before the release job creates anything is NOT met by this job.
+  alert:
+    name: Alert on a publish that did not succeed
+    needs: [gate, build, attest, release]
+    # always(), so a failure above does not take this job with it, and then each
+    # result named rather than `contains(needs.*.result, 'failure')`. A job that
+    # was skipped because the one before it failed leaves the release just as
+    # missing as one that failed, and `contains` on failure alone would not see
+    # it.
+    if: >-
+      always() && (needs.gate.result != 'success' || needs.build.result !=
+      'success' || needs.attest.result != 'success' || needs.release.result !=
+      'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Never contents. This job reports and writes nothing to the repository, and
+    # keeping it off the release job's scope is why the alert is a job of its own
+    # rather than a step at the end of that one.
+    permissions:
+      actions: read # this run's own jobs and their steps
+      issues: write # where the alert is left
+
+    steps:
+      # No checkout. Every input is read from the context and the API, so there is
+      # no working tree here to guard, and no untrusted value is interpolated into
+      # a shell `run:`.
+      - name: Open an issue naming the run and the step that failed
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+
+            // This workflow triggers on a tag push and on nothing else, so the
+            // ref name is the tag.
+            const tag = context.ref.replace(/^refs\/tags\//, "");
+            const marker = "<!-- publish-failure-alert run:" + runId + " -->";
+
+            // An alert already written for this run is not written again. A
+            // re-run is a new run id and gets its own alert, which is wanted:
+            // two failures are two things to look at.
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "all",
+              per_page: 100,
+            });
+            if (existing.some((i) => (i.body || "").includes(marker))) {
+              core.info("An alert for run " + runId + " is already on this board.");
+              return;
+            }
+
+            const jobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              { owner, repo, run_id: runId, per_page: 100 },
+            );
+
+            // A null conclusion is a job still running, which includes this one.
+            const endedBadly = (conclusion) =>
+              conclusion !== null &&
+              conclusion !== undefined &&
+              conclusion !== "success" &&
+              conclusion !== "neutral";
+
+            const lines = [];
+            for (const job of jobs.filter((j) => endedBadly(j.conclusion))) {
+              const steps = (job.steps || []).filter((s) => endedBadly(s.conclusion));
+              if (steps.length === 0) {
+                // A job that ended badly with no step to blame. Said plainly
+                // rather than left out: a skipped job and a job whose runner
+                // vanished both look like this, and reporting nothing for them
+                // would make the alert look like it covered more than it did.
+                lines.push(
+                  "- `" +
+                    job.name +
+                    "` ended `" +
+                    job.conclusion +
+                    "` and names no failing step. " +
+                    job.html_url,
+                );
+                continue;
+              }
+              for (const step of steps) {
+                lines.push(
+                  "- `" +
+                    job.name +
+                    "` / `" +
+                    step.name +
+                    "` ended `" +
+                    step.conclusion +
+                    "`. " +
+                    job.html_url,
+                );
+              }
+            }
+            if (lines.length === 0) {
+              lines.push(
+                "- No job on this run reports a bad conclusion, and this alert " +
+                  "ran anyway. Read the run itself: the condition that started " +
+                  "this job and the API disagree, which is a defect in the alert " +
+                  "rather than a clean publish.",
+              );
+            }
+
+            const body = [
+              marker,
+              "",
+              "The publish run for `" +
+                tag +
+                "` did not succeed, so no release was published for that tag and " +
+                "nothing else in this repository would have said so.",
+              "",
+              "## The run",
+              "",
+              runUrl,
+              "",
+              "## What ended badly",
+              "",
+              ...lines,
+              "",
+              "## What this did not check",
+              "",
+              "Whether a release exists for the tag. This reads the jobs and steps " +
+                "of the run and nothing else, so a run that failed after creating " +
+                "something is reported the same way as one that failed before. " +
+                "`docs/RELEASING.md` is where the state of a tag is read.",
+              "",
+              "A run that was cancelled outright, or that never reached this job, " +
+                "produces no alert at all. That bound is written where this job is " +
+                "defined.",
+              "",
+              "Opened by the `alert` job in `.github/workflows/publish.yaml`.",
+            ].join("\n");
+
+            // The milestone is looked up by title rather than written as a
+            // number, because a number here goes wrong silently when the
+            // milestones are renumbered. Where it is not found the alert is
+            // still opened without one: an alert nobody sees is worse than an
+            // issue missing a field, and the absence is warned about in the log.
+            let milestone;
+            const milestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              { owner, repo, state: "open", per_page: 100 },
+            );
+            const wanted = milestones.find((m) =>
+              m.title.startsWith("M11 Release and catalogue readiness"),
+            );
+            if (wanted) {
+              milestone = wanted.number;
+            } else {
+              core.warning(
+                "No open milestone titled M11 Release and catalogue readiness, " +
+                  "so the alert carries none.",
+              );
+            }
+
+            const created = await github.rest.issues.create({
+              owner,
+              repo,
+              title: "Publish did not succeed for " + tag,
+              body,
+              labels: ["ci"],
+              assignees: ["iderex"],
+              ...(milestone === undefined ? {} : { milestone }),
+            });
+            core.notice(
+              "Alert opened as #" + created.data.number + " for run " + runId + ".",
+            );
