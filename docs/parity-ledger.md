@@ -1,10 +1,10 @@
 # Parity ledger
 
 One row for every workflow file on the default branch of
-`iderex/jellyfin-plugin-sso`, which is the gate this repository is being brought
+`Flowfin/jellyfin-plugin-sso`, which is the gate this repository is being brought
 level with. The list is taken from a listing rather than from memory:
 
-    gh api repos/iderex/jellyfin-plugin-sso/contents/.github/workflows --jq '.[].name'
+    gh api repos/Flowfin/jellyfin-plugin-sso/contents/.github/workflows --jq '.[].name'
 
 Every row reads adopted or declined. Deferred counts as declined for now and
 names the milestone that revisits it. A row that reads adopted names either the
@@ -35,6 +35,7 @@ notices that.
 | `manifest-freshness.yml`    | Deferred to M11      | There is nothing published to keep fresh until the release milestone.                                                                                                                                                                                                                                                                                 |
 | `nightly-betas.yml`         | Declined             | There is no public prerelease channel for this plugin, decided on #89 on 2026-08-11. A nightly prerelease has nowhere to go.                                                                                                                                                                                                                          |
 | `opengrep.yml`              | Adopted, landed      | `.github/workflows/invariants.yml`. #16 is open at this commit and holds what is left of the seeding, so the file existing is not the issue being done.                                                                                                                                                                                               |
+| `perf-baseline.yml`         | Declined             | A weekly login-latency baseline. It runs only on a schedule and on dispatch, carries no threshold and gates no merge, so it holds nothing the required set is about. Its subject is a login round trip this plugin does not have, which is why `e2e-login.yml` is declined, and its numbers are read beside a wiki, which is why `wiki-lint.yml` is.  |
 | `prettier.yml`              | Adopted              | #17. Nothing here covers HTML, JavaScript, YAML, JSON or Markdown today.                                                                                                                                                                                                                                                                              |
 | `pr-hygiene.yml`            | Adopted, landed      | `.github/workflows/pr-hygiene.yml`, by #15                                                                                                                                                                                                                                                                                                            |
 | `publish.yml`               | Deferred to M11      | Nothing is published before that milestone.                                                                                                                                                                                                                                                                                                           |
