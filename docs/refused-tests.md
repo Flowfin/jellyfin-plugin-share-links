@@ -167,11 +167,14 @@ requires every owed replacement to name an issue.
 
 What it does not judge is whether a replacement is a good one. That a route-level
 test stands in adequately for a browser is an argument, and the review is where a
-bad substitution is caught. Three of the lines above still carry an owed
-replacement, and a green suite says nothing about any of them beyond the issue
-numbers being there. Two of the three wait on one run against a real server, by
-hand, which no machine without one supplies. The third waits on code nobody has
-written, so it is a promise about a mechanism rather than about a machine.
+bad substitution is caught. A green suite says nothing about a line that is owed
+beyond the issue number being there, and how many of those the page holds is
+derived rather than written here, because a count typed into a page is a count
+that stops being true without anybody editing it:
+
+    grep -c '^\*\*Replacement, owed\.' docs/refused-tests.md
+
+What each one waits on is on the line itself. Nothing here re-counts them.
 
 Nothing refuses a refusal that was never written down. A test somebody declined to
 write and never brought here is invisible to this page and to the test that reads
