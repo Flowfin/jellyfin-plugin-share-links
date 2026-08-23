@@ -9,6 +9,19 @@ compiles against, at the version `Directory.Build.props` pins:
     grep -n 'JellyfinVersion' Directory.Build.props
     15:        <JellyfinVersion>10.11.11</JellyfinVersion>
 
+Nothing re-extracts the pasted output on this page. Other pages under `docs/` are
+opened and read by the suite; the only mention of this one anywhere in the test
+project is inside a comment:
+
+    grep -rn 'bitrate-cap.md' Jellyfin.Plugin.ShareLinks.Tests/*.cs
+    Jellyfin.Plugin.ShareLinks.Tests/GuestConfinementFilterTests.cs:254:    /// lowered, which is the interception leg of <c>docs/bitrate-cap.md</c>.
+
+So a paste below goes stale with nothing saying so, and the way one is found is
+somebody running the command again. That has happened more than once here, and
+each instance is recorded where it sits rather than counted in one place, because
+a count of them would be the next thing on this page to stop being true. Run the
+commands rather than reading them.
+
 ## What is already fixed
 
 The per-share ceiling is on the record, and it is carried and shown rather than
@@ -43,8 +56,15 @@ on to.
 
 Transcoding stays on for a guest, and that is a decision rather than an oversight:
 
-    git grep -n 'EnableVideoPlaybackTranscoding' origin/master -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
-    origin/master:Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:201:        policy.EnableVideoPlaybackTranscoding = true;
+    git grep -n 'EnableVideoPlaybackTranscoding' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:253:        policy.EnableVideoPlaybackTranscoding = true;
+
+**This paste did not reproduce either, and it is a second instance of what the
+paragraph above records rather than the same one.** It named line 201 and the
+command returns 253. The switch is still set and still set once, so the sentence
+it stands under is unchanged and only the evidence moved. That is the direction
+worth naming, because a reader who meets a stale line number cannot tell it from
+a claim that has stopped being true.
 
 A ceiling below what direct play needs forces a transcode, so an account that may
 not transcode turns every capped share into a broken player. That is what makes
@@ -171,8 +191,25 @@ would show nothing.
 The switch on the account stays where the server put it, and this plugin does not
 write it:
 
-    git grep -n 'RemoteClientBitrateLimit' origin/master -- Jellyfin.Plugin.ShareLinks/
-    origin/master:Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:35:/// <c>RemoteClientBitrateLimit</c> is bounded by #61 and #62; setting it here
+    git grep -n 'RemoteClientBitrateLimit' -- Jellyfin.Plugin.ShareLinks/
+    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:36:/// <c>RemoteClientBitrateLimit</c> is bounded by #61 and #62; setting it here
+    Jellyfin.Plugin.ShareLinks/ServerCeilings.cs:40:        return accounts.GetUserById(account)?.RemoteClientBitrateLimit is { } limit
+    Jellyfin.Plugin.ShareLinks/ServerCeilings.cs:54:        return EffectiveBitrate.FromServerValue(configuration.Configuration.RemoteClientBitrateLimit);
+
+**This paste carried one line and the command returns three.** The sentence above
+it survives the re-run and is not softened for it. Both hits that arrived read
+the field and neither writes it, in `ServerCeilings`, which the filter and the
+administrator listing both call so that the surface describing the ceiling and
+the surface applying it cannot disagree:
+
+    git grep -n 'ServerCeilings\.' -- Jellyfin.Plugin.ShareLinks/
+    Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs:231:        => ServerCeilings.OfAccount(_userManager, account);
+    Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs:234:        => ServerCeilings.OfServer(_serverConfiguration);
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:650:                account => ServerCeilings.OfAccount(_userManager, account),
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:651:                ServerCeilings.OfServer(_serverConfiguration),
+
+So what had drifted was the evidence, and the claim it was standing under is
+re-read against the new output rather than assumed to have travelled with it.
 
 The account's own limit and the server configuration's are still read rather than
 ignored. They are the second and third inputs to `EffectiveBitrate.Lowest`, and
