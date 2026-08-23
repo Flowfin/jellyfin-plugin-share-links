@@ -19,7 +19,15 @@
 # a given invariant refuses goes green the moment that invariant is removed.
 set -euo pipefail
 
-default_paths=("Jellyfin.Plugin.ShareLinks" "Jellyfin.Plugin.ShareLinks.Tests")
+default_paths=(
+  "Jellyfin.Plugin.ShareLinks"
+  "Jellyfin.Plugin.ShareLinks.Tests"
+  # The fuzz harness (#19). It is C# in this tree that calls the resolution
+  # decision and holds a fixture with a key in it, so leaving it out would make
+  # the one project most likely to reach for a machine clock or its own random
+  # bytes the one project nothing reads.
+  "Jellyfin.Plugin.ShareLinks.Fuzz"
+)
 
 if [ "$#" -gt 0 ]; then
   paths=("$@")

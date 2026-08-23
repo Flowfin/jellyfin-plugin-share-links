@@ -1,0 +1,19 @@
+diff --git a/Jellyfin.Plugin.ShareLinks/ShareResolution.cs b/Jellyfin.Plugin.ShareLinks/ShareResolution.cs
+index b9b8feb..a2ff4e1 100644
+--- a/Jellyfin.Plugin.ShareLinks/ShareResolution.cs
++++ b/Jellyfin.Plugin.ShareLinks/ShareResolution.cs
+@@ -178,6 +178,14 @@ public static class ShareResolution
+             return new ShareResolutionResult(null, ShareRefusal.NoTokenPresented);
+         }
+ 
++        // PLANTED DEFECT. Not part of this plugin. Applied only by the rehearsal
++        // leg of .github/workflows/fuzz.yml, to show that the job finds a defect
++        // on this path rather than reporting a clean run over nothing. It reads a
++        // character at a fixed offset without asking how long the presented token
++        // is, which is what a length assumption looks like, and it throws for every
++        // token shorter than that offset.
++        _ = presentedToken[ShareTokens.EncodedLength / 2];
++
+         var share = ShareLookup.ByToken(records, key, presentedToken);
+         if (share is null)
+         {

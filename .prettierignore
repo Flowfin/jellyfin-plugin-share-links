@@ -14,3 +14,7 @@ package-lock.json
 # own style on the next force-evaluate, so a prettier pass would be undone by the
 # next person who adds a package and would show up as their diff.
 **/packages.lock.json
+
+# The fuzz seed corpus. These are bytes handed to a fuzzer, derived from the
+# token encoding rather than written, and prettier has no business reading them.
+Jellyfin.Plugin.ShareLinks.Fuzz/corpus/

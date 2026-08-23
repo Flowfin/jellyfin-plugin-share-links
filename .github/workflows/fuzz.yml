@@ -1,0 +1,232 @@
+# Coverage-guided fuzzing of the token path (#19). The token in a share link is
+# the one input this plugin takes from somebody it has not yet decided anything
+# about: `ShareLinksGuestController` takes it as a path segment the caller writes
+# and hands it to `ShareResolution.Resolve`, which is what this job drives.
+#
+# There is no decode step in front of that routine and there is not meant to be.
+# The token is checked for null or empty and its UTF-8 bytes go into a keyed hash;
+# a length or alphabet check ahead of the comparison would make a wrong-shaped
+# token refuse more cheaply than a right-shaped one that names nothing, which is
+# what #26 rules out. So the harness holds a property rather than watching a
+# parser: no input throws, no input resolves, and every non-empty input is refused
+# for the same reason as every other.
+#
+# NON-GATING BY CONSTRUCTION. This runs on a schedule and on manual dispatch and
+# on nothing else, so it reports on no pull request and holds no merge. A crasher
+# reds the run as a notification and is triaged as a finding against the plugin,
+# never patched out of the harness. `Jellyfin.Plugin.ShareLinks.Fuzz/README.md`
+# is where that is written down.
+#
+# WHAT MAKES A GREEN RUN WORTH READING is the rehearsal below rather than this
+# comment. A scheduled job whose target has been renamed away, or whose oracle
+# asserts nothing, reports exactly what a clean run reports. Two things stand
+# against that. The suite compiles the harness and runs its target over every
+# committed seed on each pull request, so a rename reds a merge rather than a
+# Sunday. And a dispatch with `plant` set applies a committed patch that puts a
+# defect on the path this job fuzzes, so the claim that the job would find one is
+# something that can be performed instead of asserted.
+#
+# Hardened the way the rest of this tree's workflows are: SHA-pinned actions with
+# a version comment, checkout with persist-credentials disabled, deny-all
+# permissions at the top with the job granted only contents:read, and no input
+# interpolated into a run script except through `env`.
+name: fuzz
+
+on:
+  schedule:
+    # Midweek and off the hour. Nothing else in this repository runs then, and a
+    # finding lands on a Wednesday rather than waiting out a weekend.
+    - cron: "23 4 * * 3"
+  workflow_dispatch:
+    inputs:
+      max_total_time:
+        description: "libFuzzer -max_total_time, in seconds."
+        required: false
+        default: "600"
+      plant:
+        description: "Apply the committed planted defect first, and require the run to find it."
+        type: boolean
+        required: false
+        default: false
+
+# Explicit deny-all at workflow level; the job below grants only what it needs.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The same SDK the other jobs pin.
+  DOTNET_VERSION: "9.0.316"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # The managed harness libFuzzer drives, and the plugin assembly SharpFuzz
+  # rewrites in place. The harness loads that instrumented copy out of its own
+  # output directory, which is why both paths are the build output rather than
+  # the project.
+  FUZZ_DLL: "Jellyfin.Plugin.ShareLinks.Fuzz/bin/Release/net9.0/Jellyfin.Plugin.ShareLinks.Fuzz.dll"
+  PLUGIN_DLL: "Jellyfin.Plugin.ShareLinks.Fuzz/bin/Release/net9.0/Jellyfin.Plugin.ShareLinks.dll"
+  CORPUS: "Jellyfin.Plugin.ShareLinks.Fuzz/corpus"
+  PLANT_PATCH: "Jellyfin.Plugin.ShareLinks.Fuzz/rehearsal/plant-an-index-into-the-presented-token.patch"
+  # The native shim that hosts the CLR and bridges the managed target to
+  # libFuzzer, pinned to an immutable commit so the thing compiled from source is
+  # the same thing next week.
+  LIBFUZZER_DOTNET_REF: "c33d28305eba24261ce1945a39576e659f437b90"
+  # The instrumentation CLI has to be the version the harness references, and a
+  # mismatch between the two is what this pin exists against.
+  SHARPFUZZ_VERSION: "2.3.0"
+
+jobs:
+  fuzz:
+    name: Fuzz the token path
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read # check out the tree, the harness and the seed corpus
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Plant a defect on the path being fuzzed
+        # Only on a dispatch that asked for it. The patch is committed rather than
+        # written here so a reader can see exactly what was planted, and the step
+        # fails closed if it no longer applies: a rehearsal that silently planted
+        # nothing would be the failure this whole job is written against.
+        if: ${{ inputs.plant }}
+        run: |
+          set -euo pipefail
+          if ! git apply --check "${PLANT_PATCH}"; then
+            echo "::error::${PLANT_PATCH} no longer applies to ShareResolution.cs, so nothing was planted. Re-cut the patch against the current file before reading this run as a rehearsal."
+            exit 1
+          fi
+          git apply "${PLANT_PATCH}"
+          echo "Planted:"
+          git diff --stat
+
+      - name: Restore the harness
+        # Locked, so a drifted dependency graph cannot build here either.
+        run: |
+          set -euo pipefail
+          dotnet restore Jellyfin.Plugin.ShareLinks.Fuzz/Jellyfin.Plugin.ShareLinks.Fuzz.csproj --locked-mode
+
+      - name: Build the harness
+        run: |
+          set -euo pipefail
+          dotnet build Jellyfin.Plugin.ShareLinks.Fuzz/Jellyfin.Plugin.ShareLinks.Fuzz.csproj \
+            --configuration Release --no-restore -warnaserror
+
+      - name: Install clang
+        # libFuzzer comes out of the clang runtime, so this is what -fsanitize=fuzzer
+        # links against below and no separate libFuzzer package is needed.
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang
+
+      - name: Build the native shim
+        run: |
+          set -euo pipefail
+          curl -fsSL -o libfuzzer-dotnet.cc \
+            "https://raw.githubusercontent.com/Metalnem/libfuzzer-dotnet/${LIBFUZZER_DOTNET_REF}/libfuzzer-dotnet.cc"
+          clang -O2 -fsanitize=fuzzer libfuzzer-dotnet.cc -o libfuzzer-dotnet
+
+      - name: Install the SharpFuzz instrumentation tool
+        run: |
+          set -euo pipefail
+          dotnet tool install --global SharpFuzz.CommandLine --version "${SHARPFUZZ_VERSION}"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Instrument the plugin assembly
+        # In place, in the harness's own output directory. Without this the run
+        # still executes the target and libFuzzer gets no coverage feedback, which
+        # is a fuzzer reduced to random input and looks identical from the outside.
+        run: |
+          set -euo pipefail
+          sharpfuzz "${PLUGIN_DLL}"
+
+      - name: Fuzz
+        # continue-on-error, because a crasher is a non-zero exit here and the
+        # steps that archive it and read the verdict have to run anyway. The report
+        # step below is what decides whether this run is red.
+        continue-on-error: true
+        env:
+          MAX_TOTAL_TIME: ${{ inputs.max_total_time }}
+        run: |
+          set -euo pipefail
+          duration="${MAX_TOTAL_TIME:-600}"
+          mkdir -p findings
+          ./libfuzzer-dotnet \
+            -timeout=25 \
+            -max_total_time="${duration}" \
+            -print_final_stats=1 \
+            -artifact_prefix=findings/ \
+            --target_path=dotnet \
+            --target_arg="${PWD}/${FUZZ_DLL}" \
+            "${CORPUS}"
+
+      - name: Archive the reproducers
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-reproducers
+          path: findings/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Archive the corpus this run grew
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-corpus
+          path: ${{ env.CORPUS }}/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Read the verdict
+        # Four outcomes and they are not two. An ordinary run finding nothing is
+        # green. An ordinary run finding something is red, and it is a finding
+        # against the plugin. A rehearsal finding the planted defect is green and
+        # is the evidence the Done-when of #19 asks for. A rehearsal finding
+        # NOTHING is red and is the worst of the four: it means this job would not
+        # have told anybody about a defect on the path it claims to fuzz.
+        env:
+          PLANTED: ${{ inputs.plant }}
+        run: |
+          set -euo pipefail
+          found=""
+          if [ -n "$(find findings -type f -print -quit 2>/dev/null)" ]; then
+            found="yes"
+          fi
+
+          if [ "${PLANTED}" = "true" ]; then
+            if [ -z "${found}" ]; then
+              echo "::error::The rehearsal planted a defect on the token path and this run did not find it. The job is not proving what it claims to prove."
+              exit 1
+            fi
+            echo "The rehearsal found the planted defect. Reproducers are in the fuzz-reproducers artifact."
+            {
+              echo "## Rehearsal: the planted defect was found"
+              echo "A defect was applied to ShareResolution.Resolve from ${PLANT_PATCH} before this run, and libFuzzer wrote a reproducer for it."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "${found}" ]; then
+            echo "::error::libFuzzer wrote a reproducer against the token path. Download the fuzz-reproducers artifact, minimise it, and open it as a finding against the plugin. Do not patch the harness."
+            {
+              echo "## A reproducer was written"
+              echo "Triage it against the plugin per Jellyfin.Plugin.ShareLinks.Fuzz/README.md. This run is a notification, not a merge gate."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "No reproducer on the token path this run."

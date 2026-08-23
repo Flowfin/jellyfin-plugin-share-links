@@ -34,6 +34,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Jellyfin.Plugin.ShareLinks\Jellyfin.Plugin.ShareLinks.csproj" />
+    <!-- The fuzz harness (#19). Referenced so the derivation the committed corpus
+         comes out of, and the property the target holds, are judged by the suite
+         that runs on every change rather than only by the weekly job. A harness
+         nothing compiles between two schedules is one that reds on a Sunday for a
+         rename somebody made on a Tuesday. -->
+    <ProjectReference Include="..\Jellyfin.Plugin.ShareLinks.Fuzz\Jellyfin.Plugin.ShareLinks.Fuzz.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,6 +60,9 @@
          every workflow file rather than a list, so a workflow added later is judged
          without anybody remembering to add it here. -->
     <None Include="..\.github\workflows\*.yml;..\.github\workflows\*.yaml" Link="workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The committed seed corpus, so the suite can compare the files in the tree
+         against the derivation that is supposed to have produced them (#19). -->
+    <None Include="..\Jellyfin.Plugin.ShareLinks.Fuzz\corpus\*" Link="corpus\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

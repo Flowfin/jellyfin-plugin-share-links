@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.ShareLinks.Fuzz</RootNamespace>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The harness is driven by libFuzzer, not by a test runner. Saying so keeps
+         `dotnet test` over the solution from treating it as a project it should
+         look for tests in. -->
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <!-- The packaging step publishes the solution, so without this the harness and
+         its SharpFuzz dependency are published into the directory the operator's
+         package is built from. `refuse-unrecorded-runtime-assemblies.sh` would
+         catch that at the zip, and this is the line that stops it earlier. -->
+    <IsPublishable>false</IsPublishable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SharpFuzz is what turns a managed delegate into something libFuzzer can
+         drive. The instrumentation CLI of the same version rewrites the plugin
+         assembly in place; `.github/workflows/fuzz.yml` pins both to this number,
+         and a mismatch between the two is the failure that pin exists against. -->
+    <PackageReference Include="SharpFuzz" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Jellyfin.Plugin.ShareLinks\Jellyfin.Plugin.ShareLinks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The plugin project excludes these at runtime because a running server
+         supplies them. The harness is not a server, so it pulls the same versions
+         in with their runtime assets, exactly as the test project does. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" />
+  </ItemGroup>
+
+</Project>
