@@ -53,7 +53,12 @@ jobs:
           # The same pinned version the build and packaging workflows use. CodeQL
           # analyses what the compiler produced, so analysing under a different SDK
           # from the one that ships would be analysing a different program.
-          dotnet-version: "9.0.316"
+          # Two SDKs: the tree carries two server lines and the 12.0 packages
+          # support net10.0 only (#181). The build below compiles both, so CodeQL
+          # analyses both.
+          dotnet-version: |
+            9.0.316
+            10.0.301
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3

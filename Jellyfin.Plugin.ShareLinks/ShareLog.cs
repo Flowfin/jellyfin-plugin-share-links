@@ -64,6 +64,18 @@ public static class ShareLog
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(record);
 
+        // The level is asked before the arguments are built. At net10.0 the
+        // analyzer set carries CA1873, which refuses an argument that has to be
+        // evaluated whether or not anything is listening, and this tree builds with
+        // warnings as errors, so the same five lines are silent on one line and
+        // fatal on the other (#181). The guard is the fix rather than a suppression,
+        // because the rule is right: a line nobody collects still pays for its
+        // arguments.
+        if (!logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
+
         logger.LogInformation(
             "Share {Share} created for item {Item}, expiring {Expires}, {Invited} account(s) invited",
             Name(record.Id),
@@ -88,6 +100,12 @@ public static class ShareLog
     {
         ArgumentNullException.ThrowIfNull(logger);
 
+        // The level is asked first, for the reason given in Created above.
+        if (!logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
+
         logger.LogInformation("Share {Share} revocation: {Outcome}", Name(shareId), outcome);
     }
 
@@ -105,6 +123,12 @@ public static class ShareLog
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(record);
+
+        // The level is asked first, for the reason given in Created above.
+        if (!logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
 
         logger.LogInformation("Share {Share} resolved", Name(record.Id));
     }
@@ -131,6 +155,12 @@ public static class ShareLog
     public static void Refused(ILogger logger, ShareRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(logger);
+
+        // The level is asked first, for the reason given in Created above.
+        if (!logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
 
         logger.LogInformation("A token did not resolve: {Reason}", refusal);
     }
@@ -186,7 +216,10 @@ public static class ShareLog
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(outcome);
 
-        if (outcome.Removed.Count > 0)
+        // Guarded per call rather than at the top, because the two lines below sit
+        // at different levels and an install collecting one may not collect the
+        // other. Same rule as in Created above.
+        if (outcome.Removed.Count > 0 && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "{Removed} guest account(s) removed, their last record having been swept",

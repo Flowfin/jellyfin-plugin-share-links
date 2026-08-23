@@ -26,3 +26,12 @@ jobs:
     # edited from a pull request. Pinned by commit so what a required check runs
     # cannot change in another repository without a change here.
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/test.yaml@eb99033a7ff644881b014bc0b4169916c854a68b # master as of 2026-07-29
+    with:
+      # The shared workflow installs one SDK and defaults to 9.0.x. This tree now
+      # compiles two server lines and the 12.0 packages support net10.0 only, so a
+      # restore under a 9.0-only SDK fails on the second line, and running the
+      # net9.0 leg of the suite needs a 9.0 runtime a 10-only install does not
+      # bring. Both are installed, so both legs run here (#181).
+      dotnet-version: |
+        9.0.x
+        10.0.x

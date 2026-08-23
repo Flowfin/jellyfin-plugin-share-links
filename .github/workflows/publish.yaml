@@ -243,7 +243,12 @@ jobs:
         # run must never be able to reach the bytes that get released.
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: "9.0.x"
+          # Two SDKs, because the tree compiles two server lines (#181). What this
+          # workflow publishes is still the one line build.yaml names, which the
+          # step below reads out of MSBuild rather than assuming.
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Check the project is built for the target in the manifest
         env:

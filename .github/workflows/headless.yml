@@ -24,7 +24,13 @@ concurrency:
 env:
   # The same SDK ci.yaml pins, and the container below is the same version, so
   # the tests run against one .NET rather than two.
-  DOTNET_VERSION: "9.0.316"
+  # Two SDKs, because the tree carries two server lines and the 12.0 packages
+  # support net10.0 only (#181). Pinned rather than a wildcard, for the reason the
+  # first line already gives: the SDK that judges a pull request is the SDK the next
+  # one is judged by.
+  DOTNET_VERSION: |
+    9.0.316
+    10.0.301
   # Pinned by digest, not by tag: what judges one pull request has to be what
   # judges the next, and a tag is a name somebody else can repoint.
   SDK_IMAGE: "mcr.microsoft.com/dotnet/sdk:9.0.316-noble-amd64@sha256:0ce9e6f0022d9db72e7077f1999fa68f689d7ba75fd548110a816d942295f1d7"

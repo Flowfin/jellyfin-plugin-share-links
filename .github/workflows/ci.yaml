@@ -23,15 +23,31 @@ concurrency:
 env:
   # Pinned rather than 9.0.x, so the SDK that judges a pull request is the SDK the
   # next pull request is judged by. Moving it is a change somebody reviews.
-  DOTNET_VERSION: "9.0.316"
+  # Two SDKs, because the tree carries two server lines and the 12.0 packages
+  # support net10.0 only (#181). Pinned rather than a wildcard, for the reason the
+  # first line already gives: the SDK that judges a pull request is the SDK the next
+  # one is judged by.
+  DOTNET_VERSION: |
+    9.0.316
+    10.0.301
   DOTNET_NOLOGO: "true"
   DOTNET_CLI_TELEMETRY_OPTOUT: "true"
 
 jobs:
   build:
-    name: build
+    # One leg per server line (#181). The name carries the framework rather than
+    # the Jellyfin version, because the framework is what the two lines cannot
+    # share: the 12.0 packages support net10.0 only, so a line is a compile of its
+    # own and a break in one has to red a job that says which.
+    name: build (${{ matrix.framework }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      # One line failing must not cancel the other's run. Which of the two broke is
+      # the thing worth knowing.
+      fail-fast: false
+      matrix:
+        framework: [net9.0, net10.0]
 
     steps:
       - name: Checkout Repository
@@ -52,7 +68,31 @@ jobs:
         # -warnaserror on the command line as well as in the csproj: the project
         # property is one edit away from being dropped, and a warning that stops
         # failing the build stops being read.
-        run: dotnet build --configuration Release --no-restore -warnaserror
+        #
+        # -f rather than a build of both: this leg is one line, and the framework is
+        # printed by the command rather than assumed from the job's name.
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+        run: |
+          set -euo pipefail
+          echo "Compiling the ${FRAMEWORK} line"
+          dotnet build --configuration Release --no-restore -warnaserror -f "${FRAMEWORK}"
+
+      - name: Say which Jellyfin version was compiled against
+        # The version is a function of the framework in Directory.Build.props, so a
+        # leg that quietly resolved the other line's packages would be green under a
+        # name that says otherwise.
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+        run: |
+          set -euo pipefail
+          resolved=$(dotnet msbuild Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj -getProperty:JellyfinVersion -p:TargetFramework="${FRAMEWORK}" -nologo | tr -d '[:space:]')
+          if [ -z "${resolved}" ]; then
+            echo "::error::No Jellyfin version resolved for ${FRAMEWORK}. Directory.Build.props names one per framework and this one matched nothing."
+            exit 1
+          fi
+          echo "${FRAMEWORK} compiled against Jellyfin ${resolved}"
+          grep -q "jellyfin.controller/${resolved}" "Jellyfin.Plugin.ShareLinks/obj/project.assets.json"
 
   abi-floor:
     # The build above compiles against the version the plugin develops on. That
@@ -60,6 +100,13 @@ jobs:
     # reference to a symbol added after that promise fails on a user's server at
     # load time rather than here. This job compiles the same source against the
     # floor, so the promise is checked by something.
+    #
+    # One line, and that is a hold rather than an oversight (#181). A floor is the
+    # oldest RELEASED version a plugin promises to load on, and the 12.0 line has
+    # no released version, so a floor for it would name something nobody can
+    # install. The decision of 2026-08-21 holds this job, the packaging and the
+    # readme's supported line sentence until 12.0.0 is released. Every step below
+    # therefore pins net9.0 explicitly rather than inheriting it.
     name: abi-floor
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -101,10 +148,15 @@ jobs:
         # version on purpose, which is exactly what the committed graph
         # refuses. The lockfile is right to refuse it and this job is
         # right to ask, so the two are kept apart here.
-        run: dotnet restore -p:JellyfinVersion="${JELLYFIN_FLOOR}"
+        #
+        # TargetFrameworks is overridden to the one line this floor is about. A
+        # version passed on the command line is a global property, so without this
+        # the floor's 10.11 packages would be asked for at net10.0 as well, and
+        # they do not support it.
+        run: dotnet restore -p:JellyfinVersion="${JELLYFIN_FLOOR}" -p:TargetFrameworks=net9.0
 
       - name: Build against the floor
-        run: dotnet build --configuration Release --no-restore -warnaserror -p:JellyfinVersion="${JELLYFIN_FLOOR}"
+        run: dotnet build --configuration Release --no-restore -warnaserror -p:JellyfinVersion="${JELLYFIN_FLOOR}" -p:TargetFrameworks=net9.0
 
       - name: Say which version was actually compiled against
         # A job named abi-floor that quietly resolved the development version
@@ -116,9 +168,14 @@ jobs:
           grep -q "jellyfin.controller/${JELLYFIN_FLOOR}" Jellyfin.Plugin.ShareLinks/obj/project.assets.json
 
   test:
-    name: test
+    # One leg per server line, for the reason the build job gives (#181).
+    name: test (${{ matrix.framework }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net9.0, net10.0]
 
     steps:
       - name: Checkout Repository
@@ -135,12 +192,19 @@ jobs:
         run: dotnet restore --locked-mode
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore -warnaserror
-
-      - name: Test
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
         run: |
           set -euo pipefail
-          dotnet test --configuration Release --no-build --verbosity normal | tee test-output.txt
+          dotnet build --configuration Release --no-restore -warnaserror -f "${FRAMEWORK}"
+
+      - name: Test
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+        run: |
+          set -euo pipefail
+          echo "Running the suite on the ${FRAMEWORK} line"
+          dotnet test --configuration Release --no-build --verbosity normal -f "${FRAMEWORK}" | tee test-output.txt
 
       - name: Report the number of tests run
         # A suite that runs nothing reports success, which looks exactly like a

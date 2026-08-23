@@ -26,7 +26,13 @@ concurrency:
 
 env:
   # The same SDK the other jobs pin.
-  DOTNET_VERSION: "9.0.316"
+  # Two SDKs, because the tree carries two server lines and the 12.0 packages
+  # support net10.0 only (#181). Pinned rather than a wildcard, for the reason the
+  # first line already gives: the SDK that judges a pull request is the SDK the next
+  # one is judged by.
+  DOTNET_VERSION: |
+    9.0.316
+    10.0.301
   DOTNET_NOLOGO: "true"
   DOTNET_CLI_TELEMETRY_OPTOUT: "true"
   # The test host targets 9.0 and the runner may carry something newer. Without
@@ -62,7 +68,9 @@ jobs:
         # stryker-config.json, beside the code, rather than in this file. The
         # runner exits non-zero when the score is under the break threshold,
         # which is what reds this job.
-        run: dotnet stryker --config-file stryker-config.json
+        # The target framework is named because the projects carry two and Stryker
+        # judges one (#181). The line named is the line that is packaged.
+        run: dotnet stryker --config-file stryker-config.json --target-framework net9.0
 
       - name: Keep the report
         if: always()
