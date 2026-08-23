@@ -59,8 +59,13 @@ page.on("console", (message) => {
     }
 });
 page.on("response", (response) => {
-    if (response.url().includes("/ShareLinks/")) {
-        process.stdout.write(`  the browser asked ${response.url()} -> ${response.status()}\n`);
+    const url = response.url();
+    // This plugin's own routes, and the one of the server's the sign-in rests
+    // on. A leg that fails at the form has to say what the server answered and
+    // not only that a wait ran out, which is what the runs before this could
+    // not.
+    if (url.includes("/ShareLinks/") || url.includes("AuthenticateByName")) {
+        process.stdout.write(`  the browser asked ${url} -> ${response.status()}\n`);
     }
 });
 
@@ -82,9 +87,16 @@ try {
     await page.fill("#txtManualPassword", credential);
     await page.click(".manualLoginForm button[type=submit]");
 
-    await page.waitForFunction(() => !window.location.hash.includes("login"), null, {
-        timeout: 60000,
-    });
+    await page
+        .waitForFunction(() => !window.location.hash.includes("login"), null, { timeout: 60000 })
+        .catch(async () => {
+            const stillAt = await page.evaluate(() => window.location.hash);
+            const said = await page
+                .locator(".manualLoginForm")
+                .innerText()
+                .catch(() => "the form is not on the page");
+            fail(`the client stayed on ${stillAt} after the form was submitted. What the form shows: ${said}`);
+        });
     process.stdout.write(`the client left the sign-in page for ${await page.evaluate(() => window.location.hash)}\n`);
 
     // Read back who the client believes it is, out of the client's own store

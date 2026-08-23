@@ -340,6 +340,19 @@ status=$(call GET "${link#"$base"}" "guest-1" "$guest_token")
 echo "the link carrying the guest's token -> $status"
 [ "$status" = "302" ] || fail "the link did not resolve for the guest it names: $status"
 
+# The ceiling observation 1 stands on is still in force and the sessions it
+# opened are still running, so a browser signing in would be the one past the
+# ceiling and would be turned away for a reason that has nothing to do with the
+# link. The first run of this leg found that the hard way: the client sat on its
+# sign-in page until the wait gave up. One session is ended here to make room,
+# and the one every observation above used is not the one ended.
+status=$(call POST /Sessions/Logout "guest-$ceiling" "${tokens[$((ceiling - 1))]}")
+echo "ending session $ceiling so the browser has room under the ceiling of $ceiling -> $status"
+case "$status" in
+  200 | 204) ;;
+  *) fail "the session could not be ended, so the browser would meet the ceiling rather than the link: $status" ;;
+esac
+
 # The browser lives beside its own pinned dependency rather than beside this
 # script, so what drives it is the version `.github/browser/package-lock.json`
 # records and not whatever is installed on the machine. A hand run installs it
