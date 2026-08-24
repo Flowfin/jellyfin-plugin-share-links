@@ -54,14 +54,35 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <!-- 0.0.0.0 is reserved and no release carries it, so an assembly reporting
-             it was not built by the release process. A release supplies the version
-             on the build command line and the tree never holds one; docs/versioning.md
-             is where that is argued. Keep these three on one line each: the version
-             scheme is read by tools that match the element, not the XML. -->
-        <Version>0.0.0.0-unreleased</Version>
-        <AssemblyVersion>0.0.0.0</AssemblyVersion>
-        <FileVersion>0.0.0.0</FileVersion>
+        <!-- The version is read out of build.yaml rather than written here, so the
+             number a catalogue shows and the number inside the DLL cannot be two
+             numbers. The release gate proves the tag equals build.yaml's version and
+             then proves the assembly carries the same value, and a second
+             hand-maintained copy of that number is exactly what the second proof
+             exists to catch.
+
+             A REGEX OVER A YAML FILE IS THE MEANS, and it is chosen rather than
+             inherited. The packaging tool builds the plugin itself and is handed no
+             MSBuild properties, so the only number it can stamp into the shipped
+             assembly is one the tree already holds; nothing but an evaluation-time
+             read gets it there, and MSBuild has no YAML reader. The pattern is
+             anchored to a line starting with the field name, and a build.yaml the
+             pattern stops matching leaves the property empty rather than wrong -
+             which PackagingMetadataTests refuses on every run.
+
+             WHAT THIS GAVE UP is not a detail and is written down rather than left
+             to be discovered. 0.0.0.0 was reserved so that an assembly reporting it
+             was known not to have come from the release process. That reservation
+             and a release that stamps its own version could not both exist, because
+             the packager reads the tree. The reservation went; docs/versioning.md
+             says so in place of the argument it used to carry.
+
+             Keep these on one line each: the version scheme is read by tools that
+             match the element, not the XML. -->
+        <ManifestVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)build.yaml')), '(?m)^version:[ ]*"([0-9]+(\.[0-9]+)*)"').Groups.get_Item(1).Value)</ManifestVersion>
+        <Version>$(ManifestVersion)</Version>
+        <AssemblyVersion>$(ManifestVersion)</AssemblyVersion>
+        <FileVersion>$(ManifestVersion)</FileVersion>
         <!-- The server line this plugin is built for. The plugin project compiles
              against it and excludes it at runtime, because the server supplies it;
              the test project needs the same assemblies present to run at all. One

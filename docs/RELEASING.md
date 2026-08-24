@@ -12,7 +12,13 @@ name.
 
 ## Cutting a release
 
-1. Update `version` in `build.yaml` on the release branch and merge it.
+1. Update `version` in `build.yaml` on the release branch and merge it. That field
+   is the only place the number is written: `Directory.Build.props` reads it, so
+   the assembly is stamped with it and no second file needs editing. Run
+   `dotnet restore --force-evaluate` in the same change, because the test
+   project's `packages.lock.json` records the plugin project's version and goes
+   stale otherwise. Locked-mode restore does not refuse a stale entry there, so
+   nothing reds if this is forgotten.
 2. Check that the commit you want to release is on that branch.
 3. Push the tag for that commit:
 
