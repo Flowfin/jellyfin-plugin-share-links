@@ -98,8 +98,19 @@ carrying no caller.
 
 What this document adds is the state rather than the answer. A share whose whole
 invited set is gone can never resolve again for anybody, and the administrator view
-says so rather than showing it as live. A share that still has one invited account
-left is live and is not touched by this.
+does not say so: it shows the share as live.
+
+THIS PARAGRAPH PROMISED THE OPPOSITE AND THE PROMISE IS WITHDRAWN RATHER THAN
+QUIETLY REWORDED. It said the view says so, and no route ever asked. Decided on
+#39 on 2026-08-24: the listing owes live, expired and revoked, which are the three
+things a record carries, and it does not ask the server about an invited account.
+The price refused is a user lookup for every row of every page of the listing, paid
+on every load, for a column that changes what an operator does in one case. What an
+operator meets instead is in `docs/limits.md`, under "A share whose whole invited
+set is gone still reads as live in the listing".
+
+A share that still has one invited account left is live either way and is not
+touched by this.
 
 Deleted and disabled are two states in that view and not one. Disabling is
 reversible, and an account that is enabled again resolves its share again; deletion
@@ -109,21 +120,20 @@ operator delete an account to fix something a toggle would have fixed.
 
 ## What this does not settle
 
-Where the item is asked about was the open question here and is answered: in the
-resolution, with its own reason. What is left is the operator's half of the accounts
-section above.
+Both open questions here are answered now, and this section is what is left after
+them rather than a list of them. Where the item is asked about: in the resolution,
+with its own reason. Whether the listing reports a dead invited set: no.
 
 The administrator listing says which records still resolve, and it says it from the
 record alone:
 
     git grep -n 'public static ShareSummary Of' origin/master -- Jellyfin.Plugin.ShareLinks/ShareSummary.cs
 
-So it separates live from expired and from revoked, and a share whose invited
-accounts are all gone is still shown as live, because nothing on that route asks the
-server about an account. `ShareState` says in its own words that it has three values
-and no fourth, so making the listing say it is not a field to add but an argument to
-have, and it is the one this page's accounts section is waiting on rather than a
-gap somebody can fill quietly.
+So it separates live from expired and from revoked and asks the server nothing.
+`ShareState` says in its own words that it has three values and no fourth, and the
+decision of 2026-08-24 leaves it at three: a set of accounts that can no longer sign
+in is not a fact about the record, so a fourth value would be a state whose truth
+lives outside the store and would be recomputed for every row of every page.
 
 Nothing is written to a record when its target goes. Nothing tells this plugin that
 an item was removed or that an account was deleted, so a stored deadness would be a

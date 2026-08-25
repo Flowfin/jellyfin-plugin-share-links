@@ -136,6 +136,19 @@ meant, which is a disclosure rather than an inconvenience.
 
 **What an operator does.** Creates a new share. The old one stays refused.
 
+### A share whose whole invited set is gone still reads as live in the listing
+
+Nobody can open it. Every invited account is one the server identifies nobody as,
+so every request is refused for carrying no caller, and the share is dead in the
+only sense that matters to a guest. The administrator listing shows it as live all
+the same, because it reads a record's state off the record and asks the server
+about no account. Decided on #39 on 2026-08-24, against the alternative of a user
+lookup for every row of every page of the listing.
+
+**What an operator does.** Revokes a share when the last invited account for it
+goes. Nothing in the listing will say the share stopped working, and `docs/gone.md`
+is where the whole family of these is argued.
+
 ### A disabled account and a deleted account are not the same
 
 Both stop a share resolving, because the decision takes the account the server
