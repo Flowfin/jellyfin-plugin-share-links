@@ -31,6 +31,16 @@ into the document it is a count of goes stale in the direction that flatters it:
 `NegativeCapabilityTests` reads those verdicts and refuses a line that carries
 none of them.
 
+A **Not held** line owes two things beyond that sentence, and #47's done-when is
+where they come from. It names what this plugin contributes towards the refusal
+somebody else makes, with the test that asserts the contribution, so a
+contribution dropped in silence reds the suite instead of leaving the line
+reading exactly as it did. And it names the section of `docs/limits.md` where an
+operator meets what is left, because a bound only a reader of this page knows
+about is one an operator does not. `NegativeCapabilityTests` resolves both: the
+test against the compiled test assembly, and the section against that page's own
+headings.
+
 Where a line is held by a switch on the guest account rather than by a refusal in
 this plugin, that is said in the line. The distinction matters and it is the same
 one `docs/guest-capabilities.md` closes on: this plugin asks for a narrow account
@@ -104,16 +114,26 @@ has merely signed in.
 
 Not held here, and it cannot be. The refusal belongs to the server's own
 authorization over its own routes, and what this plugin contributes is an account
-that is not an administrator:
+that is not an administrator, asserted against the row
+`docs/guest-capabilities.md` decides:
 
 ```
 git grep -n 'policy.IsAdministrator = false' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+git grep -n 'public void TheGuestGetsTheValueTheDocumentDecided' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+git grep -n 'public void ApplyingToAnExistingPolicyNarrowsItTheSameWay' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
 ```
 
-That value is asserted against the row `docs/guest-capabilities.md` decides, by
-`TheGuestGetsTheValueTheDocumentDecided` in `GuestPolicyTests`. It is a statement
-about what is asked for and not about what is enforced, and nothing in this
-repository judges another assembly.
+Two tests rather than one, and the second is the one that bites. A fresh
+`UserPolicy` handed out by the server is already not an administrator, so the
+theory reads the value it expects whether or not this plugin sets it; deleting
+the line above was measured on #47 and leaves that theory green. What reds is the
+narrowing driven from a policy somebody set wide, which is the account an operator
+prepared, and that is where the switch is doing work.
+
+It is a statement about what is asked for and not about what is enforced, and
+nothing in this repository judges another assembly.
+
+An operator meets it in `docs/limits.md`, under "An invited guest is a signed-in account, and reads what any account reads".
 
 ### The creation, editing or revocation of any share
 
@@ -136,10 +156,13 @@ line that says it is held.
 
 Held in part. Reaching another session or another person's is refused on the
 account, and those three switches are asserted against the document that decides
-them:
+them. Two tests rather than one, because `SyncPlayAccess` is not a boolean and
+the theory that drives every switch that document decides cannot carry it:
 
 ```
 git grep -n 'EnableSharedDeviceControl\|EnableRemoteControlOfOtherUsers\|SyncPlayAccess' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+git grep -n 'public void TheGuestGetsTheValueTheDocumentDecided' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+git grep -n 'public void TheGuestCannotJoinASynchronisedPlaybackGroup' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
 ```
 
 Another account's data is confinement rather than a switch, and that half is the
@@ -153,12 +176,38 @@ In part rather than held, because the three switches above are asked for rather
 than enforced here, and because the filter reaches only the routes its own list
 names.
 
+One of the three is narrower than the other two and the line says so rather than
+letting a reader take all three alike. Deleting all three was measured on #47:
+`EnableSharedDeviceControl` and `SyncPlayAccess` red the two tests named above,
+and `EnableRemoteControlOfOtherUsers` does not, because a fresh `UserPolicy` from
+the server already carries `false` there. What holds that one is the narrowing of
+an account somebody set wide,
+`ApplyingToAnExistingPolicyNarrowsItTheSameWay`, which is the account
+`docs/guest-accounts.md` has an operator prepare:
+
+```
+git grep -n 'public void ApplyingToAnExistingPolicyNarrowsItTheSameWay' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+```
+
 ### The plugin configuration
 
 Not held here. The plugin's configuration is served by the server on its own
-route, behind the server's elevation, and this repository judges neither. What is
-held is the same account switch as the server-administrator line, and the same
-bound applies to it.
+route, behind the server's elevation, and this repository judges neither. What
+this plugin contributes is the same account switch as the server-administrator
+line, named here as well rather than referred to, so that a rename reaches both
+lines:
+
+```
+git grep -n 'policy.IsAdministrator = false' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+git grep -n 'public void TheGuestGetsTheValueTheDocumentDecided' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+git grep -n 'public void ApplyingToAnExistingPolicyNarrowsItTheSameWay' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+```
+
+The same bound applies, the second test for the same reason: the value on a fresh
+policy is the server's own, and what the switch moves is an account somebody had
+already set wide.
+
+An operator meets it in `docs/limits.md`, under "An invited guest is a signed-in account, and reads what any account reads".
 
 ### The download route
 
@@ -184,8 +233,22 @@ becomes the one #47 wrote and needs what that document decides.
 Not held, and no test here can hold it. There is no other plugin in the suite to
 point at, and adding one would test an installation rather than this code. The
 refusal belongs to the server's authorization over the other plugin's routes, and
-this is written down rather than left as a line quietly without a test.
-`docs/limits.md` already carries it as a limit an operator meets.
+this is written down rather than left as a line quietly without a test. What this
+plugin contributes is the one it contributes to the two lines above, an account
+that administers nothing:
+
+```
+git grep -n 'policy.IsAdministrator = false' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
+git grep -n 'public void TheGuestGetsTheValueTheDocumentDecided' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+git grep -n 'public void ApplyingToAnExistingPolicyNarrowsItTheSameWay' -- Jellyfin.Plugin.ShareLinks.Tests/GuestPolicyTests.cs
+```
+
+That reaches another plugin's routes only where the other plugin gates them
+behind the server's elevation. One gating behind ordinary authentication answers
+an invited guest as it answers any signed-in account, which is what is left over
+rather than a hole in this line.
+
+An operator meets it in `docs/limits.md`, under "Another plugin's routes are outside anything this plugin can refuse".
 
 ### No route can move the expiry of an existing record
 

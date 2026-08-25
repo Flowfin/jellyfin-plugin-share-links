@@ -144,8 +144,10 @@ reached only under the server's own elevation policy:
 over its own routes and nothing in this repository judges another assembly. What
 this plugin contributes is an account that is not an administrator, and that
 value is asserted against the row `docs/guest-capabilities.md` decides:
-`TheGuestGetsTheValueTheDocumentDecided`. That is a statement about what is asked
-for and not about what is enforced.
+`TheGuestGetsTheValueTheDocumentDecided`, `ApplyingToAnExistingPolicyNarrowsItTheSameWay`.
+The second is the one that reds when the switch is deleted, because a fresh policy
+from the server is already not an administrator. That is a statement about what is
+asked for and not about what is enforced.
 
 ### The creation, editing or revocation of any share
 
@@ -172,8 +174,10 @@ list names.
 
 **Not held by a test here.** The plugin's configuration is served by the server
 on its own route, behind the server's elevation, and this repository judges
-neither. What is held is the same account switch as the server-administrator
-line, and the same bound applies to it.
+neither. What this plugin contributes is the same account switch as the
+server-administrator line, named here as well rather than referred to:
+`TheGuestGetsTheValueTheDocumentDecided`,
+`ApplyingToAnExistingPolicyNarrowsItTheSameWay`. The same bound applies to it.
 
 ### The download route
 
@@ -187,8 +191,12 @@ for the line to admit.
 
 **Not held by a test here.** There is no other plugin in the suite to point at,
 and adding one would test an installation rather than this code. The refusal
-belongs to the server's authorization over the other plugin's routes.
-`docs/limits.md` carries it as a limit an operator meets.
+belongs to the server's authorization over the other plugin's routes, and what
+this plugin contributes is the account that administers nothing:
+`TheGuestGetsTheValueTheDocumentDecided`,
+`ApplyingToAnExistingPolicyNarrowsItTheSameWay`. That reaches another plugin's routes
+only where it gates them behind elevation. `docs/limits.md` carries what is left
+as a limit an operator meets.
 
 ### No route can move the expiry of an existing record
 

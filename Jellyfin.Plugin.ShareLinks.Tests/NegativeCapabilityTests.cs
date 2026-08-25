@@ -51,6 +51,13 @@ public sealed class NegativeCapabilityTests
         @"public\s+(?:async\s+Task|void)\s+([A-Za-z][A-Za-z0-9_]*)",
         RegexOptions.Compiled);
 
+    // Where an operator meets what a not-held line leaves over. One line of its
+    // own rather than a sentence anywhere in the paragraph, so that the pointer is
+    // as easy to find by eye as it is to resolve here.
+    private static readonly Regex Pointer = new(
+        @"^An operator meets it in `docs/limits\.md`, under ""(.+?)""\.\s*$",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
     /// <summary>
     /// Gets one case per line, so a line that is wrong fails under its own heading
     /// rather than inside one assertion about the whole page.
@@ -164,6 +171,101 @@ public sealed class NegativeCapabilityTests
             opening.Length > "Not held".Length + 1 && opening.EndsWith('.'),
             $"the line \"{heading}\" in docs/negative-capabilities.md says it is not held and "
             + $"finishes no sentence saying whose refusal it is instead: \"{opening}\"");
+    }
+
+    /// <summary>
+    /// A line that is not held names what this plugin contributes towards the
+    /// refusal somebody else makes, and the test that asserts that contribution.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// #47's done-when separates the two groups on this page by whose check would
+    /// have to be removed for the test to fail. For the three lines whose check is
+    /// in another assembly there is nothing here to remove, so what the line owes
+    /// instead is the contribution this plugin does make, with the assertion on it.
+    /// Without this leg a not-held line is a sentence, and a sentence is what the
+    /// page can carry while the switch behind it is quietly deleted.
+    /// </para>
+    /// <para>
+    /// What this does NOT judge is whether the contribution is the right one, or
+    /// whether it reaches the refusal the heading names. That is the same argument
+    /// about meaning the held lines leave to the review, and it is left there.
+    /// </para>
+    /// </remarks>
+    /// <param name="heading">The line.</param>
+    [Theory]
+    [MemberData(nameof(Lines))]
+    public void EveryLineThatIsNotHeldNamesTheContributionItAsserts(string heading)
+    {
+        if (Verdict(heading) != "Not held")
+        {
+            return;
+        }
+
+        var names = TestName.Matches(Entry(heading))
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            names.Length >= 1,
+            $"the line \"{heading}\" in docs/negative-capabilities.md says it is not held and names "
+            + "no test at all. A not-held line owes the contribution this plugin makes towards "
+            + "somebody else's refusal and the assertion on it, so that dropping the contribution "
+            + "reds the suite rather than leaving the line reading as it did.");
+
+        var missing = names.Where(name => !Resolves(name)).ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            $"the line \"{heading}\" in docs/negative-capabilities.md names "
+            + string.Join(", ", missing)
+            + " and no such method is in the test assembly. Either the test was renamed away "
+            + "and the page did not follow, or the contribution was never asserted.");
+    }
+
+    /// <summary>
+    /// A line that is not held names the section of <c>docs/limits.md</c> where an
+    /// operator meets what is left, and that section is on that page.
+    /// </summary>
+    /// <remarks>
+    /// A bound that lives only on this page is one an operator does not read: this
+    /// page is the list a reviewer checks and <c>docs/limits.md</c> is the page
+    /// somebody deciding whether to install the plugin is pointed at. #47's
+    /// done-when asks the residual to be carried where they meet it, and a pointer
+    /// nothing resolves goes stale the first time that page is reorganised.
+    /// </remarks>
+    /// <param name="heading">The line.</param>
+    [Theory]
+    [MemberData(nameof(Lines))]
+    public void EveryLineThatIsNotHeldNamesWhereAnOperatorMeetsTheResidual(string heading)
+    {
+        if (Verdict(heading) != "Not held")
+        {
+            return;
+        }
+
+        var pointer = Pointer.Match(Entry(heading));
+
+        Assert.True(
+            pointer.Success,
+            $"the line \"{heading}\" in docs/negative-capabilities.md says it is not held and points "
+            + "at no section of docs/limits.md. The line is expected to carry, on one line of its "
+            + "own: An operator meets it in `docs/limits.md`, under \"<the heading there>\".");
+
+        var section = pointer.Groups[1].Value;
+        var headings = Document("limits.md")
+            .Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.StartsWith("### ", StringComparison.Ordinal))
+            .Select(line => line[4..].Trim())
+            .ToArray();
+
+        Assert.True(
+            Array.Exists(headings, other => string.Equals(other, section, StringComparison.Ordinal)),
+            $"the line \"{heading}\" in docs/negative-capabilities.md points at the section "
+            + $"\"{section}\" of docs/limits.md and that page carries no such heading. A residual "
+            + "an operator is sent to and cannot find is one this page has stopped carrying.");
     }
 
     /// <summary>
