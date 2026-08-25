@@ -12,15 +12,20 @@ name.
 
 ## Cutting a release
 
-1. Update `version` in `build.yaml` on the release branch and merge it. That field
+1. Write the release notes as you go, not at the end. Every change worth telling
+   an operator about leaves a fragment in `changelog.d`, named `<issue>.<kind>.md`,
+   in the change that makes it. `changelog.d/README.md` is the convention. A tag
+   pushed with an empty `changelog.d` is refused by the gate job before anything
+   is built.
+2. Update `version` in `build.yaml` on the release branch and merge it. That field
    is the only place the number is written: `Directory.Build.props` reads it, so
    the assembly is stamped with it and no second file needs editing. Run
    `dotnet restore --force-evaluate` in the same change, because the test
    project's `packages.lock.json` records the plugin project's version and goes
    stale otherwise. Locked-mode restore does not refuse a stale entry there, so
    nothing reds if this is forgotten.
-2. Check that the commit you want to release is on that branch.
-3. Push the tag for that commit:
+3. Check that the commit you want to release is on that branch.
+4. Push the tag for that commit:
 
     ```
     git tag 1.4.0-stable <commit>
@@ -32,6 +37,38 @@ The `Publish Release` workflow takes it from there.
 Push one tag at a time and wait for its run to finish. GitHub keeps at most one
 queued run per concurrency group, and although the group here is keyed on the tag,
 serialising them by hand is what keeps the release order readable.
+
+In the same change that raises the version, delete the fragments that went into
+it. `changelog.d` holds what is unreleased; the notes for a version that shipped
+live in that release.
+
+## Where the release notes come from
+
+From the fragments in `changelog.d`, assembled by
+`.github/scripts/assemble-release-notes.sh` in the gate job and handed to the
+release job as the body of the release. Nothing else writes them, and the forge's
+own note generator is off:
+
+    grep -n 'body_path\|generate_release_notes' .github/workflows/publish.yaml
+
+Two sources for one body is the failure that decided this. The forge builds notes
+from the commits between two tags, which is a record of the work, and the notes an
+operator reads answer what is different on their server after they upgrade.
+Decided on #89 on 2026-08-11 and again on 2026-08-24; `changelog.d/README.md`
+argues it where somebody writing a fragment meets it.
+
+## What a prerelease means here
+
+Nothing yet. This plugin publishes one channel, every published version is
+stable, and `prerelease` is `false` on every run:
+
+    grep -n 'prerelease:' .github/workflows/publish.yaml
+
+There is no public prerelease channel and no nightly build, decided on #89 on
+2026-08-11 and recorded as declined in `docs/parity-ledger.md`. A version that is
+not ready is not tagged; the tag is what publishes, so there is no state between
+built and released for a prerelease to occupy. If a beta channel is ever run, #91
+is where it is decided and this section is what it changes.
 
 ## What the run produces
 
@@ -79,6 +116,9 @@ is gone and no catalog is fed until a manifest generator is added.
   `dotnet restore <project> -p:RestorePackagesWithLockFile=true` and commit it.
 - The version stamped into the assembly is not the version in `build.yaml`.
 - The build produced no archive, or more than one, or no packaging metadata.
+- `changelog.d` holds no fragment, so the release would carry no notes.
+- A fragment there is empty, or is not named `<issue>.<kind>.md` with a kind the
+  assembler accepts.
 - A release already exists for the tag.
 
 All of these fail before anything is published.

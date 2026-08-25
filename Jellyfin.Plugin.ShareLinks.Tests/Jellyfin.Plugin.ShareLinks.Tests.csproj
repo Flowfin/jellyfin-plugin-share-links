@@ -60,6 +60,11 @@
          every workflow file rather than a list, so a workflow added later is judged
          without anybody remembering to add it here. -->
     <None Include="..\.github\workflows\*.yml;..\.github\workflows\*.yaml" Link="workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The release-note fragments and the script that assembles them, because
+         ReleaseNotesTests judges every fragment in the directory rather than a
+         list, and reads the kinds the script accepts out of the script (#89). -->
+    <None Include="..\changelog.d\*" Link="changelog.d\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\.github\scripts\assemble-release-notes.sh" Link="scripts\assemble-release-notes.sh" CopyToOutputDirectory="PreserveNewest" />
     <!-- The committed seed corpus, so the suite can compare the files in the tree
          against the derivation that is supposed to have produced them (#19). -->
     <None Include="..\Jellyfin.Plugin.ShareLinks.Fuzz\corpus\*" Link="corpus\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
