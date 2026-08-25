@@ -5,19 +5,18 @@ using Xunit;
 namespace Jellyfin.Plugin.ShareLinks.Tests;
 
 /// <summary>
-/// docs/versioning.md reserves 0.0.0.0 for builds the release process did not
-/// make. The reservation is only worth anything if a build that reports it also
-/// says so, because four zeros on their own read as an old release just as easily
-/// as they read as no release at all.
+/// docs/versioning.md fixes that one number describes a build, read out of
+/// build.yaml and stamped into every place the assembly reports a version. The
+/// informational version is the place that can drift on its own, because the SDK
+/// composes it rather than copying it, and a build reporting two different numbers
+/// is a build whose provenance cannot be settled by reading it.
 /// </summary>
 public class VersionTests
 {
     private static readonly Assembly PluginAssembly = typeof(Plugin).Assembly;
 
-    private static readonly Version Unreleased = new Version(0, 0, 0, 0);
-
     [Fact]
-    public void AnUnreleasedBuildSaysSoAndAReleasedOneDoesNot()
+    public void TheInformationalVersionCarriesTheSameNumberAsTheAssembly()
     {
         var informational = PluginAssembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
@@ -25,17 +24,12 @@ public class VersionTests
 
         Assert.NotNull(informational);
 
-        // The two directions are one test because they are one rule, and a test
-        // asserting only the first would pass on a release build that had quietly
-        // kept the marker.
-        if (PluginAssembly.GetName().Version == Unreleased)
-        {
-            Assert.StartsWith("0.0.0.0-unreleased", informational, StringComparison.Ordinal);
-        }
-        else
-        {
-            Assert.DoesNotContain("unreleased", informational, StringComparison.OrdinalIgnoreCase);
-        }
+        // The SDK appends the commit after a plus sign, and the part in front of it
+        // is what a person reads as the version of the thing they are holding.
+        var plus = informational.IndexOf('+', StringComparison.Ordinal);
+        var declared = plus >= 0 ? informational[..plus] : informational;
+
+        Assert.Equal(PluginAssembly.GetName().Version?.ToString(), declared);
     }
 
     [Fact]

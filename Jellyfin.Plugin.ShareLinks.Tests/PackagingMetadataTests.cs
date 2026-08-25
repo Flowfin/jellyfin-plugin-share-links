@@ -152,12 +152,38 @@ public class PackagingMetadataTests
     }
 
     [Fact]
-    public void VersionIsTheReservedOne()
+    public void TheAssemblyCarriesTheVersionTheManifestDeclares()
     {
-        // docs/versioning.md reserves 0.0.0.0 for a build the release process did
-        // not make, and a release supplies its version on the command line. A
-        // manifest holding any other number gives a hand-built package a version
-        // that looks like a release.
-        Assert.Equal("0.0.0.0", ReadQuotedField("version"));
+        // build.yaml is the one place the version is written, and
+        // Directory.Build.props reads this field for AssemblyVersion. The release
+        // gate proves the tag equals this field and then proves the assembly
+        // carries the same number, but that second proof is reachable only by
+        // pushing a tag, and a tag cannot be taken back. This is the same
+        // comparison on every run.
+        //
+        // It is not a comparison of a value with itself. What it refuses is the
+        // derivation breaking: a literal pinned back into Directory.Build.props, or
+        // a build.yaml the pattern in it no longer matches, which leaves the
+        // property empty and the SDK stamping its own default.
+        var declared = ReadQuotedField("version");
+
+        // Four parts, because a Jellyfin plugin version is four parts wherever a
+        // server reads it, and because Assembly.GetName().Version is always four:
+        // a three part declaration would fail this comparison for a reason that is
+        // about the formatting rather than about the number.
+        Assert.Matches("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$", declared);
+        Assert.Equal(declared, typeof(Plugin).Assembly.GetName().Version?.ToString());
+    }
+
+    [Fact]
+    public void TheVersionIsNotTheOneThatSaysNoReleaseWasMade()
+    {
+        // 0.0.0.0 was reserved for a build the release process did not make, and
+        // that reservation is retired: the packaging tool builds the plugin itself
+        // and is handed no properties, so the only number it can stamp is the one
+        // this file holds. What survives the retirement is the smaller half - four
+        // zeros is not a version anybody releases, and a manifest that has fallen
+        // back to it would hand a catalogue an entry no server can order.
+        Assert.NotEqual("0.0.0.0", ReadQuotedField("version"));
     }
 }

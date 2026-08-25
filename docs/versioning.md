@@ -13,37 +13,56 @@ an existing installation does not have to care about. `PATCH` moves for a fix.
 `targetAbi` in `build.yaml` is not part of this. It names the server line the
 build was made against and moves on its own.
 
-## What the tree holds
+## Where the number is written
 
-`0.0.0.0` and nothing else. `Directory.Build.props` pins `AssemblyVersion` and
-`FileVersion` at `0.0.0.0` and `Version` at `0.0.0.0-unreleased`, and no release
-ever carries either. A release supplies its version on the build command line
-instead, so the number lives in the release and not in a file somebody can build
-from afterwards.
+`build.yaml`, in its `version` field, and nowhere else.
+`Directory.Build.props` reads that field at evaluation time and hands it to
+`AssemblyVersion`, `FileVersion` and `Version`, so the number a catalogue shows
+and the number inside the DLL are one number that was written once.
 
-That is the whole point of reserving it. Before this, the release process wrote
-the released version into `Directory.Build.props` and committed it, so from then
-on an ordinary local build produced an assembly reporting the released version.
-Two artefacts that are not the same thing reported the same version, and the one
-question a version has to answer is which of the two you are holding.
+    git grep -n '<ManifestVersion>' -- Directory.Build.props
 
-So an assembly reporting `0.0.0.0` was not built by the release process. There is
-no build that reports `0.0.0.0` and is a release, and no release that reports
-`0.0.0.0`.
+Two mechanisms then hold it. The gate job in `.github/workflows/publish.yaml`
+refuses a tag whose numeric part is not that field, and a later step in the same
+workflow refuses a build whose assembly is stamped anything else. The second is
+reachable only by pushing a tag, and a tag cannot be taken back, so
+`PackagingMetadataTests.TheAssemblyCarriesTheVersionTheManifestDeclares` makes the
+same comparison on every run.
 
-The informational version says the same thing in words rather than by absence. An
-unreleased build reports `0.0.0.0-unreleased+<commit>`, where the commit is
-appended by the SDK from the repository. `Jellyfin.Plugin.ShareLinks.Tests` holds
-the rule as a test rather than as this paragraph.
+## THIS SECTION USED TO RESERVE `0.0.0.0`, AND THE RESERVATION IS RETIRED
 
-One route used to write a release version into the tree. The inherited
-release-notes workflow rewrote the three properties with `sed` and committed the
-result, which is exactly the shape this scheme exists to stop. Issue #7 removed
-that workflow, so no route in the tree does it today.
+What stood here said `Directory.Build.props` pinned `0.0.0.0`, that no release
+ever carried it, and that a release supplied its version on the build command
+line - so an assembly reporting `0.0.0.0` was known not to have come from the
+release process. The informational version said the same thing in words, as
+`0.0.0.0-unreleased+<commit>`, and a test held that rule.
 
-Nothing refuses a new one. This scheme is a rule a person follows, not a check
-that fails, and the release process it depends on is still to be decided in issue
-#89.
+The reservation and a working release could not both exist. The packaging tool
+builds the plugin itself and is handed no MSBuild properties, so the only number
+it can stamp into the shipped assembly is one the tree already holds; a release
+supplying its version on a command line reaches the archive's name and never the
+DLL inside it. The tag that would have found that out is the one input here that
+cannot be taken back, so it was measured on #136 before one was spent.
+
+**What is lost is stated rather than softened.** An assembly no longer says
+whether the release process built it. A local build of the tree at this commit
+reports the same version as the release cut from it, and the two are told apart
+by the commit in the informational version and by the provenance attestation on
+the published archive, not by the version. `-unreleased` is gone from
+`Version`, and the test that held it is gone with it.
+
+**What survives.** No release carries `0.0.0.0`: it is not a version anybody
+publishes, and `PackagingMetadataTests.TheVersionIsNotTheOneThatSaysNoReleaseWasMade`
+refuses a manifest that has fallen back to it. Nothing writes a release version
+into the tree behind a person's back either - the inherited release-notes
+workflow rewrote the version properties with `sed` and committed the result, and
+issue #7 removed it, so the only edit that moves this number is the one a person
+makes to `build.yaml`.
+
+The informational version still carries the commit, appended by the SDK, and
+`Jellyfin.Plugin.ShareLinks.Tests` holds both that and the agreement between the
+informational version and the assembly version as tests rather than as this
+paragraph.
 
 ## Two builds of one commit
 

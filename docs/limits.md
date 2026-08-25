@@ -19,9 +19,11 @@ refuses one.
 ### No version has been published
 
 Nothing is released and no manifest is served, so there is nothing to install from
-a repository URL. A package built from the tree carries `0.0.0.0`, which
-`docs/versioning.md` reserves for exactly that case. The release process is #89,
-the manifest is #90, the first tag is #136.
+a repository URL. `build.yaml` declares `0.1.0.0`, which is the version the first
+release will carry rather than a version anybody can install today, and a package
+built from the tree carries that same number: nothing in the version tells a local
+build from a released one, which `docs/versioning.md` says at length. The release
+process is #89, the manifest is #90, the first tag is #136.
 
 **What an operator does.** Waits. A build from the tree loads and names itself, and
 it is not a copy anybody should hand a guest a link from.
