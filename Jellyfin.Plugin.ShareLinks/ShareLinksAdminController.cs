@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Configuration;
@@ -80,6 +81,7 @@ public class ShareLinksAdminController : ControllerBase
     private readonly IUserManager _userManager;
     private readonly IServerConfigurationManager _serverConfiguration;
     private readonly ILibraryManager _libraryManager;
+    private readonly IMediaSourceManager _mediaSources;
     private readonly IPluginConfigurationSource _configuration;
     private readonly IAuthorizationContext _authorizationContext;
     private readonly ISessionManager _sessionManager;
@@ -94,6 +96,7 @@ public class ShareLinksAdminController : ControllerBase
     /// <param name="userManager">The server's own account management, which is what makes a guest account and what takes one away again.</param>
     /// <param name="serverConfiguration">The server's own configuration, which is where the server-wide bitrate ceiling is read (#64).</param>
     /// <param name="libraryManager">The server's own answer to whether an item exists.</param>
+    /// <param name="mediaSources">The server's own answer to what an item can be played at, which is what says whether a ceiling can be met (#286).</param>
     /// <param name="configuration">Where the operator's settings are read from, per request.</param>
     /// <param name="authorizationContext">The server's own answer to who is asking.</param>
     /// <param name="sessionManager">The server's session list, which a revocation reaches into (#55).</param>
@@ -105,6 +108,7 @@ public class ShareLinksAdminController : ControllerBase
         IUserManager userManager,
         IServerConfigurationManager serverConfiguration,
         ILibraryManager libraryManager,
+        IMediaSourceManager mediaSources,
         IPluginConfigurationSource configuration,
         IAuthorizationContext authorizationContext,
         ISessionManager sessionManager,
@@ -116,6 +120,7 @@ public class ShareLinksAdminController : ControllerBase
         _userManager = userManager;
         _serverConfiguration = serverConfiguration;
         _libraryManager = libraryManager;
+        _mediaSources = mediaSources;
         _configuration = configuration;
         _authorizationContext = authorizationContext;
         _sessionManager = sessionManager;
@@ -336,7 +341,7 @@ public class ShareLinksAdminController : ControllerBase
 
         return Ok(new ShareCreated
         {
-            Share = Summary(written, record, now),
+            Share = await SummaryAsync(written, record, now, cancellationToken).ConfigureAwait(false),
             Link = link,
             Guests = guests,
         });
@@ -381,7 +386,7 @@ public class ShareLinksAdminController : ControllerBase
         var listing = new List<ShareSummary>(records.Count);
         for (var index = 0; index < records.Count; index++)
         {
-            listing.Add(Summary(records, records[index], now));
+            listing.Add(await SummaryAsync(records, records[index], now, cancellationToken).ConfigureAwait(false));
         }
 
         return Ok(listing);
@@ -509,7 +514,7 @@ public class ShareLinksAdminController : ControllerBase
             _sessionManager,
             GuestSessions.LeftWithNothingToWatch(remaining, record, now)).ConfigureAwait(false);
 
-        return Ok(Summary(remaining, record, now));
+        return Ok(await SummaryAsync(remaining, record, now, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -640,16 +645,53 @@ public class ShareLinksAdminController : ControllerBase
     // out a summary has to have the store's records at hand, and each of the three
     // does. Written once, because a route that answered without the ceilings would
     // be a surface saying nothing about the number an operator came to check.
-    private ShareSummary Summary(IReadOnlyList<ShareRecord> records, ShareRecord record, DateTimeOffset now)
+    //
+    // It is asynchronous because whether a ceiling can be met is a question for
+    // the server (#286), and it is asked once per invited account that has a
+    // ceiling in force rather than once per record. That is more than #286's cost
+    // paragraph estimated, and the reason is the server's own signature: what an
+    // item can be played at is asked FOR AN ACCOUNT, so two guests on one share
+    // are two questions rather than one asked twice. A record whose accounts have
+    // no ceiling in force asks nothing at all.
+    private async Task<ShareSummary> SummaryAsync(
+        IReadOnlyList<ShareRecord> records,
+        ShareRecord record,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
         => ShareSummary.Of(
             record,
             now,
-            GuestCeilings.Of(
+            await GuestCeilings.OfAsync(
                 records,
                 record,
                 account => ServerCeilings.OfAccount(_userManager, account),
                 ServerCeilings.OfServer(_serverConfiguration),
-                now));
+                account => PlaybackOf(record.ItemId, account, cancellationToken),
+                now).ConfigureAwait(false));
+
+    // What the server says about playing one item for one account, or the answer
+    // that says nothing where either of them is not there.
+    //
+    // An account or an item the server does not hand back is not a share that
+    // cannot be served. It is a question this surface could not ask, and
+    // AccountPlayback.Nothing carries an empty version list, which
+    // BitrateCapReach answers CapReach.NotKnown to. Failing the other way would
+    // put a warning beside a share on the strength of a lookup that never
+    // happened.
+    private async Task<AccountPlayback> PlaybackOf(Guid item, Guid account, CancellationToken cancellationToken)
+    {
+        if (_userManager.GetUserById(account) is not User holder
+            || _libraryManager.GetItemById(item) is not { } held)
+        {
+            return AccountPlayback.Nothing;
+        }
+
+        var versions = await PlayableVersions
+            .OfAsync(_mediaSources, held, holder, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new AccountPlayback(versions, PlayableVersions.MayTranscode(holder));
+    }
 
     // One answer for a store this plugin cannot use, made in one place so that
     // the read path and the write path cannot drift into two. It carries no body,

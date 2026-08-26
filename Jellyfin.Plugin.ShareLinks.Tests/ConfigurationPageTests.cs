@@ -436,6 +436,64 @@ public class ConfigurationPageTests
     }
 
     /// <summary>
+    /// Each line of the in-force column says whether that ceiling can be met for
+    /// the item, which is #286's first clause.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three things again, and for the same shape of reason as the test above.
+    /// The sentence has to be written off the member the listing answers with
+    /// rather than off anything already in the row; the condition an operator has
+    /// to act on has to be spelled out rather than named, because the name is this
+    /// tree's vocabulary and not theirs; and the page has to say what the column
+    /// means, because a warning nobody can act on is a warning that teaches people
+    /// to ignore the column.
+    /// </para>
+    /// <para>
+    /// What this cannot see is the rendered page. Nothing here reaches a browser,
+    /// and the remarks at the top of this file say so of every claim in it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheViewSaysWhetherTheCeilingInForceCanBeMet()
+    {
+        var page = Page();
+
+        Assert.Contains("inForce.CanBeMet", page, StringComparison.Ordinal);
+        Assert.Contains(nameof(CapReach.NothingCanBeServed), page, StringComparison.Ordinal);
+        Assert.Contains("NOTHING CAN BE SERVED", page, StringComparison.Ordinal);
+        Assert.Contains("raise the ceiling", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The states that are not the condition say nothing, so the column is empty
+    /// on an ordinary share.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A column that said something on every line is a column an operator stops
+    /// reading, and the two members that are absences would be the lines it said
+    /// the most reassuring thing on. Neither is a branch of the routine that
+    /// writes the column, so neither ever reaches the screen.
+    /// </para>
+    /// <para>
+    /// The comparison is against the branch rather than against the bare name,
+    /// and the difference matters: the routine's own remark names all five
+    /// members, so a test looking for the name alone would refuse a comment
+    /// explaining why two of them are silent.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheStatesThatAreNotTheConditionSayNothingOnThePage()
+    {
+        var page = Page();
+
+        Assert.Contains("reach === \"" + nameof(CapReach.NothingCanBeServed) + "\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("reach === \"" + nameof(CapReach.AVersionIsWithinIt) + "\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("reach === \"" + nameof(CapReach.NoCeilingIsSet) + "\"", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The two ways of having no ceiling are two sentences on the page rather than
     /// one blank.
     /// </summary>

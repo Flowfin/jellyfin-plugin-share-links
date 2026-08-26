@@ -226,6 +226,65 @@ the ceiling this plugin reports and refuses against is the lowest of the three, 
 an operator who has set either of them is not overridden by a share that asks for
 more.
 
+## What the operator is told when the cap cannot be met
+
+The share view carries a third thing beside the two numbers, on each line of the
+in-force column: whether that ceiling can be met for this share's item. It is
+#286, it is the operator half of #63's answer, and it is what stops a share
+nothing can be served under being made in silence.
+
+**What the column means.** It is `CapReach`, and only one of its five members is a
+warning.
+
+- `NothingCanBeServed` is the condition. Every version the server offers is above
+  the ceiling and none of them can be brought under it, so a guest opening the
+  link meets #284's refusal rather than a lower-quality stream. The repair is the
+  operator's: raise the ceiling, or share something the server can serve under it.
+- `OnlyByTranscoding` is the ordinary capped case. The server re-encodes to get
+  under the ceiling, which works and costs processor time on the server.
+- `AVersionIsWithinIt` is a version already at or below the ceiling, which is the
+  cheapest case.
+- `NoCeilingIsSet` is a share with nothing to meet, including an invited account
+  this plugin did not create, which it caps at nothing at all.
+- `NotKnown` is a question the server did not answer, most often an item it
+  reports no bitrate for. It is not a refusal and it is not permission; it is the
+  absence of an answer, and it is spelled that way rather than folded into either
+  neighbour.
+
+On the page, only the first three say anything at all. A column that spoke on
+every line is a column an operator stops reading, and the two that are absences
+are the lines it would have said the most reassuring thing on.
+
+**One line per invited account, not one per share.** It is computed on the same
+answer as the ceiling beside it, out of the same reading of the store, because it
+is a fact about the same pair of an account and an item. Two guests on one share
+can be held to different ceilings, so one of them can be met and the other not,
+and a single word for the row would be wrong for one of them without saying which.
+It is also the account's transcode permission that decides the `OnlyByTranscoding`
+arm, and that is per account as well.
+
+**What instant it is true at.** The instant the listing was read, in the same way
+the state column and the in-force number are. What an item can be played at is
+read from the server then; a version added, removed or re-probed afterwards moves
+the answer with nothing here knowing. A surface that showed nothing until it could
+promise everything would show nothing.
+
+**At creation as well as in the listing.** The create route answers with the same
+`ShareSummary`, so the warning is the same field rather than a second shape of the
+same fact. A create whose ceiling nothing can be served under is still made: the
+item's versions are the server's to change, and refusing would be this plugin
+deciding what an operator may share. What the operator is owed is being told.
+
+**What it costs, and it is more than #286 estimated.** That issue's cost paragraph
+says one library call per record in the listing. It is one per invited account
+that has a ceiling in force, because the server's own question is asked FOR AN
+ACCOUNT - two guests on one share are two questions rather than one asked twice.
+A record whose accounts have no ceiling in force asks nothing at all, and
+`AListingOfUncappedSharesAsksTheServerNothingAboutTheirVersions` and
+`ACreateWithNoCeilingAsksTheServerNothingAboutTheItemsVersions` hold that with
+strict doubles rather than stating it. The correction is recorded here rather than
+left in the issue, because this page is what a reader of the surface opens.
+
 ## What a guest is told when the cap cannot be met, and the exception it spends
 
 A guest holding a valid share, for whom nothing can be served under the ceiling in
@@ -357,12 +416,11 @@ at playback with a warning at creation. Under this choice that condition is
 reached when even the lowest playable version is above the cap, because the
 ordinary case is a transcode down to the reported ceiling.
 
-**THE PLAYBACK HALF OF THAT IS SETTLED AND THIS SECTION SAID BOTH HALVES WERE
-ELSEWHERE.** The refusal a guest meets is #284 and is built; the section above on
-what a guest is told is where it is argued, along with the exception to #26 it
-spends. What is still not settled here is the operator half, which is #286: a
-share whose ceiling nothing can be served under is still made in silence, and the
-share view still says nothing about it.
+**BOTH HALVES OF THAT ARE SETTLED NOW AND THIS SECTION SAID NEITHER WAS.** The
+refusal a guest meets is #284 and the warning an operator gets is #286, and both
+are built. The two sections above are where each is argued: the exception to #26
+that the guest's sentence spends, and what the operator's column means and what
+instant it is true at.
 
 Both mechanisms are built, on the one request-path surface #239 created. The
 interception lowers the ceiling a playback information request asked for, and the

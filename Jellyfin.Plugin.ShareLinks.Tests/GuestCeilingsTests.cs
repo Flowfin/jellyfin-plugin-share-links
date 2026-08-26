@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Jellyfin.Plugin.ShareLinks.Tests;
@@ -81,7 +82,7 @@ public class GuestCeilingsTests
     /// <param name="applied">The ceilings that should be named.</param>
     [Theory]
     [MemberData(nameof(Ceilings))]
-    public void TheCeilingReportedIsTheLowestAndEveryCeilingAtItIsNamed(
+    public async Task TheCeilingReportedIsTheLowestAndEveryCeilingAtItIsNamed(
         long? share,
         long? account,
         long? server,
@@ -90,7 +91,7 @@ public class GuestCeilingsTests
     {
         var record = ALiveShare(cap: share);
 
-        var answer = Assert.Single(GuestCeilings.Of(
+        var answer = Assert.Single(await Answers(
             new[] { record },
             record,
             _ => account,
@@ -113,12 +114,12 @@ public class GuestCeilingsTests
     /// page would say which.
     /// </remarks>
     [Fact]
-    public void TwoGuestsOnOneShareGetTheirOwnAnswers()
+    public async Task TwoGuestsOnOneShareGetTheirOwnAnswers()
     {
         var record = ALiveShare(cap: 6_000_000, invited: new[] { Guest, SecondGuest });
         var limits = new Dictionary<Guid, long?> { [Guest] = 4_000_000, [SecondGuest] = null };
 
-        var answers = GuestCeilings.Of(new[] { record }, record, account => limits[account], null, Now);
+        var answers = await Answers(new[] { record }, record, account => limits[account], null, Now);
 
         Assert.Equal(new[] { Guest, SecondGuest }, answers.Select(answer => answer.UserId).ToArray());
         Assert.Equal(4_000_000, answers[0].Cap.BitsPerSecond);
@@ -140,12 +141,12 @@ public class GuestCeilingsTests
     /// filter cannot disagree about it.
     /// </remarks>
     [Fact]
-    public void ASecondLiveShareOfTheSameItemLowersWhatThisOneReports()
+    public async Task ASecondLiveShareOfTheSameItemLowersWhatThisOneReports()
     {
         var looked = ALiveShare(cap: 6_000_000);
         var other = ALiveShare(cap: 2_000_000);
 
-        var answer = Assert.Single(GuestCeilings.Of(new[] { looked, other }, looked, _ => null, null, Now));
+        var answer = Assert.Single(await Answers(new[] { looked, other }, looked, _ => null, null, Now));
 
         Assert.Equal(2_000_000, answer.Cap.BitsPerSecond);
         Assert.Equal(BitrateCeiling.Share, answer.Cap.Applied);
@@ -163,11 +164,11 @@ public class GuestCeilingsTests
     /// is enforced on somebody it is not enforced on.
     /// </remarks>
     [Fact]
-    public void AnInvitedAccountThisPluginDidNotMakeIsNotCappedByIt()
+    public async Task AnInvitedAccountThisPluginDidNotMakeIsNotCappedByIt()
     {
         var record = ALiveShare(cap: 6_000_000, pluginCreated: Array.Empty<Guid>());
 
-        var answer = Assert.Single(GuestCeilings.Of(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
+        var answer = Assert.Single(await Answers(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
 
         Assert.Equal(GuestVerdict.NotAGuestOfThisPlugin, answer.Reach);
         Assert.Null(answer.Cap.BitsPerSecond);
@@ -181,13 +182,13 @@ public class GuestCeilingsTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AShareThatHasStoppedHasNoCeilingInForce(bool revoked)
+    public async Task AShareThatHasStoppedHasNoCeilingInForce(bool revoked)
     {
         var record = revoked
             ? ALiveShare(cap: 6_000_000, revokedAt: Now.AddHours(-1))
             : ALiveShare(cap: 6_000_000, expiresAt: Now.AddHours(-1));
 
-        var answer = Assert.Single(GuestCeilings.Of(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
+        var answer = Assert.Single(await Answers(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
 
         Assert.Equal(GuestVerdict.RefusedNothingLive, answer.Reach);
         Assert.Null(answer.Cap.BitsPerSecond);
@@ -205,12 +206,12 @@ public class GuestCeilingsTests
     /// something.
     /// </remarks>
     [Fact]
-    public void AStoppedShareIsNotAnsweredWithAnotherItemsCeiling()
+    public async Task AStoppedShareIsNotAnsweredWithAnotherItemsCeiling()
     {
         var stopped = ALiveShare(cap: 6_000_000, revokedAt: Now.AddHours(-1));
         var elsewhere = ALiveShare(cap: 1_000_000, item: Guid.NewGuid());
 
-        var answer = Assert.Single(GuestCeilings.Of(new[] { stopped, elsewhere }, stopped, _ => null, null, Now));
+        var answer = Assert.Single(await Answers(new[] { stopped, elsewhere }, stopped, _ => null, null, Now));
 
         Assert.Equal(GuestVerdict.RefusedItemNotShared, answer.Reach);
         Assert.Null(answer.Cap.BitsPerSecond);
@@ -221,11 +222,11 @@ public class GuestCeilingsTests
     /// carrying an empty account.
     /// </summary>
     [Fact]
-    public void AShareNamingNobodyAnswersWithNoCeilings()
+    public async Task AShareNamingNobodyAnswersWithNoCeilings()
     {
         var record = ALiveShare(invited: Array.Empty<Guid>(), pluginCreated: Array.Empty<Guid>());
 
-        Assert.Empty(GuestCeilings.Of(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
+        Assert.Empty(await Answers(new[] { record }, record, _ => 4_000_000, 2_000_000, Now));
     }
 
     /// <summary>
@@ -233,14 +234,216 @@ public class GuestCeilingsTests
     /// rather than as a null reference somewhere further in.
     /// </summary>
     [Fact]
-    public void TheArgumentsThatMayNotBeMissingAreRefused()
+    public async Task TheArgumentsThatMayNotBeMissingAreRefused()
     {
         var record = ALiveShare();
 
-        Assert.Throws<ArgumentNullException>(() => GuestCeilings.Of(null!, record, _ => null, null, Now));
-        Assert.Throws<ArgumentNullException>(() => GuestCeilings.Of(new[] { record }, null!, _ => null, null, Now));
-        Assert.Throws<ArgumentNullException>(() => GuestCeilings.Of(new[] { record }, record, null!, null, Now));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => Answers(null!, record, _ => null, null, Now));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => Answers(new[] { record }, null!, _ => null, null, Now));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => Answers(new[] { record }, record, null!, null, Now));
+
+        // The fourth is #286's, and it is refused in the same place rather than
+        // being read as "ask nothing". A caller with no way to ask whether a
+        // ceiling can be met is a caller whose column would be silently wrong.
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => GuestCeilings.OfAsync(new[] { record }, record, _ => null, null, null!, Now));
     }
+
+    /// <summary>
+    /// A ceiling in force, with the item playable well below it: it can be met,
+    /// and the column says which of the ways rather than only yes.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACeilingTheItemFitsUnderSaysAVersionIsWithinIt()
+    {
+        var record = ALiveShare(cap: 6_000_000);
+
+        var answer = Assert.Single(await Answers(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            Now,
+            Playing(new PlayableVersion(1_500_000, false))));
+
+        Assert.Equal(6_000_000, answer.Cap.BitsPerSecond);
+        Assert.Equal(CapReach.AVersionIsWithinIt, answer.CanBeMet);
+    }
+
+    /// <summary>
+    /// The condition this column exists for. Every version is above the ceiling
+    /// and none of them can be brought under it, so the share is one nothing can
+    /// be served through.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACeilingBelowEveryVersionSaysNothingCanBeServed()
+    {
+        var record = ALiveShare(cap: 200_000);
+
+        var answer = Assert.Single(await Answers(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            Now,
+            Playing(new PlayableVersion(4_000_000, false), new PlayableVersion(1_500_000, false))));
+
+        Assert.Equal(CapReach.NothingCanBeServed, answer.CanBeMet);
+    }
+
+    /// <summary>
+    /// The same ceiling and the same version, with the account permitted to
+    /// transcode: the ceiling can be met, by transcoding. Without this the test
+    /// above is satisfied by a column that says nothing can be served whenever a
+    /// ceiling is set at all.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheSameCeilingIsMetByTranscodingWhereTheAccountMay()
+    {
+        var record = ALiveShare(cap: 200_000);
+
+        var answer = Assert.Single(await Answers(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            Now,
+            Playing(true, new PlayableVersion(4_000_000, true))));
+
+        Assert.Equal(CapReach.OnlyByTranscoding, answer.CanBeMet);
+    }
+
+    /// <summary>
+    /// A share with no ceiling anywhere has nothing to meet, and the server is
+    /// never asked. Two guests, two accounts, and no lookup at all.
+    /// </summary>
+    /// <remarks>
+    /// The delegate counts rather than answers, so this is a statement about what
+    /// was asked rather than about what came back. It is the cost paragraph of
+    /// #286 held to by a test: the library call is paid where there is a ceiling
+    /// and nowhere else.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AShareWithNoCeilingAsksTheServerNothing()
+    {
+        var record = ALiveShare(cap: null, invited: new[] { Guest, SecondGuest }, pluginCreated: new[] { Guest, SecondGuest });
+        var asked = new List<Guid>();
+
+        var answers = await GuestCeilings.OfAsync(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            account =>
+            {
+                asked.Add(account);
+                return Task.FromResult(AccountPlayback.Nothing);
+            },
+            Now);
+
+        Assert.Empty(asked);
+        Assert.All(answers, answer => Assert.Equal(CapReach.NoCeilingIsSet, answer.CanBeMet));
+    }
+
+    /// <summary>
+    /// The same share with a ceiling on it does ask, once per invited account,
+    /// so the emptiness above is the absence of a ceiling and not a column that
+    /// never asks anything.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AShareWithACeilingAsksOncePerInvitedAccount()
+    {
+        var record = ALiveShare(cap: 6_000_000, invited: new[] { Guest, SecondGuest }, pluginCreated: new[] { Guest, SecondGuest });
+        var asked = new List<Guid>();
+
+        await GuestCeilings.OfAsync(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            account =>
+            {
+                asked.Add(account);
+                return Task.FromResult(new AccountPlayback(new[] { new PlayableVersion(1_000_000, false) }, false));
+            },
+            Now);
+
+        Assert.Equal(new[] { Guest, SecondGuest }, asked);
+    }
+
+    /// <summary>
+    /// An invited account this plugin does not cap has nothing to meet either,
+    /// and the two absences are the same member here on purpose: there is no
+    /// ceiling of this plugin's on that account, so there is nothing for the item
+    /// to fit under.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnAccountThisPluginDoesNotCapHasNothingToMeet()
+    {
+        var record = ALiveShare(cap: 200_000, pluginCreated: Array.Empty<Guid>());
+
+        var answer = Assert.Single(await Answers(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            Now,
+            Playing(new PlayableVersion(4_000_000, false))));
+
+        Assert.Equal(GuestVerdict.NotAGuestOfThisPlugin, answer.Reach);
+        Assert.Equal(CapReach.NoCeilingIsSet, answer.CanBeMet);
+    }
+
+    /// <summary>
+    /// A server that said nothing about the item is a question nobody answered
+    /// rather than a share that cannot be served.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnItemTheServerSaidNothingAboutIsNotKnownRatherThanRefused()
+    {
+        var record = ALiveShare(cap: 200_000);
+
+        var answer = Assert.Single(await Answers(
+            new[] { record },
+            record,
+            _ => null,
+            null,
+            Now,
+            _ => Task.FromResult(AccountPlayback.Nothing)));
+
+        Assert.Equal(CapReach.NotKnown, answer.CanBeMet);
+    }
+
+    // The ceilings, with a playback answer that says nothing unless a test hands
+    // one in. Nothing here reaches a server, which is docs/testing.md's rule, and
+    // the delegate is what keeps it that way on this routine as well.
+    private static Task<IReadOnlyList<GuestCeiling>> Answers(
+        IReadOnlyList<ShareRecord> records,
+        ShareRecord record,
+        Func<Guid, long?> accountCeiling,
+        long? serverCeiling,
+        DateTimeOffset now,
+        Func<Guid, Task<AccountPlayback>>? playback = null)
+        => GuestCeilings.OfAsync(
+            records,
+            record,
+            accountCeiling,
+            serverCeiling,
+            playback ?? (_ => Task.FromResult(AccountPlayback.Nothing)),
+            now);
+
+    private static Func<Guid, Task<AccountPlayback>> Playing(params PlayableVersion[] versions)
+        => Playing(false, versions);
+
+    private static Func<Guid, Task<AccountPlayback>> Playing(bool mayTranscode, params PlayableVersion[] versions)
+        => _ => Task.FromResult(new AccountPlayback(versions, mayTranscode));
 
     private static ShareRecord ALiveShare(
         long? cap = null,

@@ -8,9 +8,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
@@ -267,6 +269,87 @@ public sealed class AdministratorRouteTests : IDisposable
 
         Assert.Equal(5_000_000, row.AppliedCeilings[1].Cap.BitsPerSecond);
         Assert.Equal(BitrateCeiling.ServerRemoteClientLimit, row.AppliedCeilings[1].Cap.Applied);
+    }
+
+    /// <summary>
+    /// Each line of the ceilings the listing answers with says whether that
+    /// ceiling can be met for the item, which is #286's first clause.
+    /// </summary>
+    /// <remarks>
+    /// Two accounts on one share, with one carrying a lower ceiling of its own, so
+    /// the two lines meet the same item under different numbers and come back with
+    /// different answers. A column computed once per share rather than once per
+    /// account would give both lines the same word, and one of them would be
+    /// wrong without saying which.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task TheListingSaysWhetherEachCeilingInForceCanBeMet()
+    {
+        using var store = new ShareStore(StorePath);
+        var accounts = new RecordingAccounts();
+        accounts.CarriesBitrateLimit[Invited] = 200_000;
+
+        // Zero is what an untouched account carries, and it is what puts the
+        // second account on this server at all: this fake answers with a row only
+        // for an account it was told about, and an account the server does not
+        // hold is a pair nothing can be asked about.
+        accounts.CarriesBitrateLimit[AnotherInvited] = 0;
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(invited: new[] { Invited, AnotherInvited }, pluginCreated: new[] { Invited, AnotherInvited }, cap: 6_000_000),
+        });
+
+        var answer = await Controller(
+            store,
+            Operator,
+            At(Now),
+            new RecordingSessions(),
+            accounts,
+            ServerConfigurations.WithNoCeiling(),
+            ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false)))
+            .List(CancellationToken.None);
+        var row = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<ShareSummary>>(Assert.IsType<OkObjectResult>(answer.Result).Value));
+
+        Assert.Equal(200_000, row.AppliedCeilings[0].Cap.BitsPerSecond);
+        Assert.Equal(CapReach.NothingCanBeServed, row.AppliedCeilings[0].CanBeMet);
+
+        Assert.Equal(6_000_000, row.AppliedCeilings[1].Cap.BitsPerSecond);
+        Assert.Equal(CapReach.AVersionIsWithinIt, row.AppliedCeilings[1].CanBeMet);
+    }
+
+    /// <summary>
+    /// A listing whose shares carry no ceiling asks the server nothing about what
+    /// their items can be played at.
+    /// </summary>
+    /// <remarks>
+    /// The double is strict, so a lookup arriving here fails rather than being
+    /// answered with an empty list. This is #286's cost paragraph held to by a
+    /// test: the library call is paid per invited account that has a ceiling in
+    /// force, and nowhere else.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AListingOfUncappedSharesAsksTheServerNothingAboutTheirVersions()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[]
+        {
+            ARecord(invited: new[] { Invited, AnotherInvited }, pluginCreated: new[] { Invited, AnotherInvited }),
+        });
+
+        var answer = await Controller(
+            store,
+            Operator,
+            At(Now),
+            new RecordingSessions(),
+            new RecordingAccounts(),
+            ServerConfigurations.WithNoCeiling(),
+            ServerPlayback.AskedNothing())
+            .List(CancellationToken.None);
+        var row = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<ShareSummary>>(Assert.IsType<OkObjectResult>(answer.Result).Value));
+
+        Assert.All(row.AppliedCeilings, ceiling => Assert.Equal(CapReach.NoCeilingIsSet, ceiling.CanBeMet));
     }
 
     /// <summary>
@@ -864,12 +947,28 @@ public sealed class AdministratorRouteTests : IDisposable
             RecordingSessions sessions,
             RecordingAccounts accounts,
             IServerConfigurationManager serverConfiguration)
+        => Controller(store, caller, clock, sessions, accounts, serverConfiguration, null);
+
+        private ShareLinksAdminController Controller(
+            IShareStore store,
+            Guid? caller,
+            TimeProvider clock,
+            RecordingSessions sessions,
+            RecordingAccounts accounts,
+            IServerConfigurationManager serverConfiguration,
+            IMediaSourceManager? mediaSources)
         => new ShareLinksAdminController(
             store,
             _keyFile,
             accounts.Manager,
             serverConfiguration,
-            Mock.Of<ILibraryManager>(MockBehavior.Strict),
+            // The listing asks the server what an item can be played at wherever a
+            // ceiling is in force (#286), so the library and the media sources
+            // answer here rather than being strict about never being reached. The
+            // version they report is far below every ceiling these fixtures use,
+            // which keeps the answer out of the way of what they are about.
+            ALibraryHoldingEveryItem(),
+            mediaSources ?? ServerPlayback.Reporting(ServerPlayback.AVersionAt(1_000, supportsTranscoding: false)),
             Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),
             sessions.Manager,
@@ -897,12 +996,7 @@ public sealed class AdministratorRouteTests : IDisposable
             _manager
                 .Setup(manager => manager.GetUserById(It.IsAny<Guid>()))
                 .Returns((Guid id) => Carries.ContainsKey(id) || CarriesBitrateLimit.ContainsKey(id)
-                    ? new User("a guest", "provider", "reset")
-                    {
-                        Id = id,
-                        MaxActiveSessions = Carries.TryGetValue(id, out var ceiling) ? ceiling : 0,
-                        RemoteClientBitrateLimit = CarriesBitrateLimit.TryGetValue(id, out var limit) ? limit : 0,
-                    }
+                    ? AnAccount(id)
                     : null);
 
             _manager
@@ -916,6 +1010,24 @@ public sealed class AdministratorRouteTests : IDisposable
         }
 
         public IUserManager Manager => _manager.Object;
+
+        // One account row, carrying the server's own default permissions before
+        // anything is changed. A User with no permission rows at all is not a
+        // state a server produces, and the ceiling column now reads one of them
+        // (#286), so a fixture that skipped the defaults would be driving this
+        // plugin against an object no running server hands it.
+        private User AnAccount(Guid id)
+        {
+            var account = new User("a guest", "provider", "reset")
+            {
+                Id = id,
+                MaxActiveSessions = Carries.TryGetValue(id, out var ceiling) ? ceiling : 0,
+                RemoteClientBitrateLimit = CarriesBitrateLimit.TryGetValue(id, out var limit) ? limit : 0,
+            };
+
+            account.AddDefaultPermissions();
+            return account;
+        }
 
         // The accounts a policy was written onto, in the order they were written,
         // so a second write on one account is visible rather than collapsed.
@@ -960,6 +1072,16 @@ public sealed class AdministratorRouteTests : IDisposable
         public IReadOnlyList<Guid> Revoked => _revoked;
 
         public List<string> Spared { get; } = new List<string>();
+    }
+
+    // Every item this listing is ever asked about is there. What an item really
+    // is belongs to the server, and nothing on these routes reaches past whether
+    // one is there and what it can be played at.
+    private static ILibraryManager ALibraryHoldingEveryItem()
+    {
+        var library = new Mock<ILibraryManager>(MockBehavior.Strict);
+        library.Setup(m => m.GetItemById(It.IsAny<Guid>())).Returns((Guid id) => new Folder { Id = id });
+        return library.Object;
     }
 
     private static IAuthorizationContext ContextFor(Guid? caller)

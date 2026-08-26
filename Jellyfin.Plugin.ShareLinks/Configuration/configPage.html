@@ -166,6 +166,8 @@
 
                     <p>What is not here. The link is not, and cannot be: only the keyed hash of a token is written down, so the server cannot produce a link a second time even when asked, and the table above is a listing rather than a way back to what a create answered. The item is named by its identifier rather than by its title, because the listing answers with the identifier and nothing here asks the server for a title. The ceiling column is the share's own, which is the number that was typed onto this share. The in-force column is what a guest of it would actually be held to, one line per invited account, with the ceiling that produced it named beside the number: <code>Share</code> is this share's own, <code>Account</code> is that guest's own remote client limit, and <code>ServerRemoteClientLimit</code> is the server-wide one. Where two of them sit at the same value both are named, because lowering the one that was not named would look like a change that did nothing. An invited account this plugin did not create is not confined by it either, so no ceiling of this plugin's reaches that account and the line says so rather than showing a number.</p>
 
+                    <p>Each line of the in-force column also says whether that ceiling can be met for this item, and it says so only where there is something to say. <code>NOTHING CAN BE SERVED</code> is the one that needs an operator: every version the server offers is above the ceiling and none of them can be brought under it, so a guest opening this link is refused rather than served at a lower quality, and the repair is to raise the ceiling or to share something the server can serve under it. <code>met only by transcoding</code> is not a fault and is a cost, because the server re-encodes rather than sending the file as it is. <code>not known</code> is a question the server did not answer, most often an item it reports no bitrate for, and it is neither of the other two. A line with nothing after the number is a ceiling a version of this item already fits under.</p>
+
                     <p>The in-force column is read at the instant the listing was, in the same way the state column is. The ceiling a guest actually meets is worked out again when they ask to play something, out of the same three values as they stand then, so a value somebody moves in between is a disagreement between this page and the server rather than a fault in either.</p>
                 </div>
             </div>
@@ -228,6 +230,35 @@
                     return td;
                 }
 
+                // Whether the ceiling beside it can be met for this item (#286).
+                //
+                // Three of the five members say something and two say nothing.
+                // NothingCanBeServed is the one an operator has to act on, and it
+                // is spelled out rather than named, because the name is this
+                // tree's vocabulary and the repair is theirs. OnlyByTranscoding is
+                // a cost rather than a fault, and NotKnown is the absence of an
+                // answer and must not read as either neighbour.
+                //
+                // AVersionIsWithinIt and NoCeilingIsSet write nothing, so the
+                // column is empty on the ordinary share. A column that spoke on
+                // every line is a column an operator stops reading, and those two
+                // would be the lines it said the most reassuring thing on.
+                function canBeMet(reach) {
+                    if (reach === "NothingCanBeServed") {
+                        return " - NOTHING CAN BE SERVED under this ceiling for this item";
+                    }
+
+                    if (reach === "NotKnown") {
+                        return " - whether it can be met is not known";
+                    }
+
+                    if (reach === "OnlyByTranscoding") {
+                        return " - met only by transcoding";
+                    }
+
+                    return "";
+                }
+
                 // What each invited account of one share would actually be held
                 // to, as one line each. The number alone is not the answer: the
                 // whole of #64 is that an operator lowered a ceiling and nothing
@@ -251,7 +282,7 @@
                         return inForce.UserId + ": no ceiling is set anywhere";
                     }
 
-                    return inForce.UserId + ": " + cap.BitsPerSecond + " (" + cap.Applied + ")";
+                    return inForce.UserId + ": " + cap.BitsPerSecond + " (" + cap.Applied + ")" + canBeMet(inForce.CanBeMet);
                 }
 
                 function ceilingsInForce(share) {

@@ -119,6 +119,13 @@ public sealed class ShareSummary
     /// per account. <see cref="GuestCeilings"/> is where it is computed and where
     /// the instant it is true at is argued.
     /// </para>
+    /// <para>
+    /// Each entry also says whether its ceiling can be met for this share's item,
+    /// which is #286 and is what stops a share nothing can be served under being
+    /// made in silence. The create route answers with this same type, so an
+    /// operator learns it at creation rather than from a guest's error message,
+    /// and it is the same field rather than a second shape of the same fact.
+    /// </para>
     /// </remarks>
     public required IReadOnlyList<GuestCeiling> AppliedCeilings { get; init; }
 
@@ -127,7 +134,7 @@ public sealed class ShareSummary
     /// </summary>
     /// <param name="record">The record.</param>
     /// <param name="now">The instant the state is read at.</param>
-    /// <param name="appliedCeilings">What each invited account would be capped at, from <see cref="GuestCeilings.Of"/>.</param>
+    /// <param name="appliedCeilings">What each invited account would be capped at and whether that ceiling can be met, from <see cref="GuestCeilings.OfAsync"/>.</param>
     /// <returns>The summary.</returns>
     /// <remarks>
     /// The ceilings are handed in rather than computed here. They need every
