@@ -71,12 +71,21 @@ The reason a share was refused is not on the wire and is not going to be. It
 survives for the operator, and the surface that shows it is #67 and #70.
 
 **Where the redirect points.** The item's address in the web client, under
-whatever path the server is mounted at. **That address was not measured against a
-running web client.** This plugin adds nothing to the client and no test here may
-reach a server, so where the client shows an item is an assumption written in one
-place in the source and marked as one. What is tested is that the address carries
-the item the share names, carries the token nowhere, and keeps the path a reverse
-proxy mounts the server under.
+whatever path the server is mounted at. **That address has still not been measured
+against a running web client, and there is now a second reason it has not.** A
+browser navigating to this route is refused with `401` before any redirect is
+built, which #269 measured, so nothing has reached the address even on a run that
+had a real client in front of it. Where the client shows an item therefore remains
+an assumption, written in one place in the source and marked as one, and no test
+here may reach a server anyway, which is `docs/testing.md`.
+
+The sentence that stood here also said this plugin adds nothing to the client. It
+adds nothing today, and that is a statement about the tree rather than a standing
+decision: it was decision 4 of #94, and #269 reopened it on 2026-08-24 when the
+answer chosen there was a link that points into the web client.
+
+What is tested is that the address carries the item the share names, carries the
+token nowhere, and keeps the path a reverse proxy mounts the server under.
 
 ### POST /ShareLinks/Shares
 

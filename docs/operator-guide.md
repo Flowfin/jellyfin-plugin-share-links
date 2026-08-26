@@ -118,8 +118,16 @@ the web client, so the link travels however you choose.
 The guest signs in on the server's own sign-in page with the name and credential
 you sent, and then opens the link.
 
-A guest who opens the link before signing in is sent to the sign-in page and
-opens the link again afterwards. Nothing carries the destination across.
+**Opening the link in a browser does not work yet, and this paragraph used to
+say that it did.** It said a guest who opens the link before signing in is sent
+to the sign-in page and opens it again afterwards. Driven against a real Jellyfin
+with the packaged plugin installed, neither half happens: the link answers `401`
+and a blank page before the guest signs in, and answers `401` again after they
+have. A browser attaches no identity to a top level navigation, because the web
+client keeps its access token in its own storage rather than in a cookie, and the
+same link answers `302` in the same run when the request carries that token in a
+header. #269 carries the run and the answer chosen for it, and nothing in the
+tree does that yet.
 
 The link resolves for the account the share names and for nobody else. A link in
 a chat preview, a mail scanner, a browser history or a proxy log is text, and

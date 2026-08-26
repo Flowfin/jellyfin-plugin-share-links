@@ -155,13 +155,20 @@ public class ShareLinksGuestController : ControllerBase
     /// <returns>An address on this server, beginning with a slash.</returns>
     /// <remarks>
     /// <para>
-    /// **This shape was NOT measured against a running web client.** It is where
-    /// the client is mounted and how it addresses an item, taken as an assumption
-    /// and written in one place so that correcting it is one line. Nothing in this
-    /// repository can read the client: the plugin adds nothing to it, which is
-    /// decision 4 of #94, and no test here may reach a server, which is
-    /// <c>docs/testing.md</c>. What the tests below do hold is that the address
-    /// carries the item the share named and carries the token nowhere.
+    /// **This shape was NOT measured against a running web client, and there is
+    /// now a second reason it was not.** It is where the client is mounted and how
+    /// it addresses an item, taken as an assumption and written in one place so
+    /// that correcting it is one line. No test here may reach a server, which is
+    /// <c>docs/testing.md</c>; and the one run that did have a real client in
+    /// front of it never got this far, because a browser navigating to this route
+    /// is refused with <c>401</c> before the redirect is built. #269 is that run
+    /// and the answer chosen for it. What the tests below do hold is that the
+    /// address carries the item the share named and carries the token nowhere.
+    /// </para>
+    /// <para>
+    /// The plugin adds nothing to the web client today. That was decision 4 of
+    /// #94 and #269 reopened it on 2026-08-24, so it is a statement about this
+    /// tree rather than a decision still standing over it.
     /// </para>
     /// <para>
     /// The path base is kept rather than dropped, because a server behind a proxy
