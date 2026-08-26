@@ -106,6 +106,12 @@ status=$(call POST /Users/AuthenticateByName operator "" "{\"Username\":\"$opera
 token=$(body | jq -r '.AccessToken')
 operator_id=$(body | jq -r '.User.Id')
 echo "signed in, user $operator_id"
+# Written down so a second script can read this server without holding a second
+# copy of the password above. `read-the-server-surface.sh` takes the surface
+# comparison #96 asks for off the same session rather than opening its own, and
+# one password with two homes is one that stops being the same password the first
+# time either is changed.
+printf '{"token":"%s","operatorId":"%s","base":"%s"}\n' "$token" "$operator_id" "$base" >/tmp/observation-session
 
 say "the server loaded the plugin"
 status=$(call GET /Plugins operator "$token")

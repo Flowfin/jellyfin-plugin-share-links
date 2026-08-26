@@ -20,6 +20,15 @@
 # sibling board settled on: the per-day evidence is what makes a green run mean
 # something, and paying a container start on every push to the tree would buy a
 # second copy of a run the pull request already made.
+#
+# TWO BOOTS SINCE #96, not one. The family rule is that this plugin works alone
+# and works with every other supported sibling installed at the same time, and
+# one boot can only ever answer the first half. The second boot installs what the
+# Flowfin catalogue serves beside this plugin, runs the same observations again,
+# and compares the two servers on the three axes that rule is about: routes,
+# scheduled task names, and configuration. What the set is, is read from the
+# catalogue at the moment it is used rather than listed here, so the run widens on
+# the day a sibling board publishes its first release.
 name: observations
 
 on:
@@ -29,6 +38,10 @@ on:
     paths:
       - ".github/workflows/observations.yml"
       - ".github/scripts/observe-on-a-real-server.sh"
+      - ".github/scripts/install-the-supported-set.sh"
+      - ".github/scripts/read-the-server-surface.sh"
+      - ".github/scripts/refuse-a-collision.sh"
+      - ".github/scripts/prove-the-collision-scan-bites.sh"
       - ".github/browser/**"
   workflow_dispatch:
 
@@ -61,12 +74,19 @@ env:
   #
   #   curl -s "https://hub.docker.com/v2/repositories/jellyfin/jellyfin/tags/10.11.11" | jq -r .digest
   JELLYFIN_IMAGE: "jellyfin/jellyfin:10.11.11@sha256:aefb67e6a7ff1debdd154a78a7bbb780fd0c873d8639210a7f6a2016ad2b35db"
+  # Where the supported set is read from. This is the catalogue an operator adds
+  # to their server, so what the second boot installs is what an operator would
+  # have installed, and not a list somebody kept up to date by hand. This board
+  # publishes nothing yet and is therefore absent from it; the installer skips its
+  # own entry by guid anyway, so the day that changes the subject still comes from
+  # the package this job builds out of the tree.
+  CATALOGUE: "https://flowfin.dev/manifest.json"
 
 jobs:
   observe:
     name: Observations on a real Jellyfin
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -75,6 +95,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Prove the collision scan refuses a collision
+        # First, because it reaches no server and costs seconds. The comparison
+        # further down runs against two boots that did not collide, which is what
+        # a green run means and is also what a scan that never fires looks like,
+        # so every refusal is shown to bite on its own fault against a surface
+        # written to carry exactly one.
+        run: bash .github/scripts/prove-the-collision-scan-bites.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -180,7 +208,17 @@ jobs:
       - name: Make the observations
         run: bash .github/scripts/observe-on-a-real-server.sh http://127.0.0.1:8096
 
-      - name: What the server said
+      - name: Record the surface this plugin puts on a server alone
+        # The first half of the comparison #96 asks for. It is judged on its own
+        # here as well as against the second boot, because a duplicate task name
+        # or a plugin the server would not run is a fault whether or not anything
+        # else is installed, and a comparison is not the place to find one.
+        run: |
+          set -euo pipefail
+          bash .github/scripts/read-the-server-surface.sh http://127.0.0.1:8096 /tmp/surface-alone.json
+          bash .github/scripts/refuse-a-collision.sh /tmp/surface-alone.json
+
+      - name: What the server said, with this plugin alone
         # Always, because a failed observation is read out of the server's log
         # and not out of the step that failed, and because a green run is where
         # the plugin's own log lines are checked by eye for the first time.
@@ -191,6 +229,71 @@ jobs:
           echo "===== what the plugin wrote ====="
           docker logs jellyfin 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
 
-      - name: Stop the server
+      - name: Stop the server this plugin ran alone on
+        # Removed rather than left running: the second server takes the same port
+        # so that the observations are made against the same address twice, and
+        # two servers behind one address would make it unreadable which of them
+        # answered.
+        run: docker rm -f jellyfin
+
+      - name: Install this plugin and the supported set where the second server reads them
+        # A second configuration directory rather than the first one reused. The
+        # first server walked its startup wizard, and a run that started from that
+        # state would be a server with a history rather than the clean one the
+        # observations assume.
+        run: |
+          set -euo pipefail
+          plugin_dir="test/e2e/with-the-set/config/plugins/ShareLinks"
+          mkdir -p "$plugin_dir" test/e2e/with-the-set/cache
+          unzip -o ./artifacts/*.zip -d "$plugin_dir"
+
+          # The server line the set is installed for, taken out of the image this
+          # job pins rather than written a second time. A sibling that publishes
+          # for two lines at once publishes two releases, and asking for its
+          # newest would put a build for the next line on this one.
+          ref="${JELLYFIN_IMAGE%%@*}"
+          line="${ref##*:}"
+          echo "installing the supported set for server line $line"
+          bash .github/scripts/install-the-supported-set.sh "$CATALOGUE" test/e2e/with-the-set/config/plugins "$line"
+
+          chmod -R 0777 test/e2e/with-the-set
+
+      - name: Start the second server, with the supported set installed
+        run: |
+          set -euo pipefail
+          docker run -d --name jellyfin-with-the-set \
+            -p 127.0.0.1:8096:8096 \
+            -v "$PWD/test/e2e/with-the-set/config:/config" \
+            -v "$PWD/test/e2e/with-the-set/cache:/cache" \
+            -v "$PWD/test/e2e/media:/media:ro" \
+            -e JELLYFIN_LOG_DIR=/config/log \
+            "$JELLYFIN_IMAGE"
+          docker ps
+
+      - name: Make the observations again, with the set installed
+        # The same script, unchanged. Everything this plugin does is driven end to
+        # end a second time with the siblings present, which is the half of the
+        # rule a surface comparison cannot reach: two plugins declaring the SAME
+        # route are one entry in the server's own description of itself, and what
+        # finds that is a call that no longer answers.
+        run: bash .github/scripts/observe-on-a-real-server.sh http://127.0.0.1:8096
+
+      - name: Refuse a collision between this plugin and the supported set
+        run: |
+          set -euo pipefail
+          bash .github/scripts/read-the-server-surface.sh http://127.0.0.1:8096 /tmp/surface-with-the-set.json
+          bash .github/scripts/refuse-a-collision.sh /tmp/surface-with-the-set.json /tmp/surface-alone.json
+
+      - name: What the second server said
         if: always()
-        run: docker rm -f jellyfin || true
+        run: |
+          set -euo pipefail
+          docker logs jellyfin-with-the-set 2>&1 | tail -300 || true
+          echo "===== what the plugin wrote ====="
+          docker logs jellyfin-with-the-set 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
+
+      - name: Stop the servers
+        if: always()
+        run: |
+          docker rm -f jellyfin || true
+          docker rm -f jellyfin-with-the-set || true
