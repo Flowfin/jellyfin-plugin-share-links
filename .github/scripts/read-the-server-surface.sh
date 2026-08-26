@@ -109,7 +109,10 @@ read_every_configuration() {
       # which plugins were silent.
       out=$(printf '%s' "$out" | jq -c --arg i "$id" --arg s "no configuration, $got" '.[$i] = $s')
     fi
-    echo "  $name -> $got"
+    # To stderr, not stdout. What this function writes on stdout is the JSON its
+    # caller captures, and a progress line mixed into that is a document that no
+    # longer parses - which is how the first run of this step failed.
+    echo "  $name -> $got" >&2
   done < <(printf '%s' "$plugins" | jq -r '.[].raw')
   printf '%s' "$out"
 }
