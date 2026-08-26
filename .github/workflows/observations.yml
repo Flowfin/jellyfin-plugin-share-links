@@ -42,6 +42,8 @@ on:
       - ".github/scripts/read-the-server-surface.sh"
       - ".github/scripts/refuse-a-collision.sh"
       - ".github/scripts/prove-the-collision-scan-bites.sh"
+      - ".github/scripts/refuse-a-startup-error.sh"
+      - ".github/scripts/prove-the-startup-refusal-bites.sh"
       - ".github/browser/**"
   workflow_dispatch:
 
@@ -103,6 +105,13 @@ jobs:
         # so every refusal is shown to bite on its own fault against a surface
         # written to carry exactly one.
         run: bash .github/scripts/prove-the-collision-scan-bites.sh
+
+      - name: Prove the startup rule refuses a startup error
+        # Same reason, and the near misses matter more here than the
+        # refusals do: the subject is a third party's log, so a rule drawn
+        # one line too wide reds this board's nightly for a line another
+        # project wrote.
+        run: bash .github/scripts/prove-the-startup-refusal-bites.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -220,14 +229,26 @@ jobs:
 
       - name: What the server said, with this plugin alone
         # Always, because a failed observation is read out of the server's log
-        # and not out of the step that failed, and because a green run is where
-        # the plugin's own log lines are checked by eye for the first time.
+        # and not out of the step that failed.
+        #
+        # THIS SAID A GREEN RUN IS WHERE THE PLUGIN'S OWN LOG LINES ARE CHECKED BY
+        # EYE FOR THE FIRST TIME, AND THAT IS NOW ONLY THE REMAINDER. The step
+        # below refuses a fatal and an error out of this plugin. Everything else
+        # the server writes is still read by a person or not at all, and that is
+        # deliberate: the rest of this log belongs to a third party and to other
+        # plugins.
         if: always()
         run: |
           set -euo pipefail
           docker logs jellyfin 2>&1 | tail -300 || true
           echo "===== what the plugin wrote ====="
           docker logs jellyfin 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
+
+      - name: Refuse a startup error on the boot with this plugin alone
+        run: |
+          set -euo pipefail
+          docker logs jellyfin >/tmp/log-alone.txt 2>&1
+          bash .github/scripts/refuse-a-startup-error.sh /tmp/log-alone.txt "with this plugin alone"
 
       - name: Stop the server this plugin ran alone on
         # Removed rather than left running: the second server takes the same port
@@ -283,6 +304,12 @@ jobs:
           set -euo pipefail
           bash .github/scripts/read-the-server-surface.sh http://127.0.0.1:8096 /tmp/surface-with-the-set.json
           bash .github/scripts/refuse-a-collision.sh /tmp/surface-with-the-set.json /tmp/surface-alone.json
+
+      - name: Refuse a startup error on the boot with the set installed
+        run: |
+          set -euo pipefail
+          docker logs jellyfin-with-the-set >/tmp/log-with-the-set.txt 2>&1
+          bash .github/scripts/refuse-a-startup-error.sh /tmp/log-with-the-set.txt "with the supported set installed"
 
       - name: What the second server said
         if: always()
