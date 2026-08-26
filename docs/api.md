@@ -58,6 +58,7 @@ described here.
 | Case                                                 | Answer                                      |
 | ---------------------------------------------------- | ------------------------------------------- |
 | The token names a live share that invites the caller | `302` to the item in the web client         |
+| That share's ceiling cannot be met for its item      | `409`, with one fixed sentence saying so    |
 | Anything else                                        | `404`, no body, no headers of this plugin's |
 
 Anything else is every other case and the flatness is deliberate. A share that
@@ -69,6 +70,22 @@ map what exists on this server. Issue #26 is where that is argued and
 
 The reason a share was refused is not on the wire and is not going to be. It
 survives for the operator, and the surface that shows it is #67 and #70.
+
+**The `409` row is an exception to that and is the only one.** It is reachable
+only after the resolution has already accepted the caller, which means the server
+signed them in, the token named a live record and the record names their account,
+so nothing is being handed to anybody who was not already inside. It was granted
+on #63 on 2026-08-24, built as #284, and `docs/bitrate-cap.md` is where it is
+argued in full.
+
+What it carries is one fixed sentence naming the condition. Not the ceiling, not
+what the item can be played at, not which of the three ceilings was the one
+holding, and not who made the share, so a caller learns that this link's own
+quality limit is impossible for what it points at and nothing else.
+`GuestRouteTests.EveryOtherRefusalOnThisRouteIsUnchangedByTheCapCondition` is what
+holds the row above it unchanged, by driving the other eight with the condition
+armed on the same store and comparing what each writes against the literal a
+refusal wrote before this row existed.
 
 **Where the redirect points.** The item's address in the web client, under
 whatever path the server is mounted at. **That address has still not been measured

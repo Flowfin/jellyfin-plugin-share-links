@@ -389,6 +389,12 @@ public sealed class LoggingTests : IDisposable
             ContextFor(caller),
             ManagerSaying(status),
             library ?? ALibraryThatHoldsEveryItem(),
+            // No share in this file carries a ceiling, so the cap condition never
+            // asks the server anything and writes no line. A strict double is what
+            // proves the first half of that rather than assuming it (#284).
+            ServerPlayback.AskedNothing(),
+            ServerPlayback.NoAccounts(),
+            ServerConfigurations.WithNoCeiling(),
             At(Now),
             _log.For<ShareLinksGuestController>())
         {

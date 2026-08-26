@@ -207,15 +207,79 @@ the surface applying it cannot disagree:
     Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs:234:        => ServerCeilings.OfServer(_serverConfiguration);
     Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:650:                account => ServerCeilings.OfAccount(_userManager, account),
     Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:651:                ServerCeilings.OfServer(_serverConfiguration),
+    Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:235:            ServerCeilings.OfAccount(_userManager, caller),
+    Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:236:            ServerCeilings.OfServer(_serverConfiguration),
 
 So what had drifted was the evidence, and the claim it was standing under is
 re-read against the new output rather than assumed to have travelled with it.
+
+**The paste carried four lines when it was written and this change is what added
+the fifth and sixth**, so it is re-run in the same act rather than left for the
+next reader to find. Both new hits are the guest route asking the same two
+questions the filter and the listing already ask, through the same routine, which
+is the sentence above holding rather than being weakened: there is still one place
+where "zero means no ceiling" is decided, and there are now three callers of it.
 
 The account's own limit and the server configuration's are still read rather than
 ignored. They are the second and third inputs to `EffectiveBitrate.Lowest`, and
 the ceiling this plugin reports and refuses against is the lowest of the three, so
 an operator who has set either of them is not overridden by a share that asks for
 more.
+
+## What a guest is told when the cap cannot be met, and the exception it spends
+
+A guest holding a valid share, for whom nothing can be served under the ceiling in
+force, is refused with a sentence saying so. That is an exception to #26, it was
+granted on #63 on 2026-08-24, and it is written down here rather than only in the
+issue because #26 is the rule everything else on this page defers to.
+
+The decision, in the words it was taken in: the #26 rule protects against
+unauthenticated probing; a signed-in guest holding a valid share is already
+inside, so telling them leaks nothing outward, and refusals to everybody
+unauthenticated stay byte-identical. The same decision is what permits this plugin
+to read an item's playable versions at all, paid on the share surface.
+
+**It is held to one caller and one condition.** The caller is one the resolution
+has already accepted, which means the server signed them in, the token named a
+live record, and the record names their account. The condition is that the
+ceiling in force cannot be met for the item, which is
+`CapReach.NothingCanBeServed` and nothing else. Every other caller and every other
+outcome meets the bare refusal this route has always given.
+
+**What holds it there is a test rather than this paragraph.**
+`GuestRouteTests.EveryOtherRefusalOnThisRouteIsUnchangedByTheCapCondition` drives
+the eight other ways of getting nothing with the condition armed on the same
+store, compares what each writes against the literal a refusal wrote before this
+change, and then reaches the condition on that same store so the comparison
+cannot pass by nothing having been armed.
+
+**The message names the condition and nothing else.** Not the ceiling, not what
+the item can be played at, not which of the three ceilings was the one holding,
+and not who made the share. It is a constant rather than a sentence assembled at
+the refusal, so nothing a caller sent can come back to them in it, and
+`WhatTheGuestIsToldCarriesNoNumberAndNoIdentifier` refuses a number arriving in
+it later.
+
+**The status is its own rather than a body hung off the bare refusal.** Two
+answers that differ only in whether they carry a body are two answers a reader has
+to compare byte by byte to tell apart, and the point of holding this to one
+condition is that it is obvious which one somebody met. It is also not a "not
+found": the share is there and the item is there, and what cannot be honoured is
+the pair of them.
+
+**Where the lookup is paid.** On the surface that opens a share, which happens
+once, and never in `GuestConfinementFilter`, which stands in front of every stream
+request a guest makes. A library call per segment is a cost with no ceiling on it.
+A share carrying no ceiling in force asks the server nothing at all, and
+`AShareWithNoCeilingAsksTheServerNothingAboutTheItemsVersions` proves that with a
+strict double rather than asserting it.
+
+**What this does not do.** It does not tell an operator anything; that is #286,
+and it is the half that stops a share nothing can be served under being made in
+silence. It does not change the request-path filter, which still answers a bare
+refusal to a stream request above the ceiling. And it says nothing about what a
+server does afterwards: what is asserted is that this plugin does not send the
+guest on to the item, and no test here may reach a transcoder.
 
 ## What this does not constrain
 
@@ -292,6 +356,13 @@ What happens when the cap cannot be honoured is #63, and its answer is a refusal
 at playback with a warning at creation. Under this choice that condition is
 reached when even the lowest playable version is above the cap, because the
 ordinary case is a transcode down to the reported ceiling.
+
+**THE PLAYBACK HALF OF THAT IS SETTLED AND THIS SECTION SAID BOTH HALVES WERE
+ELSEWHERE.** The refusal a guest meets is #284 and is built; the section above on
+what a guest is told is where it is argued, along with the exception to #26 it
+spends. What is still not settled here is the operator half, which is #286: a
+share whose ceiling nothing can be served under is still made in silence, and the
+share view still says nothing about it.
 
 Both mechanisms are built, on the one request-path surface #239 created. The
 interception lowers the ceiling a playback information request asked for, and the

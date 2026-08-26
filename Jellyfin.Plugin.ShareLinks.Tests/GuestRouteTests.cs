@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
@@ -421,22 +422,304 @@ public sealed class GuestRouteTests : IDisposable
         Assert.False(action.IsRefused);
     }
 
+    /// <summary>
+    /// The first of the two tests #284 names: a ceiling below the item's lowest
+    /// playable bitrate. The guest holds a valid share and is refused, and what
+    /// they are told names the condition.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACeilingBelowEveryVersionRefusesTheGuestAndSaysWhy()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(200_000) });
+
+        var answer = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(
+                ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false),
+                ServerPlayback.AVersionAt(1_500_000, supportsTranscoding: false)),
+            accounts: ServerPlayback.AccountsHolding(Invited));
+
+        var refusal = Assert.IsType<ObjectResult>(answer);
+        Assert.Equal(StatusCodes.Status409Conflict, refusal.StatusCode);
+        Assert.Equal(ShareLinksGuestController.TheCapCannotBeMetHere, refusal.Value);
+    }
+
+    /// <summary>
+    /// The second of the two: every version is above the ceiling and one of them
+    /// could be transcoded down, but the account is not permitted to transcode.
+    /// </summary>
+    /// <remarks>
+    /// This is the state <c>docs/guest-capabilities.md</c> says this plugin does
+    /// not produce - it turns transcoding on for every account it makes - so the
+    /// only way in is an operator narrowing the account by hand afterwards. The
+    /// permission is read rather than assumed for exactly that reason.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AGuestNotPermittedToTranscodeIsRefusedWhereTranscodingWasTheOnlyWayUnderTheCeiling()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(200_000) });
+
+        var answer = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: true)),
+            accounts: ServerPlayback.AccountsHolding(Invited, mayTranscode: false));
+
+        var refusal = Assert.IsType<ObjectResult>(answer);
+        Assert.Equal(StatusCodes.Status409Conflict, refusal.StatusCode);
+        Assert.Equal(ShareLinksGuestController.TheCapCannotBeMetHere, refusal.Value);
+    }
+
+    /// <summary>
+    /// The clause both of those carry: neither ends with a stream above the cap.
+    /// What this route can put a guest in front of a stream with is the redirect
+    /// to the item, so what is asserted is that neither answer is one.
+    /// </summary>
+    /// <remarks>
+    /// It is stated as what this route does rather than as a measurement of
+    /// bytes. No test in this repository may reach a server, which is
+    /// <c>docs/testing.md</c>, so what came out of a transcoder is not asserted
+    /// anywhere here. What is asserted is that this plugin does not send the
+    /// guest on.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task NeitherRefusalSendsTheGuestOnToTheItem()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(200_000) });
+
+        var belowEveryVersion = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false)),
+            accounts: ServerPlayback.AccountsHolding(Invited));
+
+        var notPermittedToTranscode = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: true)),
+            accounts: ServerPlayback.AccountsHolding(Invited, mayTranscode: false));
+
+        Assert.IsNotType<RedirectResult>(belowEveryVersion);
+        Assert.IsNotType<RedirectResult>(notPermittedToTranscode);
+    }
+
+    /// <summary>
+    /// The near miss for the transcoding arm. The same item, the same ceiling and
+    /// the same version, with the account permitted to transcode: the share opens.
+    /// Without this the tests above are satisfied by a route that refuses every
+    /// capped share, which would cap a share at nothing and read as the guard
+    /// working.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AnAccountPermittedToTranscodeReachesTheSameItemUnderTheSameCeiling()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(200_000) });
+
+        var answer = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: true)),
+            accounts: ServerPlayback.AccountsHolding(Invited, mayTranscode: true));
+
+        var redirect = Assert.IsType<RedirectResult>(answer);
+        Assert.Equal("/web/#/details?id=" + Item.ToString("N"), redirect.Url);
+    }
+
+    /// <summary>
+    /// The other near miss. A version at or below the ceiling answers the question
+    /// before the transcode flag is ever read, so a capped share whose item fits
+    /// opens like any other.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AVersionInsideTheCeilingOpensTheShare()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(2_000_000) });
+
+        var answer = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(
+                ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false),
+                ServerPlayback.AVersionAt(1_500_000, supportsTranscoding: false)),
+            accounts: ServerPlayback.AccountsHolding(Invited, mayTranscode: false));
+
+        Assert.IsType<RedirectResult>(answer);
+    }
+
+    /// <summary>
+    /// A version the server reports no bitrate for is an unknown and not a version
+    /// above the ceiling, so the share opens. Failing the other way would refuse a
+    /// working share on the reading of a field this plugin does not own.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AVersionTheServerReportsNoBitrateForDoesNotRefuseTheShare()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ACappedRecord(200_000) });
+
+        var answer = await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.Reporting(
+                ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false),
+                ServerPlayback.AVersionWithNoReportedBitrate(supportsTranscoding: false)),
+            accounts: ServerPlayback.AccountsHolding(Invited, mayTranscode: false));
+
+        Assert.IsType<RedirectResult>(answer);
+    }
+
+    /// <summary>
+    /// A share with no ceiling asks the server nothing about what the item can be
+    /// played at. The lookup is paid on the surface that opens a share, and a
+    /// share with nothing to meet is not a reason to pay it.
+    /// </summary>
+    /// <remarks>
+    /// The double is strict, so a lookup arriving here fails the test rather than
+    /// being answered with an empty list that would pass every assertion above it.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task AShareWithNoCeilingAsksTheServerNothingAboutTheItemsVersions()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[] { ARecord(madeByThisPlugin: true) });
+
+        Assert.IsType<RedirectResult>(await Ask(
+            store,
+            "a-token",
+            Invited,
+            mediaSources: ServerPlayback.AskedNothing(),
+            accounts: ServerPlayback.AccountsHolding(Invited)));
+    }
+
+    /// <summary>
+    /// The clause that holds the exception where it was meant to stop. Every other
+    /// refusal on this route answers the same bytes it answered before #284, with
+    /// the cap condition armed rather than absent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The literal is what makes this a statement about disclosure. All of them
+    /// being equal to each other is satisfiable by all of them having changed in
+    /// the same way, including all of them having grown the sentence this change
+    /// adds.
+    /// </para>
+    /// <para>
+    /// The fixtures carry a ceiling and the doubles answer, so the condition is
+    /// reachable on this store rather than switched off for the comparison. What
+    /// each of these callers is refused for is decided before the ceiling is ever
+    /// looked at, and the last assertion is what shows the arming was real.
+    /// </para>
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task EveryOtherRefusalOnThisRouteIsUnchangedByTheCapCondition()
+    {
+        using var store = new ShareStore(StorePath);
+        await store.MutateAsync(_ => new[]
+        {
+            ACappedRecord(200_000),
+            ARecord(token: "revoked-token", revokedAt: Now.AddDays(-1), maxBitrateBitsPerSecond: 200_000, madeByThisPlugin: true),
+            ARecord(token: "expired-token", expiresAt: Now.AddDays(-1), maxBitrateBitsPerSecond: 200_000, madeByThisPlugin: true),
+        });
+
+        var sources = ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false));
+        var accounts = ServerPlayback.AccountsHolding(Invited);
+
+        var written = new List<string>
+        {
+            await Bytes(await Ask(store, "no-such-token", Invited, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "a-token", Stranger, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "a-token", caller: null, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "revoked-token", Invited, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "expired-token", Invited, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "a-token", Invited, status: PluginStatus.Disabled, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, presentedToken: string.Empty, Invited, mediaSources: sources, accounts: accounts)),
+            await Bytes(await Ask(store, "a-token", Invited, library: ALibraryHolding(), mediaSources: sources, accounts: accounts)),
+        };
+
+        Assert.Single(written.Distinct(StringComparer.Ordinal));
+        Assert.Equal("404 headers:[] body:[]", written[0]);
+
+        // And the condition is reachable on this very store, so the eight above
+        // are unchanged because they are decided first rather than because
+        // nothing was armed.
+        var refused = await Ask(store, "a-token", Invited, mediaSources: sources, accounts: accounts);
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(refused).StatusCode);
+    }
+
+    /// <summary>
+    /// What the guest is told names the condition and nothing else. Not the
+    /// ceiling, not what the item can be played at, not the share and not the
+    /// item.
+    /// </summary>
+    /// <remarks>
+    /// Asserted as an absence of digits rather than against the numbers of one
+    /// fixture. A message that grew a number would pass a comparison against the
+    /// two values this test happens to use and fail this one.
+    /// </remarks>
+    [Fact]
+    public void WhatTheGuestIsToldCarriesNoNumberAndNoIdentifier()
+    {
+        var told = ShareLinksGuestController.TheCapCannotBeMetHere;
+
+        Assert.DoesNotContain(told, character => char.IsDigit(character));
+        Assert.DoesNotContain("bitrate", told, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(Item.ToString("N", CultureInfo.InvariantCulture), told, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(Invited.ToString("N", CultureInfo.InvariantCulture), told, StringComparison.OrdinalIgnoreCase);
+    }
+
     private ShareRecord ARecord(
         string token = "a-token",
         DateTimeOffset? expiresAt = null,
         DateTimeOffset? revokedAt = null,
-        Guid? invited = null) => new ShareRecord
+        Guid? invited = null,
+        long? maxBitrateBitsPerSecond = null,
+        bool madeByThisPlugin = false) => new ShareRecord
         {
             SchemaVersion = ShareRecord.CurrentSchemaVersion,
             Id = Guid.NewGuid(),
             ItemId = Item,
             InvitedUserIds = new[] { invited ?? Invited },
+
+            // Provenance, and the cap condition needs it: this plugin applies no
+            // ceiling to an invited account it did not make, so a record that did
+            // not claim the account would come back from the confinement decision
+            // with no ceiling and the condition would never be reached (#284).
+            PluginCreatedUserIds = madeByThisPlugin
+                ? new[] { invited ?? Invited }
+                : Array.Empty<Guid>(),
             CreatedByUserId = Guid.NewGuid(),
             CreatedAt = Now.AddDays(-1),
             ExpiresAt = expiresAt ?? Now.AddDays(7),
             RevokedAt = revokedAt,
+            MaxBitrateBitsPerSecond = maxBitrateBitsPerSecond,
             TokenHash = ShareTokenHash.Compute(_key, token),
         };
+
+    // One capped share, made by this plugin for the invited account, which is the
+    // only arrangement in which the ceiling this plugin applies is in force.
+    private ShareRecord ACappedRecord(long ceiling)
+        => ARecord(maxBitrateBitsPerSecond: ceiling, madeByThisPlugin: true);
 
     private static Plugin ThePlugin()
     {
@@ -515,15 +798,21 @@ public sealed class GuestRouteTests : IDisposable
         string presentedToken,
         Guid? caller,
         PluginStatus status = PluginStatus.Active,
-        ILibraryManager? library = null)
-        => Ask(store, presentedToken, ContextFor(caller), status, library);
+        ILibraryManager? library = null,
+        IMediaSourceManager? mediaSources = null,
+        IUserManager? accounts = null,
+        IServerConfigurationManager? serverConfiguration = null)
+        => Ask(store, presentedToken, ContextFor(caller), status, library, mediaSources, accounts, serverConfiguration);
 
     private async Task<ActionResult> Ask(
         IShareStore store,
         string presentedToken,
         IAuthorizationContext authorization,
         PluginStatus status = PluginStatus.Active,
-        ILibraryManager? library = null)
+        ILibraryManager? library = null,
+        IMediaSourceManager? mediaSources = null,
+        IUserManager? accounts = null,
+        IServerConfigurationManager? serverConfiguration = null)
     {
         var controller = new ShareLinksGuestController(
             store,
@@ -531,6 +820,14 @@ public sealed class GuestRouteTests : IDisposable
             authorization,
             ManagerSaying(status),
             library ?? ALibraryHolding(Item),
+            // Strict by default, and that default is doing work rather than
+            // saving a line. Every fixture in this file but the cap ones is a
+            // share with no ceiling, and what those fixtures assert is partly
+            // that the server is never asked what the item can be played at
+            // (#284).
+            mediaSources ?? ServerPlayback.AskedNothing(),
+            accounts ?? ServerPlayback.NoAccounts(),
+            serverConfiguration ?? ServerConfigurations.WithNoCeiling(),
             At(Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {

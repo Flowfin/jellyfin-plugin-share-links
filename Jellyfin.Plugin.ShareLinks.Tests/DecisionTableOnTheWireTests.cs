@@ -289,6 +289,13 @@ public sealed class DecisionTableOnTheWireTests : IDisposable
             ContextFor(situation.Caller),
             ManagerSaying(situation.Status),
             situation.TheServerHoldsTheItem ? ALibraryThatHoldsEveryItem() : ALibraryHoldingNothing(),
+            // No row of the table carries a ceiling, so nothing on this route asks
+            // the server what an item can be played at. A strict double is what
+            // says so: a lookup arriving here would fail rather than be answered
+            // with an empty list nobody would notice (#284).
+            ServerPlayback.AskedNothing(),
+            ServerPlayback.NoAccounts(),
+            ServerConfigurations.WithNoCeiling(),
             At(situation.Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {

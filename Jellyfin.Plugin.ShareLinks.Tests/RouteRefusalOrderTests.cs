@@ -238,6 +238,9 @@ public sealed class RouteRefusalOrderTests : IDisposable
             AnAuthorizationContextSaying(signedIn),
             AManagerListingNothing(),
             ALibraryThatHoldsEveryItem(),
+            ServerPlayback.AskedNothing(),
+            ServerPlayback.NoAccounts(),
+            ServerConfigurations.WithNoCeiling(),
             new FixedClock(Now),
             NullLogger<ShareLinksGuestController>.Instance)
         {
