@@ -408,6 +408,10 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
             accounts.Manager,
             ServerConfigurations.WithNoCeiling(),
             Mock.Of<ILibraryManager>(MockBehavior.Strict),
+            // Strict, and it stays strict: the rotation route answers with a count
+            // rather than with a summary, so nothing on it asks the server what an
+            // item can be played at (#286).
+            ServerPlayback.AskedNothing(),
             Mock.Of<IPluginConfigurationSource>(MockBehavior.Strict),
             ContextFor(caller),
             sessions.Manager,

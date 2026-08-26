@@ -208,11 +208,12 @@ operator typed onto it. `AppliedCeilings` is what a guest of it would actually b
 held to, one entry per invited account, because the ceiling is a per-account
 question and a record names a list:
 
-| Field    | What it carries                                                   |
-| -------- | ----------------------------------------------------------------- |
-| `UserId` | The invited account the entry is about                            |
-| `Reach`  | What the request-path filter would decide for that account        |
-| `Cap`    | `BitsPerSecond`, and `Applied` naming every ceiling sitting at it |
+| Field      | What it carries                                                   |
+| ---------- | ----------------------------------------------------------------- |
+| `UserId`   | The invited account the entry is about                            |
+| `Reach`    | What the request-path filter would decide for that account        |
+| `Cap`      | `BitsPerSecond`, and `Applied` naming every ceiling sitting at it |
+| `CanBeMet` | Whether anything can be served under that ceiling for this item   |
 
 `Applied` is a set rather than one name. Two ceilings can sit at the same value
 and both apply, and reporting one of them would mean an operator who lowers the
@@ -226,8 +227,25 @@ all. `Reaches` with `BitsPerSecond` absent is an account the filter does cover a
 for which nobody has set a ceiling anywhere. The two are repaired in opposite
 directions.
 
+`CanBeMet` is five members and only one of them is a warning.
+`NothingCanBeServed` is the condition: every version the server offers is above
+the ceiling and none of them can be brought under it, so a guest opening the link
+is refused rather than served at lower quality. `AVersionIsWithinIt` is a version
+already at or below the ceiling. `OnlyByTranscoding` is the ordinary capped case,
+where the server re-encodes to get under it. `NoCeilingIsSet` is a share with
+nothing to meet, and the server is not asked at all in that case.
+`NotKnown` is a question the server did not answer, most often an item it reports
+no bitrate for; it is not a refusal and must not be read as one.
+
+The create route answers with the same summary, so an operator learns this when
+the share is made rather than from a guest's error message. A create whose ceiling
+nothing can be served under is still made: the item's versions are the server's to
+change, and what this route owes the operator is the fact rather than a refusal.
+
 The entries are computed at the instant the listing was read, in the same way the
-state is. The ceiling a guest meets is worked out again when they ask to play
+state is. `CanBeMet` is the same: what an item can be played at is read from the
+server then, and a version added or removed afterwards moves the answer without
+anything here knowing. The ceiling a guest meets is worked out again when they ask to play
 something, out of the same three values as they stand then, so a value somebody
 moves in between is a disagreement between this answer and a later request rather
 than a fault in either.

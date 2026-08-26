@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.ShareLinks.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -531,6 +532,87 @@ public sealed class ShareCreationTests : IDisposable
         Assert.Equal(created.Guests.Select(guest => guest.UserId).ToArray(), record.InvitedUserIds);
     }
 
+    /// <summary>
+    /// The test #286 names: a create whose cap nothing can be served under. The
+    /// operator is told in the answer to the create rather than finding out later
+    /// from a guest.
+    /// </summary>
+    /// <remarks>
+    /// The share is still made. A create that refused would be this plugin
+    /// deciding that an operator may not share an item the server currently
+    /// reports no version of under their ceiling, and the item's versions are the
+    /// server's to change; what the operator is owed is being told, which is what
+    /// #286 asks for.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACreateWhoseCapNothingCanBeServedUnderSaysSoInItsAnswer()
+    {
+        using var store = new ShareStore(StorePath);
+
+        var created = Assert.IsType<ShareCreated>(
+            Assert.IsType<OkObjectResult>(
+                (await Controller(
+                    store,
+                    Operator,
+                    TheDefaults(),
+                    ServerPlayback.Reporting(ServerPlayback.AVersionAt(4_000_000, supportsTranscoding: false)))
+                    .Create(ARequest(maxBitrateMbps: 0.2), CancellationToken.None)).Result).Value);
+
+        var ceiling = Assert.Single(created.Share.AppliedCeilings);
+        Assert.Equal(200_000, ceiling.Cap.BitsPerSecond);
+        Assert.Equal(CapReach.NothingCanBeServed, ceiling.CanBeMet);
+
+        // And the share exists, so this is a warning rather than a refusal.
+        Assert.Single(await store.ReadAsync());
+    }
+
+    /// <summary>
+    /// The same create with the same ceiling, against an item the server can
+    /// serve under it, says the ceiling can be met. Without this the test above is
+    /// satisfied by an answer that warns on every capped create.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACreateWhoseCapTheItemFitsUnderSaysTheCeilingCanBeMet()
+    {
+        using var store = new ShareStore(StorePath);
+
+        var created = Assert.IsType<ShareCreated>(
+            Assert.IsType<OkObjectResult>(
+                (await Controller(
+                    store,
+                    Operator,
+                    TheDefaults(),
+                    ServerPlayback.Reporting(ServerPlayback.AVersionAt(150_000, supportsTranscoding: false)))
+                    .Create(ARequest(maxBitrateMbps: 0.2), CancellationToken.None)).Result).Value);
+
+        Assert.Equal(CapReach.AVersionIsWithinIt, Assert.Single(created.Share.AppliedCeilings).CanBeMet);
+    }
+
+    /// <summary>
+    /// A create with no ceiling has nothing to meet, and the server is never asked
+    /// what the item can be played at.
+    /// </summary>
+    /// <remarks>
+    /// The double is strict, so the lookup arriving here fails the test rather
+    /// than being answered with an empty list. This is #286's cost paragraph held
+    /// to: the library call is paid where there is a ceiling and nowhere else.
+    /// </remarks>
+    /// <returns>A task that completes when the assertions have been made.</returns>
+    [Fact]
+    public async Task ACreateWithNoCeilingAsksTheServerNothingAboutTheItemsVersions()
+    {
+        using var store = new ShareStore(StorePath);
+
+        var created = Assert.IsType<ShareCreated>(
+            Assert.IsType<OkObjectResult>(
+                (await Controller(store, Operator, TheDefaults(), ServerPlayback.AskedNothing())
+                    .Create(ARequest(), CancellationToken.None)).Result).Value);
+
+        Assert.Equal(CapReach.NoCeilingIsSet, Assert.Single(created.Share.AppliedCeilings).CanBeMet);
+    }
+
     // The request every test starts from: one item this server holds, one guest,
     // and nothing said about expiry or the ceiling, which is the ordinary case.
     private static ShareCreationRequest ARequest(
@@ -652,6 +734,13 @@ public sealed class ShareCreationTests : IDisposable
         => Controller(store, caller, TheDefaults());
 
     private ShareLinksAdminController Controller(IShareStore store, Guid? caller, IPluginConfigurationSource configuration)
+        => Controller(store, caller, configuration, null);
+
+    private ShareLinksAdminController Controller(
+        IShareStore store,
+        Guid? caller,
+        IPluginConfigurationSource configuration,
+        IMediaSourceManager? mediaSources)
     {
         var http = new DefaultHttpContext();
         http.Request.Scheme = "https";
@@ -663,6 +752,10 @@ public sealed class ShareCreationTests : IDisposable
             _server.Manager(),
             ServerConfigurations.WithNoCeiling(),
             _server.Library(),
+            // A version far below anything these fixtures cap at, so the summary a
+            // create answers with reports a ceiling that can be met and the reach
+            // column stays out of the way of what these tests are about (#286).
+            mediaSources ?? ServerPlayback.Reporting(ServerPlayback.AVersionAt(1_000, supportsTranscoding: false)),
             configuration,
             ContextFor(caller),
             _server.Sessions(),
@@ -714,6 +807,12 @@ public sealed class ShareCreationTests : IDisposable
         public User Add(string name)
         {
             var user = new User(name, "provider", "reset") { Id = Guid.NewGuid() };
+
+            // The server's own default permissions, before this plugin writes its
+            // policy over them. The summary a create answers with reads one of
+            // them (#286), and an account with no permission rows at all is not a
+            // state a server produces.
+            user.AddDefaultPermissions();
             Users.Add(user);
             return user;
         }
