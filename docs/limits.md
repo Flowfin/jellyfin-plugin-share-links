@@ -162,17 +162,30 @@ pause somebody.
 
 ## The link
 
-### A guest who is not signed in has to open the link twice
+### A guest cannot open the link in a browser at all
 
-The route answers only callers the server has already identified, so a guest
-following a link before signing in meets the server's own refusal, signs in, and
-reaches the item by opening the link a second time. Making that one round trip
-needs something in the web client, and decision 4 of #94 is that nothing is added
-to the web client. #68 is where the remaining choice sits, and `docs/leaked-link.md`
-is where the shape of the link itself is argued.
+The route answers only callers the server has already identified, and a browser
+attaches no identity to a top level navigation: the web client keeps its access
+token in its own storage rather than in a cookie. Measured against a real
+Jellyfin with the packaged plugin installed, the link answers `401` and a blank
+page before the guest signs in and `401` again after they have, while the same
+link answers `302` in the same run when the request carries the guest's token in
+a header. #269 carries that run.
 
-**What an operator does.** Tells the guest to sign in first, or to open the link
-again afterwards.
+THIS ENTRY SAID THE GUEST REACHES THE ITEM BY OPENING THE LINK A SECOND TIME, AND
+THE RUN SHOWS THE SECOND OPEN ANSWERING `401` AS WELL. So what stood here sent an
+operator to tell a guest to walk a loop that does not close, which is worse than
+saying nothing. It also rested on decision 4 of #94, that nothing is added to the
+web client, and that decision was reopened on #269 on 2026-08-24 when the answer
+there was chosen: the link points into the web client rather than at the route.
+Nothing in the tree does that yet, so this entry records the gap rather than the
+answer. `docs/leaked-link.md` is where the shape of the link itself is argued and
+is unaffected by any of it.
+
+**What an operator does.** Treats the link as not yet something to hand a guest
+and expect a browser to follow. What is missing is the browser navigation and not
+the share: the route resolves for a client that carries the guest's token in a
+header, which is what the same run shows.
 
 ### Every refusal looks identical
 
