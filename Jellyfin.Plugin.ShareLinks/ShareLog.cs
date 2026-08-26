@@ -134,6 +134,43 @@ public static class ShareLog
     }
 
     /// <summary>
+    /// A share resolved and then nothing could be served under its ceiling (#284).
+    /// </summary>
+    /// <param name="logger">Where the line goes.</param>
+    /// <param name="record">The share that resolved.</param>
+    /// <remarks>
+    /// <para>
+    /// A line of its own rather than one of <see cref="Refused"/>'s reasons,
+    /// because nothing was refused by the decision: the share resolved, and what
+    /// could not be honoured is the ceiling on it. Folding the two together would
+    /// put a state an operator can repair - lower the item's demands or raise the
+    /// ceiling - among the reasons that mean somebody presented a token that was
+    /// never going to work.
+    /// </para>
+    /// <para>
+    /// The share is named and the numbers are not. What the ceiling was and what
+    /// the item can be played at are both on the operator surface, read at the
+    /// instant that surface is read, and a copy of either in a log file is a
+    /// second answer with a different lifetime.
+    /// </para>
+    /// </remarks>
+    public static void CapCannotBeMet(ILogger logger, ShareRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(record);
+
+        // The level is asked first, for the reason given in Created above.
+        if (!logger.IsEnabled(LogLevel.Information))
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Share {Share} resolved and nothing could be served under the ceiling in force",
+            Name(record.Id));
+    }
+
+    /// <summary>
     /// Nothing resolved, and this is the reason the server keeps.
     /// </summary>
     /// <param name="logger">Where the line goes.</param>
