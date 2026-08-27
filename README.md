@@ -18,13 +18,19 @@ text, and text on its own opens nothing here.
 
 ## What is built and what is not
 
-No version of this plugin has been published. The manifest says so in the field a
-catalogue shows:
+No version of this plugin has been published. That is a fact about the forge
+rather than about this tree, so it is read there:
 
-    grep -A2 '^changelog:' build.yaml
-    changelog: >
-      No version of this plugin has been published yet, so there is nothing here to
-      read. A released version carries its own entry.
+    git ls-remote --tags origin | wc -l
+    0
+
+    gh release list --repo Flowfin/jellyfin-plugin-share-links
+    (no rows)
+
+The manifest field a catalogue shows under a version's changelog used to carry
+that sentence as well, and it no longer does: the packaging tool copies it into
+every package it builds, so a claim about the release history there would ship
+inside the release that refutes it. It names where the notes are instead.
 
 What the tree holds is the share record, the store it is kept in, the token and
 the keyed hash it is looked up by, the one routine that decides whether a share
