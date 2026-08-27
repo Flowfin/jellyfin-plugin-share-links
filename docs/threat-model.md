@@ -25,17 +25,27 @@ that there was no route, no share record and no store, and it pasted the second
 command above with its exit status given as 1. I found it by re-running that
 command rather than by reading the sentence around it.
 
-Most rows below still name an issue in the proof column rather than a test, and
-that is the honest state rather than a gap in the table. A row naming an issue is
-a control that is owed. A row naming a test is a control that runs. The two are
-different words on purpose, and the document is worth less than it looks if a
-reader reads them as the same.
+Most rows below still name an issue in the proof column rather than a test. A row
+naming a test is a control that runs. THIS PARAGRAPH SAID A ROW NAMING AN ISSUE IS
+A CONTROL THAT IS OWED, AND THAT HAS STOPPED BEING TRUE OF EVERY SUCH ROW. Every
+issue named in a proof column below has closed:
 
-What the correction changes is why a row names an issue. It is no longer that
-nothing could be built to prove it. Some of the issues in that column have closed
-since their row was written, and a row still naming one of those is the stale row
-the last section of this page warns about. Comparing every row against the issue
-it points at is the pass #93 asks for, and it is not done here.
+    for n in $(awk -F'|' '/^\| *T[0-9]+/ {print $5}' docs/threat-model.md | grep -oE '#[0-9]+' | tr -d '#' | sort -n -u); do gh issue view $n --json state --jq .state; done | sort | uniq -c
+         27 CLOSED
+
+The count moves with every merge and with every row anybody edits, so re-run the
+command rather than reading the output beside it.
+
+So what such a row says today is that nobody has re-read it since the work it
+points at landed, and not that the control is missing. The table understates what
+runs rather than overstating it, and the proof column cannot be used to tell a
+control that exists from one that does not.
+
+The same command returned seventeen closed and ten open when it was last run, on
+#93 on 2026-08-17, and the paragraph above it was not moved when the ten closed.
+That is the stale row this page's last section warns about, arriving in the prose
+around the table rather than in a row. Re-reading every row against the tests that
+landed is the pass #93 asks for, and it is not done here.
 
 ## Assets
 
@@ -220,12 +230,30 @@ defect there is a defect here.
 
 ## What this file does not settle
 
-It does not decide anything. Every row points at the issue that decides its half,
-and several of those are waiting on answers collected in #94, which is where the
-question of how a guest comes to have an account, how they are confined, and
-whether they may download rather than only stream, are all still open. A row whose
-proof is one of those issues is owed twice over, and the table does not pretend
-otherwise.
+It does not decide anything. Every row points at the issue that decides its half.
+THIS PARAGRAPH SAID SEVERAL OF THOSE WERE STILL WAITING ON #94 - how a guest comes
+to have an account, how they are confined, and whether they may download rather
+than only stream - AND ALL THREE WERE ANSWERED BEFORE THIS FILE LANDED. The tree
+carries each answer:
+
+    git grep -n 'The plugin creates the account' -- docs/guest-accounts.md
+    docs/guest-accounts.md:38:### The plugin creates the account with the invitation
+    docs/guest-accounts.md:55:The plugin creates the account, and it owns that account end to end. This is
+
+    git grep -n "authorization filter of this plugin's own" -- docs/guest-confinement.md
+    docs/guest-confinement.md:62:## Candidate two: an authorization filter of this plugin's own
+
+    grep -n 'Download it' docs/guest-capabilities.md
+    21:| Download it                        | refused | `EnableContentDownloading` false            |
+
+and the issue that collected the three is closed:
+
+    gh issue view 94 --json state,closedAt --jq '"\(.state) \(.closedAt)"'
+    CLOSED 2026-08-11T18:31:52Z
+
+So no row is owed twice over. This was recorded on #93 on 2026-08-08, one day
+after the file landed, and left to #140 and #84 to repair; both closed with the
+sentence still standing, which is why it is repaired here instead of there.
 
 It does not enumerate the checks. What runs is what the workflows run, and
 `docs/parity-ledger.md` is where the gate is compared against the one this
