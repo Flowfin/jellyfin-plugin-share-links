@@ -25,7 +25,9 @@ name.
    stale otherwise. Locked-mode restore does not refuse a stale entry there, so
    nothing reds if this is forgotten.
 3. Check that the commit you want to release is on that branch.
-4. Push the tag for that commit:
+4. Check that the interoperability matrix is green for that commit. The section
+   below says how it is read and what a red one means.
+5. Push the tag for that commit:
 
     ```
     git tag 1.4.0-stable <commit>
@@ -41,6 +43,66 @@ serialising them by hand is what keeps the release order readable.
 In the same change that raises the version, delete the fragments that went into
 it. `changelog.d` holds what is unreleased; the notes for a version that shipped
 live in that release.
+
+## The interoperability matrix is a release condition
+
+The rule this plugin is held to is that it works alone and works with every other
+supported sibling installed at the same time (#96). What holds it is the
+`observations` workflow, `.github/workflows/observations.yml`. It brings a real
+Jellyfin up twice from the package built out of the tree: once with this plugin
+alone, and once on a clean server carrying this plugin beside everything the
+Flowfin catalogue serves for the line being booted. The same observations are
+made against both, a fatal is refused and so is an error line whose source
+context is this plugin, and the two servers are compared on the three axes the
+rule is about: routes, scheduled task names and configuration.
+
+A release is not cut while that run is red. Before pushing the tag:
+
+```
+gh run list --repo Flowfin/jellyfin-plugin-share-links \
+  --workflow observations.yml --limit 1 \
+  --json databaseId,headSha,event,conclusion \
+  --jq '.[] | "\(.databaseId) \(.event) \(.conclusion) \(.headSha)"'
+```
+
+Read the head sha it reports rather than only the conclusion. The run is on a
+nightly schedule, so the most recent one is usually older than the commit being
+released, and a green run on an older commit says nothing about this one. Where
+it is not the commit the tag will name, start one on that commit with the
+workflow's `workflow_dispatch` trigger and wait for it.
+
+A red matrix holds the release until one of two things is true. Either the
+collision is fixed, or the incompatibility is written into `docs/limits.md` as a
+known limitation, carrying the reason it stands and the line beginning **What an
+operator does.** that every entry on that page carries. Writing it down is not a
+way past the matrix: the entry names which sibling, on which server line, and
+what an operator gives up by installing both.
+
+### What this condition is worth, and it is less than it reads
+
+**Nothing on the publish route reads that verdict.** The gate job judges the tree
+and the tag, and never the tracker or another workflow's runs, so a tag pushed
+while the matrix is red publishes exactly like one pushed while it is green. What
+holds this condition is whoever cuts the release, plus
+`InteroperabilityMatrixTests`, which refuses this section drifting away from the
+workflow and the page it names. Neither of those is a machine refusing a release.
+
+**The matrix boots one server line.** The tree compiles two, and the second has no
+released server to boot, which is #181. A green matrix therefore says this plugin
+came up beside the catalogue's set on the 10.11 line and says nothing about 12.0.
+
+**The set is what the catalogue served at the moment the run took it**, rather
+than a list in this repository, so it widens on the day a sibling board publishes
+its first release. Those plugins are the ones that ship together, not the ones
+known to work together, and this run is what turns the first into the second. A
+green one says they installed beside each other without colliding on a route, a
+task name or a configuration key. It does not say anybody has used them together.
+
+**A set comparison cannot see two plugins declaring one route.** Two owners of one
+path are one key in the server's own description of itself, so that path is
+present in both boots and the comparison says nothing about it. What catches it is
+the second run of the observations, where a server that cannot decide which
+handler owns a path fails the calls.
 
 ## Where the release notes come from
 
