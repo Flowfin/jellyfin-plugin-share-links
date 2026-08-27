@@ -186,11 +186,19 @@ jobs:
         # Installing one would add a package to the runner and a second version
         # of the tool to reason about, and the image this job already pins ships
         # the build the server itself would transcode with.
+        #
+        # As the runner's own user rather than as root (#96). This step took a root
+        # container and then a chmod as root to hand back the files it had written,
+        # which is two elevations for one problem: a container writing into a bind
+        # mount as a uid the runner is not. Running it as the runner's uid and gid is
+        # what `headless.yml` already does, the files come out owned by the runner,
+        # and the chmod has nothing left to repair. The server reads this directory
+        # read-only from inside its own container, so it is unaffected either way.
         run: |
           set -euo pipefail
           for name in "An Observation (2026)" "Another Observation (2026)"; do
             mkdir -p "test/e2e/media/movies/$name"
-            docker run --rm --user 0:0 \
+            docker run --rm --user "$(id -u):$(id -g)" \
               -v "$PWD/test/e2e/media:/out" \
               --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg \
               "$JELLYFIN_IMAGE" \
@@ -199,7 +207,6 @@ jobs:
               -t 6 -c:v libx264 -preset ultrafast -b:v 3000k -pix_fmt yuv420p \
               "/out/movies/$name/$name.mkv"
           done
-          sudo chmod -R 0777 test/e2e/media
           ls -laR test/e2e/media/movies
 
       - name: Start the server
