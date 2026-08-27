@@ -34,6 +34,23 @@ public class PackagingMetadataTests
         "line and include details about your plugin.",
     ];
 
+    // Phrases that assert the state of the release history. build.yaml is packaged
+    // into every release, so a sentence here about what has or has not been
+    // published is written before the release it travels in and refuted by that
+    // release the moment it exists. Phrases rather than whole sentences, so a
+    // rewording that keeps the claim is still caught, and each one specific enough
+    // that a changelog naming where the notes live carries none of them.
+    private static readonly string[] ReleaseHistoryClaims =
+    [
+        "no version",
+        "no release",
+        "not been published",
+        "has been published",
+        "have been published",
+        "nothing here to read",
+        "not yet released",
+    ];
+
     private static string ManifestPath => Path.Combine(AppContext.BaseDirectory, "build.yaml");
 
     private static string ReadManifest()
@@ -43,6 +60,19 @@ public class PackagingMetadataTests
     }
 
     private static string ReadmePath => Path.Combine(AppContext.BaseDirectory, "README.md");
+
+    // A folded scalar, read as the block of indented lines under the key. The
+    // quoted reader below cannot see a field written this way, which is why the
+    // changelog was the one manifest field no check here read until it shipped
+    // inside a package. A blank line inside the block is kept, so a second
+    // paragraph is part of what is judged rather than silently dropped.
+    private static string ReadFoldedField(string field)
+    {
+        var pattern = string.Format(CultureInfo.InvariantCulture, "^{0}:[ \t]*[>|][-+]?[ \t]*\r?\n((?:(?:[ \t]+[^\r\n]*)?\r?\n)*)", Regex.Escape(field));
+        var match = Regex.Match(ReadManifest(), pattern, RegexOptions.Multiline);
+        Assert.True(match.Success, $"build.yaml declares no folded '{field}' block");
+        return match.Groups[1].Value;
+    }
 
     private static string ReadQuotedField(string field)
     {
@@ -92,6 +122,35 @@ public class PackagingMetadataTests
         // no whole-file search can refuse without also matching the field name.
         var repeated = Regex.IsMatch(ReadManifest(), "^changelog:\\s*[>|][-+]?\\s*\\r?\\n\\s*changelog\\s*\\r?\\n?$", RegexOptions.Multiline);
         Assert.False(repeated, "build.yaml's changelog is still the template's, which is the word changelog and nothing else");
+    }
+
+    [Fact]
+    public void ChangelogClaimsNothingAboutTheReleaseHistory()
+    {
+        // Found on 2026-08-27, before the first tag, by reading the meta.json the
+        // mainline package job produced: the field said no version of this plugin
+        // had been published yet, and that string is what a catalogue serves as the
+        // changelog of the version it ships in. The served catalogue carries the
+        // field per version:
+        //   curl -sS https://flowfin.dev/manifest.json | python -c
+        //     'import json,sys; [print(v["changelog"]) for e in json.load(sys.stdin) for v in e["versions"]]'
+        // A published release is never edited here, so the cost of finding this
+        // after the tag is a burnt version number rather than a commit.
+        //
+        // WHAT THIS CANNOT DO. It holds a vocabulary, not a meaning. A claim about
+        // the release history worded outside the list above walks past it, and no
+        // reading of this tree could do better: the fact such a sentence would be
+        // judged against lives on the forge, and the suite reaches no network.
+        var changelog = ReadFoldedField("changelog");
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(changelog),
+            "build.yaml's changelog block is empty, so every package would ship a catalogue entry with nothing under its changelog");
+
+        foreach (var claim in ReleaseHistoryClaims)
+        {
+            Assert.DoesNotContain(claim, changelog, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
