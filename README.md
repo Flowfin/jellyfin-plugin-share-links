@@ -28,21 +28,41 @@ catalogue shows:
 
 What the tree holds is the share record, the store it is kept in, the token and
 the keyed hash it is looked up by, the one routine that decides whether a share
-resolves, and the guest route a link points at. What it does not hold is any way
-to make a share: the whole route surface is one action, and it is the guest's.
+resolves, the guest route a link points at, the administrator routes that create,
+list and revoke a share, and the request-path filter that confines a guest and
+applies the ceiling:
 
     git grep -nE '\[HttpGet|\[HttpPost|\[HttpDelete' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
-    Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:98:    [HttpGet("Guest/{token}")]
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:176:    [HttpPost("Shares")]
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:369:    [HttpGet("Shares")]
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:442:    [HttpPost("Shares/{shareId}/Revoke")]
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:561:    [HttpPost("Key/Rotate")]
+    Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:159:    [HttpGet("Guest/{token}")]
 
-So an operator has nothing to press. The administrator routes that create, list
-and revoke a share are #67, and the page that drives them is #70, and until both
-land nothing here shares anything.
+The page an operator drives them from is in the tree as well,
+`Jellyfin.Plugin.ShareLinks/Configuration/configPage.html`. So the sections below
+describe surfaces that exist rather than a plan for them.
 
-Everything below the next heading is therefore the design rather than a
-description of a working install. It is written down because the shape of the
-feature is what a reader wants first, and because the issue that changes the
-shape changes this file with it. The open issues on this repository are the
-current state; this file is not, and does not try to be.
+**THIS SECTION SAID THE OPPOSITE UNTIL #294.** It said the tree held no way to
+make a share, that the whole route surface was one action and it was the guest's,
+that an operator had nothing to press, and that everything below it was the design
+rather than a description of a working install - and it pasted the command above
+returning one line to prove it. Every word of that was true when it was written.
+#67 built the administrator routes and #70 built the page, both closed, and this
+paragraph was not re-read against them. The pasted output is the part to learn
+from: a command in a document is the thing that goes stale first and the thing a
+reader trusts most.
+
+What has not happened is a release and a reading. Nothing is published, so a
+package built from the tree is the only way this plugin is on a server today. And
+nobody has walked the operator guide on a clean server: #236 is that reading and
+it has not been made, so every screen name and refusal in this repository's
+documentation is read out of the tree rather than seen. #269 is a defect on the
+browser path that is open rather than explained, and `docs/limits.md` is where the
+behaviour that reads as a defect until somebody explains it is collected.
+
+The open issues on this repository are the current state; this file is not, and
+does not try to be.
 
 ## Supported server versions
 
