@@ -41,6 +41,15 @@ description: >
 category: "Administration"
 artifacts:
   - "Jellyfin.Plugin.ShareLinks.dll"
+# What a catalogue shows under a version's changelog. The packaging tool copies
+# this one string into the meta.json of every package it builds, so it cannot
+# describe a particular release without being wrong about the next one; it names
+# where the notes are instead. The notes themselves are assembled from
+# changelog.d into the GitHub release the tag creates, which docs/RELEASING.md
+# describes. What may not stand here is a claim about the release history: this
+# file ships inside every package, so a sentence about what has or has not been
+# published is written before the release it travels in and refuted by it.
+# PackagingMetadataTests refuses that class.
 changelog: >
-  No version of this plugin has been published yet, so there is nothing here to
-  read. A released version carries its own entry.
+  The notes for each release are in the GitHub release for its tag, at
+  https://github.com/Flowfin/jellyfin-plugin-share-links/releases.
