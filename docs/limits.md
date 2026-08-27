@@ -80,16 +80,30 @@ nothing retries.
 which guest accounts exist, rather than the share list, and ends one there when a
 share is finished with and the account has not gone by itself.
 
-### Nothing confines a guest to the shared item
+### A guest is confined by a list of routes that is kept by hand
 
-`docs/guest-confinement.md` chooses, under #52, an authorization filter of this
-plugin's own over the account's allowed tags, and says plainly that the filter does
-not exist. Until it does, an account invited to a share reaches whatever the server
-already lets it reach.
+`docs/guest-confinement.md` chose, under #52, an authorization filter of this
+plugin's own over the account's allowed tags, and #239 built it. It is registered
+once on the server's request pipeline and answers from the store per request, so on
+the routes it sits on an account invited to a share is refused everything the share
+does not name.
 
-**What an operator does.** Does not use a share as the confinement. An account that
-should see one item is one the operator narrows themselves, through the server's
-own library permissions, until that filter lands.
+Which routes those are is the accepted cost of that choice rather than an oversight.
+The routes belong to the server, nothing in this tree derives them, and the list is
+maintained by hand and is not complete. A path matching nothing on it is not judged
+rather than permitted, which means the filter is not standing in front of it at all,
+so a guest reaching library content on a route nobody added is a hole. A route that
+lists, searches or browses is refused outright rather than filtered, which is why
+sharing a series does not let a guest list its episodes and why what this plugin
+shares usefully is an item a client plays directly.
+
+**What an operator does.** Reads a share as a bound on the routes this plugin stands
+on and not as a bound on the server. Where an account must not reach something, the
+server's own library permissions are still what keep it out.
+
+THIS ENTRY SAID NOTHING CONFINED A GUEST AT ALL, and told an operator to narrow the
+account themselves until the filter landed. It landed on #239 and the entry was not
+re-read against it; #294 is where that was found.
 
 ### Another plugin's routes are outside anything this plugin can refuse
 
@@ -104,15 +118,30 @@ and this is that statement.
 not as a bound on the server. Where another plugin exposes something a guest
 account should not reach, that plugin's own permissions are what keep them out.
 
-### Nothing enforces a bitrate ceiling
+### The bitrate ceiling is enforced on two legs, and one of them trusts the client
 
-The record carries a ceiling and `EffectiveBitrate` takes the lowest of the three
-that can apply, but nothing writes a number onto an account or in front of a
-stream. `docs/bitrate-cap.md` is the decision under #61 that the enforcement will
-be built against, and #64 is the arithmetic that is already there.
+`docs/bitrate-cap.md` chose, under #61, both mechanisms rather than one: the
+playback information for a guest session reports the share's ceiling, and a stream
+request above that ceiling is refused. #239 built the pair into the same filter that
+confines the guest, and #64 is the arithmetic that takes the lowest of the ceilings
+that apply and says which one applied.
 
-**What an operator does.** Bounds the uplink outside this plugin where that cost
-matters, and reads a ceiling on a share as a number nothing yet acts on.
+The refusing leg has been seen on a running server, in the scheduled observation
+job. The reporting leg has not: the observation that would read a lowered ceiling
+back was answered with the source rather than a transcode plan, because the request
+carried no device profile, and the run records that as not observed. Beside that,
+the reporting leg is only worth what the client makes of it. One that never reads
+the ceiling it is given, or that already holds a stream address, is not constrained
+by that leg at all, and the refusing leg is bounded by the same hand-kept route list
+as the entry above.
+
+**What an operator does.** Reads a ceiling on a share as a number applied where this
+plugin stands rather than as a cap on the uplink, and bounds the uplink outside this
+plugin as well where that cost matters.
+
+THIS ENTRY SAID NOTHING WROTE A NUMBER ONTO AN ACCOUNT OR IN FRONT OF A STREAM. One
+stands in front of a stream now, and the entry was not re-read against it; #294 is
+where that was found.
 
 ## The item a share names
 

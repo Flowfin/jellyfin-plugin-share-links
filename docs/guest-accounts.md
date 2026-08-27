@@ -66,8 +66,12 @@ until something removes it, so an operator who shares fifty things has fifty
 accounts unless the removal below actually runs.
 
 The plugin can delete an account. The guard that keeps it from deleting the wrong
-one does not exist yet, and it is at the end of this document rather than left
-implied.
+one is at the end of this document rather than left implied: the record says which
+accounts this plugin made, and an account it does not claim is left where it is.
+
+THIS PARAGRAPH SAID THAT GUARD DID NOT EXIST YET. #144 landed it and this sentence
+was not re-read against the section at the end of this document, which has said so
+since. #294 is where the pair was found disagreeing.
 
 ## The lifecycle, end to end
 
