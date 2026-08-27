@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -98,6 +99,37 @@ public sealed class InteroperabilityMatrixTests
         Assert.True(
             matrix < tag,
             "docs/RELEASING.md reads the interoperability matrix after the tag is pushed. A tag is the one input on this route that cannot be taken back.");
+    }
+
+    /// <summary>
+    /// The harness takes no elevated rights, which is the clause of #96 that asks it
+    /// to run like every test in this repository.
+    /// </summary>
+    /// <remarks>
+    /// Comment lines are stripped before the search, so the paragraph in that file
+    /// arguing why the elevation is gone does not count as the elevation coming back.
+    /// The bound is that this reads one file: a script the job calls could elevate and
+    /// nothing here would see it, and the job's own server container runs as its
+    /// image's user, which is a different question from what this job asks the runner
+    /// for.
+    /// </remarks>
+    /// <param name="elevation">The spelling a step would use.</param>
+    [Theory]
+    [InlineData("sudo ")]
+    [InlineData("--user 0:0")]
+    [InlineData("--user root")]
+    public void TheHarnessTakesNoElevatedRights(string elevation)
+    {
+        var path = Path.Combine(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
+        Assert.True(File.Exists(path), $"the matrix workflow was not copied next to the test assembly: {path}");
+
+        var steps = File.ReadLines(path)
+            .Where(line => !line.TrimStart().StartsWith("#", StringComparison.Ordinal));
+
+        foreach (var line in steps)
+        {
+            Assert.DoesNotContain(elevation, line, StringComparison.Ordinal);
+        }
     }
 
     private static string Releasing()
