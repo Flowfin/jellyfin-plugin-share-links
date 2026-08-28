@@ -9,10 +9,15 @@ worth anything. What is open is who makes it, who holds its credential, and who
 takes it away again.
 
 Everything below about the server was read out of the packages this plugin
-compiles against, at the version `Directory.Build.props` pins:
+compiles against on the line it is packaged for. `Directory.Build.props` pins a
+version per target framework rather than one version:
 
-    grep -n 'JellyfinVersion' Directory.Build.props
-    15:        <JellyfinVersion>10.11.11</JellyfinVersion>
+    grep 'JellyfinVersion Condition' Directory.Build.props
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
+
+The readings below are from `10.11.11`, the `net9.0` arm, which is the line
+`build.yaml` names as the one a package is built for.
 
 ## The two shapes
 
@@ -96,8 +101,15 @@ plugin does not append a number to make the name unique, because a name the
 plugin invented is a name nobody recognises in the server's user list, and that
 list is where an operator goes to find out who these people are.
 
+`ShareCreationTests.ANameThisServerAlreadyHasIsRefusedBeforeAnyOfThemIsMade` is
+that refusal, and the half of it worth asserting is in the name: the check comes
+before anything is made, so a create refused on the third name leaves no first
+two accounts behind.
+
 The policy is then set to the one `docs/guest-capabilities.md` writes down, which
 is where every switch and its default is argued.
+`ShareCreationTests.ThePolicyIsWrittenOntoTheAccountsTheCreateMadeAndOntoNobodyElse`
+is the test that the write lands on those accounts and reaches no others.
 
 ### The credential
 
@@ -105,6 +117,12 @@ The plugin mints it once, shows it once beside the link, and does not write it
 down. What the server keeps of it is the server's business; this plugin keeps
 nothing, so a copy of the store is not a set of credentials any more than it is a
 set of links.
+
+Shown once is
+`ShareCreationTests.ACreateMakesTheAccountNarrowsItWritesTheRecordAndAnswersWithTheLinkOnce`.
+Not written down is
+`ShareCreationTests.NeitherTheLinkNorTheCredentialIsInTheListingAfterwards`,
+which asks the listing for both afterwards and finds neither.
 
 It comes from the routine that already draws token bytes, rather than from a
 second draw of its own. That is not a preference. One routine draws from the
@@ -132,7 +150,9 @@ which is #53.
 Whether an account this plugin created can authenticate on a server that has
 been configured to delegate authentication elsewhere was not measured. It is the
 one question an operator running such a server has to answer before relying on
-any of this, and nothing here answers it for them.
+any of this, and nothing here answers it for them. No test names it and none
+can: reaching it needs a server configured that way, which `docs/testing.md`
+refuses.
 
 ### Forgetting it
 
@@ -156,6 +176,17 @@ Nothing. The plugin does not touch the account again until the share ends.
 Expiry and revocation end a share the same way here. When the last live share
 naming an account has ended, the account is disabled rather than deleted:
 `IsDisabled` on the policy, which `docs/guest-capabilities.md` already lists.
+
+`GuestAccountsTests.TheAccountOfARecordThatHasEndedIsFound` is the arithmetic
+that finds such an account, and
+`AdministratorRouteTests.RevokingTheLastLiveShareDisablesTheAccountAndChangesNothingElse`
+is the write, compared member by member against the policy a create writes for
+the same account so that exactly `IsDisabled` may differ.
+`AdministratorRouteTests.AnAccountWhoseLastShareExpiredIsDisabledToo` is the same
+for a share that ended by expiring rather than by being revoked.
+
+Whether a server honours `IsDisabled` is asserted by nothing here, for the reason
+`docs/testing.md` gives.
 
 Disabled rather than deleted, because deletion is not reversible and an operator
 who revoked the wrong share has nothing to put back. The account stops working at
@@ -188,6 +219,12 @@ timer. It runs on the way to a write, which today is a create:
     git grep -n 'bounds.Retained(current, now)' -- Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs
     Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:76:                var kept = bounds.Retained(current, now);
 
+`GuestAccountRemovalTests.AnAccountWhoseLastRecordWasSweptIsReleased` is the
+arithmetic and
+`ShareCreationTests.TheAccountOfASweptRecordIsRemovedByTheCreateThatSweptIt` is
+the create that runs it, which is the pair that makes the sentence above a
+behaviour rather than an intention.
+
 So the account of a share that ended ninety days ago is removed by the next share
 somebody creates, and on a server nobody creates a share on it is not removed at
 all. The two ends of that are worth reading together: the account is disabled
@@ -208,18 +245,24 @@ count of both halves goes to the log. The log counts them and does not name them
 which is the rule every line of this plugin's follows, so an operator reading it
 learns that accounts were left behind and not which: the server's own user list is
 where they are found.
+`GuestAccountRemovalTests.ARemovalThatFailsPartWayNamesWhatItLeftBehind` is the
+first half and `GuestAccountRemovalTests.TheLineCountsTheAccountsAndNamesNone` is
+the second.
 
 The last live share matters and not the first. An account named by two shares
 stays live while either does, or revoking one share would quietly break the
-other.
+other. `GuestAccountsTests.AnAccountAnotherLiveShareInvitesIsLeftAlone` and
+`GuestAccountsTests.AnotherShareHavingExpiredDoesNotKeepAnAccountEnabled` are the
+two directions of that: a live share holds the account, and an ended one does
+not.
 
 ### The thing that has to exist before any of this deletes anything
 
 A record names its invited accounts and says nothing about where they came from:
 
-    git grep -n 'InvitedUserIds\|CreatedByUserId' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:95:    public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:105:    public required Guid CreatedByUserId { get; init; }
+    git grep -nE 'public required (IReadOnlyList<Guid> InvitedUserIds|Guid CreatedByUserId)' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:114:    public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:158:    public required Guid CreatedByUserId { get; init; }
 
 `CreatedByUserId` is the operator who made the share, not the provenance of the
 guests. So a list of identifiers is all the removal path would have, and an
@@ -238,6 +281,13 @@ That predicate is the gate on the deletion as well as on the policy write, which
 `docs/account-restoration.md` argues, and #238 is the removal path that stands
 behind it. An account the record does not claim is left where it is, and the
 record naming it goes exactly as it would have.
+
+`ShareRecordProvenanceTests` is a case per shape a record can be in, and
+`ShareRecordProvenanceTests.ARecordWrittenBeforeThisFieldExistedClaimsNothing` is
+the one a store carried forward from before #144 needs.
+`GuestAccountRemovalTests.AnInvitedAccountThisPluginDidNotMakeIsNotReleased` and
+`GuestAccountRemovalTests.AnAccountAHandEditPutAmongTheCreatedOnesIsNotReleased`
+are the two ways an account reaches that gate and is left where it is.
 
 ## What this document is, and what it is not
 
@@ -263,3 +313,7 @@ call, while no record names them. It is bounded by the identifiers the server
 returned rather than by the record, because there is no record on that path;
 `WasCreatedByThisPlugin` is the gate everywhere else, which is what #144 landed
 and what `docs/account-restoration.md` argues from.
+`ShareCreationTests.ACreateRefusedInsideTheMutationTakesBackTheAccountsItHadAlreadyMade`
+and
+`ShareCreationTests.ACreateAgainstAStoreThatCannotBeWrittenTakesBackItsAccountsToo`
+are the two refusals that reach it.

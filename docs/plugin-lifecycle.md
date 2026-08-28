@@ -6,10 +6,15 @@ same and expects the data to go with it. Neither happens by itself, and the
 interesting part is what a live share does in between.
 
 Everything below about the server was read out of the packages this plugin
-compiles against, at the version `Directory.Build.props` pins:
+compiles against on the line it is packaged for. `Directory.Build.props` pins a
+version per target framework rather than one version:
 
-    grep -n 'JellyfinVersion' Directory.Build.props
-    15:        <JellyfinVersion>10.11.11</JellyfinVersion>
+    grep 'JellyfinVersion Condition' Directory.Build.props
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
+
+The readings below are from `10.11.11`, the `net9.0` arm, which is the line
+`build.yaml` names as the one a package is built for.
 
 ## Disabling does not stop anything on its own
 
@@ -55,18 +60,27 @@ values are the server's:
 
 A refusal for this reason is a refusal like any other on the guest route: the
 caller is told nothing about why, which is #26.
+`GuestRouteTests.EveryRefusalIsTheSameBytes` is the test that holds it, over the
+refusals the route can make rather than over this one.
 
 The sentence above is a claim about behaviour, so it has a test behind it, over
 every status that is not Active rather than over the one an operator presses:
 
     git grep -n 'public void APluginThatIsNotActiveRefusesALiveShare' -- Jellyfin.Plugin.ShareLinks.Tests/
-    Jellyfin.Plugin.ShareLinks.Tests/ShareResolutionTests.cs:122:    public void APluginThatIsNotActiveRefusesALiveShare(PluginStatus status)
+    Jellyfin.Plugin.ShareLinks.Tests/ShareResolutionTests.cs:225:    public void APluginThatIsNotActiveRefusesALiveShare(PluginStatus status)
+
+That is `ShareResolutionTests.APluginThatIsNotActiveRefusesALiveShare`, and
+`ShareResolutionTests.OnlyActiveResolves` is the other direction of the same
+condition, so the pair says which status resolves rather than only which ones do
+not.
 
 Nothing else changes. Records stay where they are, expiry keeps running against
 the clock rather than against the plugin, and re-enabling the plugin resolves the
 shares that have not expired or been revoked in the meantime. A disabled plugin
 is a pause, not a revocation, and it is described that way rather than as a
-safety measure.
+safety measure. That the pause lifts rather than sticks is the second half of
+`ShareResolutionTests.OnlyActiveResolves`: the same record resolves once the
+status is Active again.
 
 ## Uninstalling
 
@@ -103,14 +117,22 @@ computed with. Both are this plugin's own, both live in the plugin's data
 folder, and both names are fixed in one place:
 
     git grep -nE 'public const string (StoreFileName|KeyFileName)' -- Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:51:    public const string StoreFileName = "shares.json";
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:57:    public const string KeyFileName = "share-key";
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:60:    public const string StoreFileName = "shares.json";
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:66:    public const string KeyFileName = "share-key";
 
 The plugin asks the server where that folder is rather than choosing one, and
 there is a single place it does the asking:
 
     git grep -n 'DataFolderPath' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:80:        return Path.Combine(plugin.DataFolderPath, fileName);
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:138:        return Path.Combine(plugin.DataFolderPath, fileName);
+
+`DataFolderNameTests` is what stands behind that one place. Its cases are the
+ways a name could reach outside the folder the server named -
+`DataFolderNameTests.ARootedNameIsRefused`,
+`DataFolderNameTests.ANameThatWalksUpwardsIsRefused` - and
+`DataFolderNameTests.TheNamesThisPluginUsesArePassed` is the one that keeps the
+two names above admissible, so a rename that broke the rule would red rather than
+quietly land somewhere else.
 
 Why the store sits there rather than in the configuration is
 `docs/share-store.md`, and what the key is, how it is made and what rotating it
@@ -126,7 +148,11 @@ files this plugin writes are inside one folder and neither is anywhere else.
 
 The third is the configuration file, and it is left out of that action rather
 than forgotten. Where it sits is the server's to decide, and what it holds is
-settings: no token, no record, and nothing about a guest. `docs/personal-data.md`
+settings: no token, no record, and nothing about a guest.
+`PluginConfigurationTests.ConfigurationDeclaresOnlyTheSettingsThatHaveLanded` is
+what holds the first half, and
+`ShareKeyTests.TheKeyNeverAppearsInThePluginConfiguration` the part that would
+matter most if it stopped being true. `docs/personal-data.md`
 is the list of what is held about a person, and it is the store rather than this
 file. That is what makes the deliberate purge one action instead of a hunt.
 `docs/share-store.md` argues the same choice for other reasons and this is a
@@ -164,11 +190,20 @@ file of a write that failed, on a path that has not touched the store:
     git grep -n 'File.Delete' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
     Jellyfin.Plugin.ShareLinks/ShareStore.cs:483:            File.Delete(path);
 
+`ShareStoreTests.AWriteThatDiesPartwayLeavesNothingBesideTheStore` is what says
+that deletion reaches the temporary file and nothing else, and
+`ShareStoreTests.AWriteThatDiesPartwayLeavesThePreviousRecordsIntactAndReadable`
+that the store it did not touch still reads.
+
 So the action above is an operator's, and the list is what they act on.
 
-Whether the hook runs on every removal path, as said above. Measuring it needs a
-running server, which no test in this repository may reach, and
-`docs/testing.md` is where that rule is written.
+Whether the hook runs on every removal path, as said above. No test names that
+claim and none can: measuring it needs a running server, which no test in this
+repository may reach, and `docs/testing.md` is where that rule is written. The
+same holds for the sentence above about what an uninstall leaves on an account -
+what is asserted here is the narrower thing, that this plugin reads and writes no
+account's viewing history at all, which is
+`AccountRestorationTests.ThisPluginTouchesNoUserDataYet`.
 
 What a restored backup does to shares that were revoked or expired before the
 backup was taken is `docs/backup-restore.md`, not this document.
