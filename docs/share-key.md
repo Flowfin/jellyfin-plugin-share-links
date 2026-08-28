@@ -146,8 +146,8 @@ disabled, exactly as `docs/revocation.md` describes for one share, which is
 `ShareKeyRotationRouteTests.TheGuestsOfEveryStoppedShareAreSignedOutAndDisabled`.
 
 No test stands beside the paragraph below, and it is the second of the two, the
-first being the Windows permissions above: a share created between the two writes is stated rather than
-defended against, so there is no behaviour to assert.
+first being the Windows permissions above: a share created between the two writes
+is stated rather than defended against, so there is no behaviour to assert.
 
 What the two writes do not cover is a share created between them. It is issued
 under the old key, is not among the records the rotation stopped, and stops
