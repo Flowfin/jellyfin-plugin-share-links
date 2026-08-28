@@ -260,9 +260,9 @@ not.
 
 A record names its invited accounts and says nothing about where they came from:
 
-    git grep -n 'InvitedUserIds\|CreatedByUserId' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:95:    public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
-    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:105:    public required Guid CreatedByUserId { get; init; }
+    git grep -nE 'public required (IReadOnlyList<Guid> InvitedUserIds|Guid CreatedByUserId)' -- Jellyfin.Plugin.ShareLinks/ShareRecord.cs
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:114:    public required IReadOnlyList<Guid> InvitedUserIds { get; init; }
+    Jellyfin.Plugin.ShareLinks/ShareRecord.cs:158:    public required Guid CreatedByUserId { get; init; }
 
 `CreatedByUserId` is the operator who made the share, not the provenance of the
 guests. So a list of identifiers is all the removal path would have, and an

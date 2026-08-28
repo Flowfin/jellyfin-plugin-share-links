@@ -65,7 +65,7 @@ The sentence above is a claim about behaviour, so it has a test behind it, over
 every status that is not Active rather than over the one an operator presses:
 
     git grep -n 'public void APluginThatIsNotActiveRefusesALiveShare' -- Jellyfin.Plugin.ShareLinks.Tests/
-    Jellyfin.Plugin.ShareLinks.Tests/ShareResolutionTests.cs:122:    public void APluginThatIsNotActiveRefusesALiveShare(PluginStatus status)
+    Jellyfin.Plugin.ShareLinks.Tests/ShareResolutionTests.cs:225:    public void APluginThatIsNotActiveRefusesALiveShare(PluginStatus status)
 
 Nothing else changes. Records stay where they are, expiry keeps running against
 the clock rather than against the plugin, and re-enabling the plugin resolves the
@@ -108,14 +108,14 @@ computed with. Both are this plugin's own, both live in the plugin's data
 folder, and both names are fixed in one place:
 
     git grep -nE 'public const string (StoreFileName|KeyFileName)' -- Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:51:    public const string StoreFileName = "shares.json";
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:57:    public const string KeyFileName = "share-key";
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:60:    public const string StoreFileName = "shares.json";
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:66:    public const string KeyFileName = "share-key";
 
 The plugin asks the server where that folder is rather than choosing one, and
 there is a single place it does the asking:
 
     git grep -n 'DataFolderPath' -- 'Jellyfin.Plugin.ShareLinks/*.cs'
-    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:80:        return Path.Combine(plugin.DataFolderPath, fileName);
+    Jellyfin.Plugin.ShareLinks/PluginServiceRegistrator.cs:138:        return Path.Combine(plugin.DataFolderPath, fileName);
 
 Why the store sits there rather than in the configuration is
 `docs/share-store.md`, and what the key is, how it is made and what rotating it

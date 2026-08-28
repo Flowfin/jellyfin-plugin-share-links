@@ -34,7 +34,7 @@ acted on:
 
     git grep -n 'MaxBitrateBitsPerSecond' -- Jellyfin.Plugin.ShareLinks/
     Jellyfin.Plugin.ShareLinks/BitrateCap.cs:34:/// <see cref="ShareRecord.MaxBitrateBitsPerSecond"/> already takes, and a second
-    Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:272:                        cell(row, share.MaxBitrateBitsPerSecond);
+    Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:303:                        cell(row, share.MaxBitrateBitsPerSecond);
     Jellyfin.Plugin.ShareLinks/EffectiveBitrate.cs:11:/// is <see cref="ShareRecord.MaxBitrateBitsPerSecond"/>; the invited account
     Jellyfin.Plugin.ShareLinks/GuestConfinement.cs:213:                || record.MaxBitrateBitsPerSecond is not { } cap)
     Jellyfin.Plugin.ShareLinks/ShareCreation.cs:170:            MaxBitrateBitsPerSecond = request.MaxBitrateMbps is null
@@ -43,7 +43,7 @@ acted on:
     Jellyfin.Plugin.ShareLinks/ShareStoreExtensions.cs:317:        MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
     Jellyfin.Plugin.ShareLinks/ShareSummary.cs:104:    public long? MaxBitrateBitsPerSecond { get; init; }
     Jellyfin.Plugin.ShareLinks/ShareSummary.cs:111:    /// <see cref="MaxBitrateBitsPerSecond"/> is what the operator typed onto this
-    Jellyfin.Plugin.ShareLinks/ShareSummary.cs:155:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
+    Jellyfin.Plugin.ShareLinks/ShareSummary.cs:162:            MaxBitrateBitsPerSecond = record.MaxBitrateBitsPerSecond,
 
 A field, copies from one record to another, a listing row, a cell on the page, and
 the two places the enforcement reads it. So the storage side is settled, and where
@@ -210,8 +210,8 @@ the surface applying it cannot disagree:
     git grep -n 'ServerCeilings\.' -- Jellyfin.Plugin.ShareLinks/
     Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs:231:        => ServerCeilings.OfAccount(_userManager, account);
     Jellyfin.Plugin.ShareLinks/GuestConfinementFilter.cs:234:        => ServerCeilings.OfServer(_serverConfiguration);
-    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:650:                account => ServerCeilings.OfAccount(_userManager, account),
-    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:651:                ServerCeilings.OfServer(_serverConfiguration),
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:667:                account => ServerCeilings.OfAccount(_userManager, account),
+    Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs:668:                ServerCeilings.OfServer(_serverConfiguration),
     Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:235:            ServerCeilings.OfAccount(_userManager, caller),
     Jellyfin.Plugin.ShareLinks/ShareLinksGuestController.cs:236:            ServerCeilings.OfServer(_serverConfiguration),
 

@@ -23,7 +23,7 @@ One routine writes the policy, and it writes every switch rather than only the
 ones whose default is wrong:
 
     git grep -n 'public static void Apply' -- Jellyfin.Plugin.ShareLinks/GuestPolicy.cs
-    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:181:    public static void Apply(UserPolicy policy, int maxActiveSessions)
+    Jellyfin.Plugin.ShareLinks/GuestPolicy.cs:233:    public static void Apply(UserPolicy policy, int maxActiveSessions)
 
 Most of those switches narrow. Three of them do not, and they are why this page
 exists rather than a detail inside it. Playing media, reaching the server from

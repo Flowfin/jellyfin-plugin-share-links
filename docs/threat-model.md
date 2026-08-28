@@ -261,8 +261,8 @@ than only stream - AND ALL THREE WERE ANSWERED BEFORE THIS FILE LANDED. The tree
 carries each answer:
 
     git grep -n 'The plugin creates the account' -- docs/guest-accounts.md
-    docs/guest-accounts.md:38:### The plugin creates the account with the invitation
-    docs/guest-accounts.md:55:The plugin creates the account, and it owns that account end to end. This is
+    docs/guest-accounts.md:43:### The plugin creates the account with the invitation
+    docs/guest-accounts.md:60:The plugin creates the account, and it owns that account end to end. This is
 
     git grep -n "authorization filter of this plugin's own" -- docs/guest-confinement.md
     docs/guest-confinement.md:62:## Candidate two: an authorization filter of this plugin's own
