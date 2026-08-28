@@ -15,18 +15,24 @@ people they know.
 These never appear in a log line, at any level, in any form, including inside an
 exception message, a stack trace this plugin writes, or a URL it logs.
 
+`LoggingTests` is where this page is checked, and each entry and each section
+below names the test for its own claim.
+
 - The raw token, whole or in part. A prefix of a token is a partial credential
   and it narrows a search, so truncation is not a way to log one.
+  `LoggingTests.NoLineCarriesTheRawToken`.
 - The keyed hash secret from #28, and anything from which it could be
   reconstructed.
 - The keyed hash of a token. It is not a link and cannot be turned into one, but
   it is the store's lookup key, so a log holding it lets a leaked log be joined
-  to a leaked store.
+  to a leaked store. `LoggingTests.NoLineCarriesTheStoredHash`.
 - The title of the item a share names. A title is not a credential and it is the
   other half of who watched what, which is the second failure this document
   opens with. The operator sees titles in the share view, which is state behind
   the elevation policy; a log file is copied by backup tooling and read by
-  whoever can read the server's disk.
+  whoever can read the server's disk. This one has no test naming titles and is
+  held by `LoggingTests.TheFieldsALineCarriesAreTheOnesThePolicyAllows` instead,
+  for the reason the last section of this page gives.
 
 - The credential this plugin mints for an account it creates. It is drawn once,
   handed to the server and shown to the operator in the answer to a create, and
@@ -46,7 +52,9 @@ line is a line in the same file.
 ## How a share is named in a line
 
 By the first eight characters of its record identifier. `ShareLog.Name` is the
-one routine that makes that name and every line goes through it.
+one routine that makes that name and every line goes through it, which is
+`LoggingTests.AShareIsNamedByItsPrefixAndNeverInFull`: it asserts the prefix
+appears and that the whole identifier appears nowhere.
 
 The record carries an identifier that is neither the token nor derived from it;
 #33 is where that field is defined, and it exists so that a share has a name
@@ -92,16 +100,22 @@ The line never carries the token to make up for any of this.
 
 Information, the level an operator reads without asking for it:
 
+Each of the four writes a line at all, which is
+`LoggingTests.EachOfTheFourPathsWritesALine` and is the assertion the three below
+it rest on: a never list holds trivially over a path that logged nothing.
+
 - A share is created. The share name, the item identifier, the expiry instant,
   and how many accounts are invited.
 - A revocation is asked for. The share name, and which of three things the store
   did: the share was revoked, it had already stopped, or no record carries that
   identifier. Revocation is idempotent (#46) and the second press is not an
   error, so it is a line rather than a silence.
+  `LoggingTests.ARevocationSaysWhatItDid` drives all three.
 - A share resolves. The share name.
 - A share refuses. The reason, as the fixed code the decision produced rather
   than a sentence assembled from the request, and no share name, for the reason
-  the section above gives.
+  the section above gives. `LoggingTests.EveryRefusalReasonIsWrittenAsItsFixedCode`
+  walks the codes rather than one of them.
 
 The codes are the members of `ShareRefusal`, and they are not listed here, because
 a list in a document drifts against the type that decides it:
@@ -115,7 +129,8 @@ the caller: `ItemGone` says the server no longer holds the item the record names
 and the share is not repaired by re-sending it. `docs/gone.md` is the decision
 behind it.
 
-The invited accounts are not named in any of those lines. The association between
+The invited accounts are not named in any of those lines, which is
+`LoggingTests.NoLineNamesAnAccount`. The association between
 a person and a title is what the administrator view holds and what
 `docs/personal-data.md` accounts
 for; a log line repeating it makes a second copy of it with a different lifetime
@@ -130,7 +145,9 @@ failed, a key that could not be read, a record that could not be parsed. These
 carry paths and reasons, never contents.
 
 A store the guest route could not read is one of those, and it is written as a
-warning rather than as one more refused token. The caller is told the same
+warning rather than as one more refused token, which is
+`LoggingTests.AnUnreadableStoreIsAWarningRatherThanARefusal` and is the one place
+this suite asserts a level. The caller is told the same
 nothing either way, which is #26; an operator reading a log needs the two apart,
 because a store nobody can read has stopped every share on the server.
 
@@ -166,12 +183,13 @@ names that carry nothing; it is the reason #27 also asks for a test that drives
 the create, resolve, refuse and revoke paths with a capturing logger and asserts
 that no emitted line contains the raw token.
 
-`Jellyfin.Plugin.ShareLinks.Tests/LoggingTests.cs` is that test. It drives the
+`LoggingTests` is that test. It drives the
 four paths through the routines that perform them, and it asserts the never list
 twice over. As an absence: the token, the keyed hash and every account
 identifier appear in no line. And as a whitelist over the placeholder names a
 line may carry, which is the half that does not need the forbidden thing to be
-named first. An item title added to a line reddens the whitelist without anybody
+named first. An item title added to a line reddens
+`LoggingTests.TheFieldsALineCarriesAreTheOnesThePolicyAllows` without anybody
 having to think of titles, which is what makes that clause of the never list
 enforced rather than reviewed.
 
