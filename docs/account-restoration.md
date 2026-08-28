@@ -122,11 +122,14 @@ absent:
     git grep -ln 'IUserManager' -- Jellyfin.Plugin.ShareLinks
     Jellyfin.Plugin.ShareLinks/ShareLinksAdminController.cs
 
-`AccountRestorationTests.ThisPluginWritesToNoAccountYet` was the tripwire for
-exactly that moment and it fired, which is what it was for. The rule above is no
-longer standing in front of code; it is standing behind one call, and what holds
-it is that the identifier reaching `UpdatePolicyAsync` is one `CreateUserAsync`
-returned in the same call. That is a fact about which value reaches a call rather
+`AccountRestorationTests.ThisPluginTouchesNoUserDataYet` was the tripwire for
+exactly that moment and it fired, which is what it was for. It watched both
+interfaces under the name `ThisPluginWritesToNoAccountYet` until `fd319d8`
+narrowed it to the half that still holds and renamed it with the claim, so the
+older name is the history of this paragraph and is not in the suite. The rule
+above is no longer standing in front of code; it is standing behind one call, and
+what holds it is that the identifier reaching `UpdatePolicyAsync` is one
+`CreateUserAsync` returned in the same call. That is a fact about which value reaches a call rather
 than about which types an assembly names, so no reading of the compiled metadata
 can see it. It is held by
 `ShareCreationTests.ThePolicyIsWrittenOntoTheAccountsTheCreateMadeAndOntoNobodyElse`,
