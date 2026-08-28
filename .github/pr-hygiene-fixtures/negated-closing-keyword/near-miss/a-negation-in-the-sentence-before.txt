@@ -1,0 +1,4 @@
+Whether a second server line is carried as well is left open in issue #94 and this
+change does not settle it.
+
+Closes #4

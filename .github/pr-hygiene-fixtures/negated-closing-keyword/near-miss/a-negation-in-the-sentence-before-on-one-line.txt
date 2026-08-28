@@ -1,0 +1,3 @@
+The formatter's context is still not required by the ruleset, which is why this went unnoticed at all. That is #21 and it is not repaired here.
+
+Closes #140.

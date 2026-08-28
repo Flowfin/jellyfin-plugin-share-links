@@ -16,17 +16,25 @@
 #
 #   FAIL, and it holds the merge:
 #     * the pull request body carries an issue reference
+#     * no closing keyword in the body, and none in a commit message of the
+#       range, stands behind a negation (#308)
 #   WARN, annotation only:
 #     * the diff is large, 400 changed lines or more, generated files excluded
 #     * plugin code changed with no matching change under the test project
 #
-# The whole FAIL tier is skipped for bots and for authors from outside this
+# THE ISSUE-REFERENCE CHECK is skipped for bots and for authors from outside this
 # repository, and the two skips have different reasons. A bot cannot know the
 # convention. A person from outside can, but has no way to know which issue
 # number this board expects before they have filed anything, and often no issue
 # exists yet, so failing their contribution on it is a ritual rather than a
 # caught slip. The linkage is still wanted in that case and the check says so on
 # the pull request, where whoever picks the contribution up will read it.
+#
+# THE CLOSING-KEYWORD CHECK IS SKIPPED FOR NOBODY, and that is not an oversight in
+# the paragraph above. Neither reason carries over: the shape needs no convention
+# to be known, and satisfying it costs one rewording of a sentence the author has
+# already written. What it prevents is a tracker action taken against what the
+# text says, and the tracker takes that action whoever wrote the text.
 #
 # Two checks in the original are deliberately NOT here, and neither is an
 # oversight.
@@ -65,14 +73,64 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      contents: read # the checkout, for the refusal script and its fixtures
       pull-requests: read # the body, the author association, the changed-file list
 
     steps:
-      # No checkout. Every input is read from the pull request metadata through
-      # the API, so there is no working tree here to guard. Untrusted values, the
-      # body and the file names, are only ever read from the JS objects and never
-      # interpolated into a shell `run:`, so there is no template-injection
-      # surface to begin with.
+      # THIS JOB CARRIED NO CHECKOUT UNTIL #308, and the sentence that stood here
+      # stated that as a property of the job. The closing-keyword refusal is a
+      # script in this repository and its proof reads fixtures beside it, so the
+      # tree has to be here. What has not changed is where the pull request's own
+      # text comes from: every input below is read from the metadata through the
+      # API, and untrusted values - the body, the commit messages, the file names
+      # - are only ever read from the JS objects or written out with `fs`, never
+      # interpolated into a shell `run:`. There is no template-injection surface
+      # here either way.
+      #
+      # The whole history, because one leg of the proof compares a fixture
+      # against the message of the commit it was taken from. On a shallow clone
+      # that leg fails and says why, rather than passing quietly.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - name: Write out the text this pull request proposes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const dir = path.join(process.env.RUNNER_TEMP, "pull-request-text");
+            fs.mkdirSync(dir, { recursive: true });
+
+            const pr = context.payload.pull_request;
+            fs.writeFileSync(path.join(dir, "pull-request-body.md"), pr.body || "");
+
+            // The commit messages of the range, and not only the body. The third
+            // instance of the shape refused below carried it in a landed message,
+            // which is the copy that cannot be taken back: a message on the
+            // default branch is read for closing keywords the same way a body is,
+            // and repairing one means rewriting history.
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+            for (const c of commits) {
+              fs.writeFileSync(path.join(dir, `commit-${c.sha}.msg`), c.commit.message);
+            }
+
+            core.info(
+              `Wrote the body and ${commits.length} commit message(s) to ${dir}. ` +
+                "The refusal below names one of those files, so a hit in " +
+                "pull-request-body.md is in the body and a hit in commit-<sha>.msg " +
+                "is in that commit's message.",
+            );
+
       - name: Run PR-hygiene checks
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -174,3 +232,24 @@ jobs:
             if (failures.length) {
               core.setFailed(failures.join(" | "));
             }
+
+      # After the step above rather than before it, so a body that is both
+      # unlinked and carrying this shape is told about both in one run. `run:`
+      # steps do not execute once an earlier step has failed, and the checks in
+      # this job are independent of one another, so each of the two below says so
+      # for itself.
+      - name: Refuse a closing keyword a negation stands in front of
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/refuse-a-negated-closing-keyword.sh             "$RUNNER_TEMP"/pull-request-text/*
+
+      - name: Prove that refusal bites, on the text that got past every check before it
+        # The step above going green means this body and these messages are
+        # clean. It says nothing about whether the shape would have been caught,
+        # and a pattern that silently stopped matching goes green in exactly the
+        # same way. So the refusal is watched biting on the bytes of the landed
+        # instances, and the correct closing lines beside them are watched going
+        # through.
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/prove-the-negated-closing-keyword-refusal-bites.sh
