@@ -100,8 +100,13 @@ it. A request that carries no token does not match the route at all, so it is
 refused before any code of this plugin's runs. A query parameter is bound by name
 and its absence is an ordinary value, which the plugin has to remember to refuse,
 and a refusal written by hand is a refusal that can be written wrong. This is the
-reason the choice was taken and it is **not measured here**: it becomes a test
-when the route exists, and #68 is where it is owed.
+reason the choice was taken. Half of it is measured now, and this paragraph said
+it was waiting for the route: the route landed under #68 and
+`GuestRouteTests.TheTokenIsAPathSegmentOfTheRoute` pins the template, so a change
+that moved the token into a query parameter reds the suite. What is still **not
+measured here** is the sentence in front of it, that a request presenting no
+segment never reaches this plugin's code at all. That is the server's routing
+rather than anything in this tree, and no run here observes it.
 
 The second is that a path segment has nowhere to grow. A query string invites a
 second parameter beside the first, and the second parameter is where an item
