@@ -8,10 +8,25 @@ Four bounds. Three of them refuse a create, one of them deletes. The values are 
 `docs/configuration.md`, which is the table the suite compares against the class,
 so the numbers below are the argument and that table is the authority.
 
+`ShareBoundsTests` is where every statement on this page is checked, and each
+section below names the test for its own claim. Two of them cover the page rather
+than a bound: `ShareBoundsTests.EveryBoundHasADefaultOnTheConfiguration` asks that
+each of the four has a default on the configuration class at all, and
+`ShareBoundsTests.TheDocumentStatesTheDefaultsTheCodeHolds` reads this file and
+refuses it for spelling a number the code no longer holds. That second one is why
+the numbers below are written as words.
+
 ## A ceiling on live shares
 
 A share is live when it is neither revoked nor past its expiry. The default is one
 hundred.
+
+`ShareBoundsTests.TheBoundaryInstantIsNotLive` fixes which side of the expiry
+instant is live, and `ShareBoundsTests.ARecordThatNoLongerAnswersDoesNotHoldAPlace`
+that a revoked or expired record frees its place.
+`ShareBoundsTests.ACreatePastTheServerCeilingIsRefusedAndTheStoreDoesNotGrow` is
+the ceiling itself, and it asserts the second half of its own name: a refused
+create leaves the store the size it was.
 
 The number is a starting value with a reason rather than a principle. This plugin
 hands one item to one invited guest, so a hundred live at once is already an
@@ -30,6 +45,10 @@ stops is a loop pointed at a single item consuming the whole server ceiling, whi
 would leave the server refusing every other share for a reason an operator could
 not see from the item they were looking at.
 
+`ShareBoundsTests.ACreatePastTheItemCeilingIsRefusedAndTheStoreDoesNotGrow` drives
+it with the server ceiling set out of the way, so what refuses is this bound and
+not the one above it.
+
 ## A ceiling on the lifetime a link may be given
 
 The default is thirty days, and the reasoning is `docs/expiry.md`'s rather than a
@@ -37,9 +56,11 @@ second opinion about it: a share is for watching one thing, a month absorbs a
 holiday and a forgotten link, and past that the link is doing the thing expiry
 exists to stop.
 
-It is checked when a share is created and never when one is resolved. Lowering the
-setting does not shorten a link an operator has already handed out, because a
-configuration edit silently expiring live links is worse than a long link.
+It is checked when a share is created and never when one is resolved, which is
+`ShareBoundsTests.ACreatePastTheLifetimeCeilingIsRefusedAndTheStoreDoesNotGrow`.
+Lowering the setting does not shorten a link an operator has already handed out,
+because a configuration edit silently expiring live links is worse than a long
+link.
 
 ## Retention, and how an operator empties the store
 
@@ -56,30 +77,41 @@ The clock starts at the instant the share stopped answering, not at the instant 
 was created, and where a share was revoked before its expiry that is the
 revocation. A share revoked after it had already expired stopped working when it
 expired, and dating retention from the revocation would keep it for the window
-twice over.
+twice over. `ShareBoundsTests.RetentionKeepsWhatStoppedInsideTheWindowAndDropsWhatDidNot`
+is the window, taken at both edges of it, and
+`ShareBoundsTests.RetentionDatesFromWhenTheShareStoppedAndNotFromTheLaterRevocation`
+is the paragraph above.
 
 Setting the retention to zero deletes a share at the first write after it stops
-working. That is how an operator empties the store of what has expired, and it is
+working, which is
+`ShareBoundsTests.ARetentionOfZeroEmptiesWhatHasStoppedWorkingAtTheNextWrite`.
+That is how an operator empties the store of what has expired, and it is
 the only lever for it in this version; a button that sweeps on demand needs the
 configuration page in #70.
 
 ## Where the bounds are enforced
 
 In the store, in `ShareStore.AddAsync`, which sweeps what retention no longer
-keeps and then refuses a create that would pass a ceiling. Not only in the route
+keeps and then refuses a create that would pass a ceiling. That order is
+`ShareBoundsTests.TheSweepRunsBeforeTheCeilingIsCounted`, and it matters in the
+direction an operator meets: a create refused by a ceiling counted before the
+sweep is a refusal against records that are no longer kept. Not only in the route
 that creates a share, because a ceiling enforced at the route is a ceiling that
 holds for the callers somebody remembered, and the caller nobody thought about is
 the one this is written against.
 
-A refusal names the setting as well as the number. An operator meeting a ceiling
-has to find the line to change, and a sentence about too many shares does not say
-which of three was met.
+A refusal names the setting as well as the number, which is
+`ShareBoundsTests.TheRefusalNamesTheNumberAsWellAsTheSetting`. An operator meeting
+a ceiling has to find the line to change, and a sentence about too many shares
+does not say which of three was met.
 
 `ShareBounds` also refuses to be built from a value outside what the setting
 admits, so a configuration file hand-edited to a ceiling of zero refuses to serve
 rather than serving under a rule nobody wrote. That refusal happens when the
 bounds are read rather than when the file is saved, which is a later moment than
 the operator typing it; refusal on save is #71.
+`ShareBoundsTests.AValueOutsideWhatTheSettingAdmitsIsRefusedByName` drives it
+once per setting and asserts that the refusal carries that setting's own name.
 
 ## What this does not bound
 
