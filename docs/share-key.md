@@ -42,8 +42,8 @@ into a document nothing writes it to.
 `ShareKeyTests.TheKeyIsTheSameOnEveryReadAfterTheFirst` is the third, and it is
 the one this section is about: the key survives being read again, and being read
 by a second instance over the same path. Beside them,
-`ShareKeyTests.TwoInstallsDoNotShareAKey` is what makes the folder in the
-paragraph above the unit: two data folders are two keys.
+`ShareKeyTests.TwoInstallsDoNotShareAKey` is what makes the folder this section
+opens with the unit: two data folders are two keys.
 
 ## Permissions
 
@@ -60,7 +60,8 @@ it is still owed. Measuring it needs a file created by the same call on that
 platform and the resulting access control read back, and no test in this
 repository may reach a running server, which is `docs/testing.md`. No claim is
 made in either direction, and this plugin does not promise a permission it has not
-seen.
+seen. That is the first of the two claims on this page with no test beside it,
+and the second is at the end of the rotation section.
 
 ## First run, and every run after it
 
@@ -144,8 +145,8 @@ time. It does neither: the guests of every stopped share are signed out and
 disabled, exactly as `docs/revocation.md` describes for one share, which is
 `ShareKeyRotationRouteTests.TheGuestsOfEveryStoppedShareAreSignedOutAndDisabled`.
 
-No test stands beside the paragraph below, and it is the second of the two this
-page owes none for: a share created between the two writes is stated rather than
+No test stands beside the paragraph below, and it is the second of the two, the
+first being the Windows permissions above: a share created between the two writes is stated rather than
 defended against, so there is no behaviour to assert.
 
 What the two writes do not cover is a share created between them. It is issued
