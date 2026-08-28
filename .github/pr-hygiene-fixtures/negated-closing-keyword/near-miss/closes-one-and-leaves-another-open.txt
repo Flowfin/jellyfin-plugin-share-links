@@ -1,0 +1,5 @@
+Closes #308.
+
+#181 stays open behind it. Nothing here reaches the second server line, and the
+release it waits for is not out, so no clause of that issue is met and this
+change makes no claim about one.

@@ -1,0 +1,3 @@
+This does not close #58. Both of its conditions are tests over an account that
+was changed and then left alone or put back, and there is neither an account
+nor a change yet.

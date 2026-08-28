@@ -1,0 +1,10 @@
+The guard was watched biting on each of the three pages before this landed, one
+character wrong in one identifier each time, and it names the page, the line and
+the identifier:
+
+    bounds.md:24 names ShareBoundsTests.TheBoundaryInstantIsNotLiv, and ShareBoundsTests in this assembly has no member called that
+    share-key.md:40 names ShareKeyTests.TwoInstallsDoNotShareAKeys, and ShareKeyTests in this assembly has no member called that
+    logging.md:133 names LoggingTests.NoLineNamesAnAccounts, and LoggingTests in this assembly has no member called that
+
+This does not close #81. Its first clause is that every issue under M10 is
+closed, and both of the open ones wait on a walkthrough on a clean server.

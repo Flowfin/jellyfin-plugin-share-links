@@ -1,0 +1,3 @@
+## What this does not do, and why it does not close #16
+
+#16 asks for three things. Two are here: each seeded invariant has a committed fixture that reds it, and removing the invariant turns that fixture green.

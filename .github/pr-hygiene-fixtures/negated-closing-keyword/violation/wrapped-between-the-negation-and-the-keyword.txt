@@ -1,0 +1,2 @@
+The reading on that page is a measurement of one head rather than of the set, so this does not
+close #308. Its remaining clause is a second reading taken after the next release.

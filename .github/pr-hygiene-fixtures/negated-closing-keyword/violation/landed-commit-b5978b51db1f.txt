@@ -1,0 +1,4 @@
+This does not close #96. The harness boots one server line, the schedule already
+runs it nightly, and the release checklist clause has no release to name.
+
+Refs #96

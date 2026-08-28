@@ -1,0 +1,5 @@
+## What this does not close
+
+#96 stays open. Its harness clause asks for a boot per supported server line, and
+this is one line: the second line has no release to boot yet and is #181. Its
+release clause names a checklist that has no release to name, which is #136.
