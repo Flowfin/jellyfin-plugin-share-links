@@ -123,12 +123,14 @@ is re-read rather than left asserting an absence that has stopped being true. Th
 is the direction a negative claim rots in.
 
 What is not checked is the behaviour. No test here drives a guest through a playback
-request, because there is no route for one to travel and no guest account for it to
-belong to; the account creation path is #51's decision and not yet code, and the
-routes are #67 and #68. When they exist, the test this page owes is that a
+request, and the reason this paragraph gave for that has stopped being true. It said
+there was no route for one to travel and no guest account for it to belong to, with
+the account creation path #51's decision and not yet code and the routes owed to #67
+and #68. All three landed: `ShareLinksGuestController` carries the route, and the
+create route makes the accounts. The test this page owes is unchanged - that a
 resolution for a guest sets no user-data suppression of its own and leaves the
-server's writes alone. That is a stronger test than the one here and it is not
-available yet.
+server's writes alone - and it is still not written. What changed is that it is now
+a gap in the suite rather than something waiting on code.
 
 Nothing checks the prose. What a member means, whether the left-hand column
 describes it correctly, and whether the four tables above are all the surfaces there
