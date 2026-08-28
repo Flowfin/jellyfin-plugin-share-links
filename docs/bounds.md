@@ -107,11 +107,11 @@ does not say which of three was met.
 
 `ShareBounds` also refuses to be built from a value outside what the setting
 admits, so a configuration file hand-edited to a ceiling of zero refuses to serve
-rather than serving under a rule nobody wrote.
-`ShareBoundsTests.AValueOutsideWhatTheSettingAdmitsIsRefusedByName` drives that
-once per setting and asserts that the refusal carries the setting's own name. That refusal happens when the
+rather than serving under a rule nobody wrote. That refusal happens when the
 bounds are read rather than when the file is saved, which is a later moment than
 the operator typing it; refusal on save is #71.
+`ShareBoundsTests.AValueOutsideWhatTheSettingAdmitsIsRefusedByName` drives it
+once per setting and asserts that the refusal carries that setting's own name.
 
 ## What this does not bound
 

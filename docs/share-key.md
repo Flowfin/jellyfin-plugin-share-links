@@ -33,11 +33,17 @@ share in it, which is the whole reason the store holds hashes.
 
 Not memory only. A key regenerated at every start invalidates every live share at
 every restart, which is expiry by accident.
-`ShareKeyTests.TheKeyIsTheSameOnEveryReadAfterTheFirst` is the other side of that:
-the key survives being read again and being read by a second instance over the
-same path. `ShareKeyTests.TheKeyNeverAppearsInThePluginConfiguration` is the first
-of the three, read off the configuration class rather than off the file, and
-`ShareKeyTests.TwoInstallsDoNotShareAKey` is why two data folders are two keys.
+
+Two of those three are read rather than argued.
+`ShareKeyTests.TheKeyNeverAppearsInThePluginConfiguration` walks the
+configuration class and refuses a property whose name carries a key or a secret,
+which is the first of the three taken from the other end: the file cannot leak
+into a document nothing writes it to.
+`ShareKeyTests.TheKeyIsTheSameOnEveryReadAfterTheFirst` is the third, and it is
+the one this section is about: the key survives being read again, and being read
+by a second instance over the same path. Beside them,
+`ShareKeyTests.TwoInstallsDoNotShareAKey` is what makes the folder in the
+paragraph above the unit: two data folders are two keys.
 
 ## Permissions
 
