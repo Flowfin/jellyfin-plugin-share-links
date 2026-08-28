@@ -4,10 +4,15 @@ This is the comparison issue #61 asks for, the choice it asks to be made, and th
 list of what the choice does not constrain.
 
 Everything below about the server was read out of the packages this plugin
-compiles against, at the version `Directory.Build.props` pins:
+compiles against on the line it is packaged for. `Directory.Build.props` pins a
+version per target framework rather than one version:
 
-    grep -n 'JellyfinVersion' Directory.Build.props
-    15:        <JellyfinVersion>10.11.11</JellyfinVersion>
+    grep 'JellyfinVersion Condition' Directory.Build.props
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
+
+The readings below are from `10.11.11`, the `net9.0` arm, which is the line
+`build.yaml` names as the one a package is built for.
 
 Nothing re-extracts the pasted output on this page. Other pages under `docs/` are
 opened and read by the suite; the only mention of this one anywhere in the test
