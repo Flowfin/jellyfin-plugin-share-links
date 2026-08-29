@@ -338,56 +338,61 @@ public sealed class GuestRouteTests : IDisposable
     }
 
     /// <summary>
+    /// The operator guide records the refusal a guest meets in a browser
+    /// (#269), naming the status the run measured.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This replaces a guard that asked for the opposite sentence and had
+    /// stopped biting. Under #68 the second click was the specified behaviour,
+    /// so the guard held the sentence telling a guest to open the link again
+    /// after signing in, judged as a sentence carrying the link, signing in and
+    /// again rather than as the wording of the day. #269 then drove a browser
+    /// at a real server and measured that neither half happens, and the
+    /// paragraph was rewritten into a retraction that quotes the withdrawn
+    /// instruction in order to withdraw it. The retraction carries all three
+    /// words, so the guard went on passing on the sentence saying its own
+    /// subject does not exist.
+    /// </para>
+    /// <para>
+    /// What is under guard now is the admission rather than an instruction,
+    /// because the admission is the part of that section this tree can assert
+    /// is true. It is judged as a sentence naming the link and the status the
+    /// run on #269 recorded, and that is deliberately tighter than the guard it
+    /// replaces: a disclosure that stops naming what was measured is a weaker
+    /// disclosure, so a rewording that drops the status reds this instead of
+    /// passing quietly.
+    /// </para>
+    /// <para>
+    /// It retires with #269. When a guest opening the link in a browser reaches
+    /// the item, the guide stops recording a refusal and this check goes with
+    /// the sentence it holds; leaving it standing then would be the same defect
+    /// one direction over. It says nothing about whether a guest reads the
+    /// guide, and nothing here reaches a running server.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheGuideRecordsTheRefusalAGuestMeetsInABrowser()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "docs", "operator-guide.md");
+        Assert.True(File.Exists(path), "docs/operator-guide.md was not copied next to the test assembly: " + path);
+
+        var recorded = Regex.Split(File.ReadAllText(path), @"(?<=[.!?])\s+")
+            .Where(sentence => sentence.Contains("link", StringComparison.OrdinalIgnoreCase)
+                && sentence.Contains("401", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            recorded.Count > 0,
+            "the operator guide carries no sentence naming the 401 a guest meets when the link is opened in a browser, so the one thing #269 measured about what the guest does is missing from the page their operator reads.");
+    }
+
+    /// <summary>
     /// The token is a segment of the route rather than a value inside the
     /// request, which is what makes a request carrying none fail to match at all
     /// rather than reach code that has to remember to refuse it.
     /// <c>docs/leaked-link.md</c> is where that was decided.
     /// </summary>
-    /// <summary>
-    /// The operator guide tells a guest to open the link again after signing in
-    /// (#68).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// This is the third part of the second click, and it is the only one this
-    /// plugin cannot hold in its own behaviour. Nothing here carries a
-    /// destination across sign-in and nothing is going to, so a guest who
-    /// follows a link before signing in lands on the sign-in page and the link
-    /// is not waiting for them afterwards. The decision was to make that the
-    /// specified behaviour rather than to build the round trip, and what a
-    /// specified behaviour needs is somebody being told what to do about it.
-    /// </para>
-    /// <para>
-    /// Judged as a sentence carrying all three of the link, signing in and
-    /// again, rather than as the sentence the guide spells today. A comparison
-    /// against the exact wording is a check somebody deletes the first time the
-    /// guide is edited, and the guide is meant to be edited. What this refuses
-    /// is the sentence going missing, which is how the guide would stop
-    /// answering this clause without anybody noticing.
-    /// </para>
-    /// <para>
-    /// It says nothing about whether a guest reads the guide, or whether the
-    /// instruction works when they do. The second click on a running server is
-    /// not measured anywhere in this repository.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public void TheGuideTellsAGuestToOpenTheLinkAgainAfterSigningIn()
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "docs", "operator-guide.md");
-        Assert.True(File.Exists(path), "docs/operator-guide.md was not copied next to the test assembly: " + path);
-
-        var told = Regex.Split(File.ReadAllText(path), @"(?<=[.!?])\s+")
-            .Where(sentence => sentence.Contains("link", StringComparison.OrdinalIgnoreCase)
-                && sentence.Contains("again", StringComparison.OrdinalIgnoreCase)
-                && sentence.Contains("sign", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        Assert.True(
-            told.Count > 0,
-            "the operator guide carries no sentence telling a guest to open the link again after signing in, so the behaviour #68 specified rather than built is one a guest meets with nothing to do about it.");
-    }
-
     [Fact]
     public void TheTokenIsAPathSegmentOfTheRoute()
     {
