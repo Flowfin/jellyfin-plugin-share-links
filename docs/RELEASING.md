@@ -163,7 +163,8 @@ is gone and no catalog is fed until a manifest generator is added.
 ## What fails the run
 
 - The tag does not end in `-stable`, or the workflow was started from something
-  other than a tag.
+  other than a tag. The one exception is the alert drill below, which is a manual
+  run that exists in order to fail.
 - The numeric part of the tag differs from `version` in `build.yaml`.
 - `build.yaml` is missing a required field, or `version`, `targetAbi`, `framework`
   or `guid` has the wrong shape.
@@ -190,6 +191,57 @@ All of these fail before anything is published.
 The packaging tool warns when `build.yaml` declares neither `image` nor `imageUrl`.
 The plugin then shows without a logo in a catalog. That is a warning on every run
 until a logo exists, and it is not a reason to hold a release.
+
+## When a publish does not happen
+
+A publish that fails leaves nothing behind. There is no release, no tag notes, and
+no message anywhere: the version somebody expected simply is not there, and the
+first person to notice is whoever went looking for it.
+
+The `alert` job at the end of `publish.yaml` is what says so. It runs when any of
+the four jobs before it ends as anything other than success, and it opens an issue
+on this repository carrying the run's address and one line per job and step that
+ended badly. It is a job inside the run rather than a workflow watching from
+outside, because the watcher shape needs a `workflow_run` trigger and the zizmor
+gate here refuses that trigger at high severity.
+
+What that shape gives up is written at the job and repeated in the body of every
+alert it opens: a run cancelled outright, or one that never reached this job, takes
+the alert with it and nothing is reported.
+
+## The alert drill
+
+The alert is the only thing that reports a publish that did not happen, so it is
+worth knowing that it works before the day it is needed. Watching it fire used to
+mean pushing a tag of this repository and spending it on a rehearsal, which is why
+the observation was owed for as long as it was (#91).
+
+Start `Publish Release` from the Actions page with **deliberately-fail** ticked, or:
+
+```
+gh workflow run publish.yaml --field deliberately-fail=true
+```
+
+The run goes through the gate, sets up both SDKs, checks the framework and the
+assembly version and restores in locked mode, and then fails on purpose at the step
+before the one that would build the archive. The alert job opens its issue, titled
+so that it reads as a drill rather than as a failed release, and the issue says in
+its first paragraph that nothing was built and nothing published. Close it once it
+has been read.
+
+Three things keep the drill from being a second way to publish, and they hold
+independently:
+
+- The gate refuses a manual run that does not carry the flag, in the same breath as
+  it refuses a run started from a branch.
+- The failure is staged before the packaging step, so no archive exists for the
+  jobs that can write.
+- The release job declines a manual run whatever the other two do.
+
+`PublishAlertDrillTests` holds all three, so removing one is a red suite rather
+than a quiet narrowing. What no test here can hold is whether the forge evaluates
+those conditions the way they read, because no test in this repository reaches the
+network; the drill run itself is the evidence for that half.
 
 ## Re-running
 
