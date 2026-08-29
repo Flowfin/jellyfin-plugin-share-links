@@ -11,11 +11,30 @@ name: Publish Release
 # in `framework` and `targetAbi`. A repository that ships two server lines needs a
 # second manifest and a second route; this file does not provide one, and the checks
 # below refuse to guess.
+#
+# There is a second trigger and it publishes nothing. The `alert` job at the end of
+# this file is the only thing that says a publish did not happen, and until now the
+# only way to watch it fire was to push a tag of this repository and spend it on a
+# drill (#91). `workflow_dispatch` with `deliberately-fail` set runs this route as
+# far as the packaging step and stops it there, so the alert fires against a real
+# run of the real jobs. The flag is not optional: the gate refuses a manual run
+# without it, and the release job refuses a manual run whatever it is set to, so
+# the dispatch path has no spelling that creates a release.
 on:
   push:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+-stable"
       - "[0-9]+.[0-9]+.[0-9]+.[0-9]+-stable"
+  workflow_dispatch:
+    inputs:
+      deliberately-fail:
+        description: >-
+          Fail the packaging step on purpose so the alert job fires. This is the
+          only reason to start this workflow by hand, and a manual run without it
+          is refused by the gate.
+        type: boolean
+        required: true
+        default: false
 
 # Deny by default. Each job opts into the smallest scope it needs.
 permissions: {}
@@ -93,12 +112,28 @@ jobs:
           # Space separated list of branches a release may be cut from.
           RELEASE_REFS: "master"
           EXPECTED_FRAMEWORK: "net9.0"
+          DELIBERATELY_FAIL: ${{ inputs['deliberately-fail'] }}
         run: |
           set -euo pipefail
 
-          # A workflow_dispatch or a run started from a branch would name the release
-          # after the branch and tag a commit nobody released.
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+          # The alert drill (#91). A manual run exists in order to fail, so the flag
+          # that makes it fail is what admits it here: without that flag a dispatch is
+          # refused in the same breath as a run started from a branch, which is what
+          # it is. With it, the checks below that read a tag have no tag to read and
+          # are skipped by name rather than by the script quietly taking another path.
+          drill=0
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ "${DELIBERATELY_FAIL}" != "true" ]; then
+              echo "::error::This workflow publishes from a tag only. A manual run is the alert drill and nothing else, so it is refused unless deliberately-fail is set."
+              exit 1
+            fi
+            drill=1
+            echo "::notice::Alert drill. This run stops at the packaging step and publishes nothing, and the release job refuses a manual run whatever this flag says."
+          fi
+
+          # A run started from a branch would name the release after the branch and
+          # tag a commit nobody released.
+          if [ "${drill}" -eq 0 ] && [ "${GITHUB_REF_TYPE}" != "tag" ]; then
             echo "::error::This workflow publishes from a tag only, but it was started from ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
             exit 1
           fi
@@ -113,13 +148,16 @@ jobs:
           fi
 
           tag="${GITHUB_REF_NAME}"
-          case "${tag}" in
-            *-stable) numeric="${tag%-stable}" ;;
-            *)
-              echo "::error::Tag ${tag} does not end in -stable."
-              exit 1
-              ;;
-          esac
+          numeric=""
+          if [ "${drill}" -eq 0 ]; then
+            case "${tag}" in
+              *-stable) numeric="${tag%-stable}" ;;
+              *)
+                echo "::error::Tag ${tag} does not end in -stable."
+                exit 1
+                ;;
+            esac
+          fi
 
           if [ ! -f build.yaml ]; then
             echo "::error::build.yaml is missing from the repository root. The packaging step reads all plugin metadata from it."
@@ -175,7 +213,9 @@ jobs:
             exit 1
           fi
 
-          if [ "${version}" != "${numeric}" ]; then
+          # A drill run carries no tag, so there is no version for build.yaml to
+          # disagree with and no release for the disagreement to reach.
+          if [ "${drill}" -eq 0 ] && [ "${version}" != "${numeric}" ]; then
             echo "::error::Tag ${tag} carries version ${numeric} but build.yaml declares ${version}. Bump build.yaml, or tag the version that is in it."
             exit 1
           fi
@@ -199,25 +239,33 @@ jobs:
           fi
 
           # A tag can be pushed onto any commit, including one that was never merged.
-          # Require the tagged commit to be contained in a release branch.
-          reachable=0
-          for branch in ${RELEASE_REFS}; do
-            if git rev-parse --verify --quiet "refs/remotes/origin/${branch}" >/dev/null; then
-              if git merge-base --is-ancestor "${GITHUB_SHA}" "refs/remotes/origin/${branch}"; then
-                reachable=1
-                break
+          # Require the tagged commit to be contained in a release branch. A drill is
+          # dispatched from whatever ref the person running it chose and publishes
+          # nothing, so there is no commit here to keep out of a release.
+          if [ "${drill}" -eq 0 ]; then
+            reachable=0
+            for branch in ${RELEASE_REFS}; do
+              if git rev-parse --verify --quiet "refs/remotes/origin/${branch}" >/dev/null; then
+                if git merge-base --is-ancestor "${GITHUB_SHA}" "refs/remotes/origin/${branch}"; then
+                  reachable=1
+                  break
+                fi
+              else
+                echo "::warning::There is no branch named '${branch}' on origin, so it cannot contain anything. Check the release branch list this workflow was filled in with."
               fi
-            else
-              echo "::warning::There is no branch named '${branch}' on origin, so it cannot contain anything. Check the release branch list this workflow was filled in with."
+            done
+            if [ "${reachable}" -ne 1 ]; then
+              echo "::error::Commit ${GITHUB_SHA} is not contained in any of the release branches (${RELEASE_REFS}), so it must not be published."
+              exit 1
             fi
-          done
-          if [ "${reachable}" -ne 1 ]; then
-            echo "::error::Commit ${GITHUB_SHA} is not contained in any of the release branches (${RELEASE_REFS}), so it must not be published."
-            exit 1
           fi
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "Publishing version ${version} from tag ${tag}."
+          if [ "${drill}" -eq 1 ]; then
+            echo "Alert drill from ${tag}. build.yaml declares version ${version}, and nothing here is published."
+          else
+            echo "Publishing version ${version} from tag ${tag}."
+          fi
 
       - name: Assemble the release notes from the changelog fragments
         # Here rather than in the release job, because this is the job that has the
@@ -347,6 +395,18 @@ jobs:
           fi
           echo "Assembly version ${assembly} matches the manifest."
 
+      - name: Short-circuit the packaging step for the alert drill
+        if: ${{ inputs['deliberately-fail'] }}
+        # The drill's failure is put here rather than earlier because everything above
+        # it is worth running for real: the checkout, both SDKs, the framework and
+        # assembly-version checks and a locked-mode restore all fail in ways a publish
+        # would meet. Here is also the last place a failure costs nothing - the next
+        # step produces the archive, and the two jobs after it are the ones that can
+        # write. `needs` on both of them means neither starts once this has fired.
+        run: |
+          echo "::error::Alert drill (#91): failing the packaging step on purpose so the alert job fires. Nothing is built and nothing is published."
+          exit 1
+
       - name: Build the plugin package
         id: jprm
         # No version input: the packager reads the version from build.yaml, and the
@@ -413,6 +473,12 @@ jobs:
   release:
     name: Publish the release
     needs: [build, attest]
+    # A second lock on the drill, and it holds even if the first one is removed. The
+    # gate admits a manual run and the packaging step fails it, so this job is already
+    # unreachable that way; this line makes it unreachable for a reason that does not
+    # depend on either of them still being there. It is also the honest condition for
+    # a job that reads GITHUB_REF_NAME as the tag to release.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Generous, because this job builds nothing and the time it spends is asset
     # uploads on somebody else's network. A timeout that fires between creating the
@@ -579,9 +645,13 @@ jobs:
             const runId = context.runId;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
 
-            // This workflow triggers on a tag push and on nothing else, so the
-            // ref name is the tag.
-            const tag = context.ref.replace(/^refs\/tags\//, "");
+            // A tag push carries the tag as its ref. A manual run is the alert
+            // drill (#91) and carries a branch, so the ref is named as a ref
+            // rather than reported as a tag that does not exist.
+            const drill = context.eventName === "workflow_dispatch";
+            const tag = drill
+              ? context.ref.replace(/^refs\/heads\//, "") + " (alert drill)"
+              : context.ref.replace(/^refs\/tags\//, "");
             const marker = "<!-- publish-failure-alert run:" + runId + " -->";
 
             // An alert already written for this run is not written again. A
@@ -653,10 +723,17 @@ jobs:
             const body = [
               marker,
               "",
-              "The publish run for `" +
-                tag +
-                "` did not succeed, so no release was published for that tag and " +
-                "nothing else in this repository would have said so.",
+              drill
+                ? "This is the alert drill of #91 and not a publish. The run was " +
+                  "started by hand with `deliberately-fail` set, which fails the " +
+                  "packaging step on purpose so that this job can be watched " +
+                  "firing without a tag being spent on it. Nothing was built and " +
+                  "no release exists. Close this issue once the run below has been " +
+                  "read."
+                : "The publish run for `" +
+                  tag +
+                  "` did not succeed, so no release was published for that tag and " +
+                  "nothing else in this repository would have said so.",
               "",
               "## The run",
               "",
@@ -705,7 +782,9 @@ jobs:
             const created = await github.rest.issues.create({
               owner,
               repo,
-              title: "Publish did not succeed for " + tag,
+              title: drill
+                ? "Alert drill: publish did not succeed for " + tag
+                : "Publish did not succeed for " + tag,
               body,
               labels: ["ci"],
               assignees: ["iderex"],
