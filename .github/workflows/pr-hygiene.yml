@@ -47,9 +47,24 @@
 # board writes commits, not a hygiene check, and it is not made here.
 #
 # The original also requires a `version:` bump in build.yaml to touch
-# CHANGELOG.md. There is no CHANGELOG.md in this tree and no release process yet,
-# which is #89. A check whose subject does not exist passes every run and reads
-# exactly like one that is working, so it comes back when the changelog does.
+# CHANGELOG.md. THIS PARAGRAPH SAID THERE WAS NO RELEASE PROCESS HERE AND NO
+# CHANGELOG, AND BOTH HALVES HAVE MOVED. `docs/versioning.md` was already in the
+# tree when this was written and `docs/RELEASING.md` landed two days after it, so
+# what #89 still owes is a rehearsal and a first release rather than a written
+# process. And the changelog came back in a shape the sentence could not
+# recognise: `changelog.d`, whose fragments are assembled into the GitHub release
+# for the tag. There is no CHANGELOG.md and #89 decided there will not be one, so
+# the condition written here - that the check returns when the changelog does -
+# has been met by a file this sentence would have waited past forever.
+#
+# WHAT IS STILL ABSENT IS THE CHECK, AND WHETHER IT RETURNS IS #326. The reason
+# it was left out stands as a reason for the day it was written - a check whose
+# subject does not exist passes every run and reads exactly like one that is
+# working - and it is no longer the reason it is absent today. Its subject now
+# exists: `docs/RELEASING.md` asks that the version be raised and the fragments
+# that went into it be deleted in the same change. Importing that as a gate is a
+# decision about how this board judges pull requests rather than a hygiene fix,
+# which is why it is an issue and not a line added here.
 name: PR Hygiene
 
 on:
