@@ -71,9 +71,9 @@ hexadecimal characters are thirty-two bits, and the ceiling on records the store
 will hold is a setting whose default is a hundred live shares plus ninety days of
 expired ones:
 
-    grep -n 'DefaultMaxLiveShares =\|DefaultExpiredShareRetentionDays =' Jellyfin.Plugin.ShareLinks/ShareBounds.cs
-    50:    public const int DefaultMaxLiveShares = 100;
-    65:    public const int DefaultExpiredShareRetentionDays = 90;
+    git grep -n 'DefaultMaxLiveShares =\|DefaultExpiredShareRetentionDays =' -- Jellyfin.Plugin.ShareLinks/ShareBounds.cs
+    Jellyfin.Plugin.ShareLinks/ShareBounds.cs:50:    public const int DefaultMaxLiveShares = 100;
+    Jellyfin.Plugin.ShareLinks/ShareBounds.cs:65:    public const int DefaultExpiredShareRetentionDays = 90;
 
 At a thousand records the chance that any two of them share a prefix is about
 `1000 * 1000 / (2 * 2**32)`, which is one in eight and a half thousand. That is
