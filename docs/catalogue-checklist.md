@@ -75,10 +75,10 @@ Ticked. The announcement makes the point in those words: the identifier has to b
 unique both in the manifest and in the plugin itself, or it collides with
 somebody else's.
 
-    grep -n '^guid:' build.yaml
-    3:guid: "a3703f07-f83d-49a0-a09f-50b890a2baac"
-    grep -n 'Guid.Parse' Jellyfin.Plugin.ShareLinks/Plugin.cs
-    32:    public override Guid Id => Guid.Parse("a3703f07-f83d-49a0-a09f-50b890a2baac");
+    git grep -n '^guid:' -- build.yaml
+    build.yaml:3:guid: "a3703f07-f83d-49a0-a09f-50b890a2baac"
+    git grep -n 'Guid.Parse' -- Jellyfin.Plugin.ShareLinks/Plugin.cs
+    Jellyfin.Plugin.ShareLinks/Plugin.cs:32:    public override Guid Id => Guid.Parse("a3703f07-f83d-49a0-a09f-50b890a2baac");
 
 The two agreeing is not left to care. `PluginIdentityTests` reads both and reds
 when they diverge, and it was the reason that test exists.
@@ -117,9 +117,9 @@ Ticked. All four are in `build.yaml`, and none of them is the template's text:
 
     grep -cE '^(name|owner|overview|description):' build.yaml
     4
-    grep -nE '^(name|overview):' build.yaml
-    2:name: "Share Links"
-    19:overview: "Share a single library item with invited guests of your server, through a link that expires and can be revoked."
+    git grep -nE '^(name|overview):' -- build.yaml
+    build.yaml:2:name: "Share Links"
+    build.yaml:23:overview: "Share a single library item with invited guests of your server, through a link that expires and can be revoked."
 
 `PackagingMetadataTests` is what holds this one. It carries the template's own
 placeholder strings and refuses each of them, so the template text coming back is
@@ -136,17 +136,34 @@ manifest, and it is not carried by every entry:
     34
 
 Twenty three occurrences of the field against thirty four entries, so a manifest
-without one is a manifest the catalogue serves. There is none in `build.yaml`
-today, which #136 names, and an entry without one is a tile with no picture
-rather than an entry that is refused.
+without one is a manifest the catalogue serves, and an entry without one is a
+tile with no picture rather than an entry that is refused.
+
+This plugin carries one, so the row is ticked rather than merely survivable:
+
+    git grep -n '^imageUrl:' -- build.yaml
+    build.yaml:4:imageUrl: "https://raw.githubusercontent.com/Flowfin/jellyfin-plugin-share-links/master/img/logo.png"
+
+    curl -sSL -o /dev/null -w "%{http_code} %{content_type} %{size_download}
+
+" https://raw.githubusercontent.com/Flowfin/jellyfin-plugin-share-links/master/img/logo.png
+200 image/png 7011
+
+THIS PARAGRAPH SAID THERE WAS NONE IN `build.yaml` AND THAT #136 NAMED THE
+ABSENCE, AND BOTH HALVES WERE WRONG. The field arrived on `0da22ff` on
+2026-08-07, and this page was written on a branch cut before that commit, so the
+sentence was already false on the mainline the day after, when the page merged.
+#136's step list carries the field as set rather than as owed. Nothing about the
+row's reading changes: the field is not required, and this is what it costs to
+read a page instead of the tree.
 
 ## A targetAbi that matches a supported server
 
 Ticked. `build.yaml` claims `10.11.9.0`, and 10.11 is the line the project is
 releasing:
 
-    grep -n '^targetAbi:' build.yaml
-    13:targetAbi: "10.11.9.0"
+    git grep -n '^targetAbi:' -- build.yaml
+    build.yaml:16:targetAbi: "10.11.9.0"
     curl -sSL https://api.github.com/repos/jellyfin/jellyfin/releases/latest | grep -oE '"tag_name": "[^"]*"'
     "tag_name": "v10.11.11"
 
@@ -186,9 +203,15 @@ catalogue serves carries one, and every one of them is thirty two hexadecimal
 characters:
 
     curl -sSL https://repo.jellyfin.org/files/plugin/manifest.json | grep -oE '"checksum": "[0-9a-f]{32}"' | wc -l
-    277
+    278
     curl -sSL https://repo.jellyfin.org/files/plugin/manifest.json | grep -c '"checksum"'
-    277
+    278
+
+Both numbers are a reading of one catalogue on one day, like the identifier count
+above, and they move as that catalogue publishes. What the row rests on is the
+two being EQUAL rather than on either of them: a version carrying a checksum that
+is not thirty two hexadecimal characters would separate them. They read 277 each
+when this page landed.
 
 Nothing is published from here yet, so there is no artefact for a checksum to be
 of. #90 is where the checksum and the artefact are made to agree, and #136 is
@@ -239,3 +262,19 @@ The three refusals about a manifest, an artefact name and a checksum are
 refusals of a catalogue requirement, not statements that this repository owes
 none of those things. It owes all three to its own manifest, and #89, #90 and
 #136 are where they are met.
+
+## What judges the pastes on this page
+
+Two of the readings above quoted a line number that had moved. `targetAbi` was
+pasted at line 13 of `build.yaml` and is at 16; `overview` was pasted at 19 and
+is at 23. Both were found by running the commands rather than by reading them,
+and nothing here had refused either one.
+
+`DocumentedPastesTests` re-reads a pasted `path:line:text` reference against the
+file it names, and its subject is that shape - a paste carrying only `line:text`
+has no path for it to resolve and is outside what it can judge. Every local
+reading on this page is now taken with `git grep -n`, which emits the path, so
+the drift that produced those two is refused by the suite from here rather than
+found by somebody grepping. The readings of another project's file and of a
+served manifest are not in that subject and cannot be: nothing in this suite may
+reach the network, which `docs/testing.md` fixes.
