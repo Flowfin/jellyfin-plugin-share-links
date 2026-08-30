@@ -607,10 +607,21 @@ jobs:
   # line is the gap. The rest of the population is the case a `workflow_run`
   # watcher would have caught and this cannot.
   #
-  # THIS HAS NOT BEEN SEEN TO FIRE. No tag has ever been pushed to this repository
-  # and no publish run exists, so what is written here is a design and not an
-  # observation. The clause of #91 asking for a publish run deliberately made to
-  # fail before the release job creates anything is NOT met by this job.
+  # THIS HAS BEEN SEEN TO FIRE, AND THIS PARAGRAPH SAID IT HAD NOT. It said that no
+  # publish run existed and that the clause of #91 asking for a publish run
+  # deliberately made to fail before the release job creates anything was not met
+  # by this job. Run 33245438050 of 2026-08-29 is that run: the gate passed, the
+  # packaging step failed on purpose, `attest` and `release` were skipped, this job
+  # succeeded, and the issue it left is #313. #91 closed ten minutes later.
+  #
+  # WHAT IS STILL A DESIGN RATHER THAN AN OBSERVATION IS THE HALF A DRILL CANNOT
+  # REACH, and that is why the sentence above is corrected rather than deleted. No
+  # tag has ever been pushed to this repository, so nothing has watched this job
+  # report a run started by a tag, which is the only shape that leaves a release
+  # missing. The drill also stops the route at the packaging step, so what `attest`
+  # and `release` do when they end badly is unobserved, and those are the two jobs
+  # that can write. The bound above, that a cancelled run or one that never reached
+  # this job produces no alert at all, is untouched by either of them.
   alert:
     name: Alert on a publish that did not succeed
     needs: [gate, build, attest, release]
