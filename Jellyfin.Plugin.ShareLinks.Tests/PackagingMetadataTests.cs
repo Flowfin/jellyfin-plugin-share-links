@@ -82,6 +82,34 @@ public class PackagingMetadataTests
         return match.Groups[1].Value;
     }
 
+    // A field read whichever of the three shapes it is written in, for the one test
+    // below that is about a value being there at all rather than about what it says.
+    // The two readers above each refuse the other's shape, so either of them alone
+    // would red a rewrite that is only a rewrite: turning a folded block into a
+    // quoted line changes no published byte and must not fail a test about
+    // emptiness. The bare scalar is last because the folded reader already matches
+    // every `>` and `|` header, so nothing written as a block reaches it.
+    private static string ReadFieldInAnyShape(string field)
+    {
+        var manifest = ReadManifest();
+
+        var quoted = Regex.Match(manifest, string.Format(CultureInfo.InvariantCulture, "^{0}:[ \t]*\"([^\"]*)\"[ \t]*$", Regex.Escape(field)), RegexOptions.Multiline);
+        if (quoted.Success)
+        {
+            return quoted.Groups[1].Value;
+        }
+
+        var folded = Regex.Match(manifest, string.Format(CultureInfo.InvariantCulture, "^{0}:[ \t]*[>|][-+]?[ \t]*\r?\n((?:(?:[ \t]+[^\r\n]*)?\r?\n)*)", Regex.Escape(field)), RegexOptions.Multiline);
+        if (folded.Success)
+        {
+            return folded.Groups[1].Value;
+        }
+
+        var bare = Regex.Match(manifest, string.Format(CultureInfo.InvariantCulture, "^{0}:[ \t]*([^\r\n]*)$", Regex.Escape(field)), RegexOptions.Multiline);
+        Assert.True(bare.Success, $"build.yaml declares no '{field}' field, in any of the three shapes it could be written in");
+        return bare.Groups[1].Value;
+    }
+
     // The GitHub account the readme links to, taken from every link in it that
     // addresses an account page rather than a repository. A link carrying a second
     // path segment is a repository and is left alone, so a readme that comes to
@@ -244,5 +272,43 @@ public class PackagingMetadataTests
         // zeros is not a version anybody releases, and a manifest that has fallen
         // back to it would hand a catalogue an entry no server can order.
         Assert.NotEqual("0.0.0.0", ReadQuotedField("version"));
+    }
+
+    [Fact]
+    public void DescriptionIsNotBlank()
+    {
+        // The catalogue this plugin is published into reads its entry out of the
+        // `.meta.json` the packaging step writes beside the archive, and that file
+        // is build.yaml's fields copied. Six of them cannot be absent or blank
+        // after trimming: guid, name, description, overview, owner and category,
+        // read on 2026-08-30 from
+        //   gh api repos/Flowfin/hub/contents/internal/identity/identity.go \
+        //     --jq .content | base64 -d | grep -n 'var Required'
+        //   var Required = []string{"guid", "name", "description", "overview", "owner", "category"}
+        //
+        // Five of the six are already refused blank here or in
+        // PluginIdentityTests, because a test asserting what a field SAYS cannot
+        // pass an empty one: the name matches what the running plugin reports, the
+        // owner matches the account the readme links to, the overview contains a
+        // phrase, the category is one of a list, and the guid parses and equals the
+        // plugin's id. The description was refused by nothing. The placeholder test
+        // at the top of this file names the template's two description sentences
+        // and passes a field with nothing in it at all.
+        //
+        // WHAT AN EMPTY ONE COSTS IS NOT THIS PLUGIN'S ROW. A blank required field
+        // is a refusal the catalogue's generator treats as fatal rather than as a
+        // plugin to skip, so its run writes nothing and the address goes on serving
+        // the file from the run before it. Every other plugin in that catalogue
+        // then stops gaining versions too, and what says so is a generator log
+        // nobody on this board reads.
+        //
+        // The release route reaches this later and does less with it: its gate
+        // greps for `^description:` and passes a key whose value is empty, which is
+        // the one-character mistake this exists against. It also runs only on a
+        // pushed tag, and the tag is the input on that route that cannot be taken
+        // back.
+        Assert.False(
+            string.IsNullOrWhiteSpace(ReadFieldInAnyShape("description")),
+            "build.yaml declares a blank description. The catalogue's generator requires that field, refuses the whole run when it is empty rather than skipping this plugin, and publishes nothing at all until it is filled in.");
     }
 }
