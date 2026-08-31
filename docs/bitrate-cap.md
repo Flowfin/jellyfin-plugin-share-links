@@ -34,7 +34,7 @@ acted on:
 
     git grep -n 'MaxBitrateBitsPerSecond' -- Jellyfin.Plugin.ShareLinks/
     Jellyfin.Plugin.ShareLinks/BitrateCap.cs:34:/// <see cref="ShareRecord.MaxBitrateBitsPerSecond"/> already takes, and a second
-    Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:303:                        cell(row, share.MaxBitrateBitsPerSecond);
+    Jellyfin.Plugin.ShareLinks/Configuration/configPage.html:304:                        cell(row, share.MaxBitrateBitsPerSecond);
     Jellyfin.Plugin.ShareLinks/EffectiveBitrate.cs:11:/// is <see cref="ShareRecord.MaxBitrateBitsPerSecond"/>; the invited account
     Jellyfin.Plugin.ShareLinks/GuestConfinement.cs:213:                || record.MaxBitrateBitsPerSecond is not { } cap)
     Jellyfin.Plugin.ShareLinks/ShareCreation.cs:170:            MaxBitrateBitsPerSecond = request.MaxBitrateMbps is null
