@@ -73,10 +73,25 @@ jobs:
           # this block the generated sources under obj/ are analysed too. They
           # are not in the tree, nobody can change them, and the source
           # generator that writes them does not follow these rules.
+          #
+          # The test and fuzz projects are dropped from the analysis too (#333).
+          # Every rule stays ON, and stays on for the plugin, which is where an
+          # unguarded construction has to be reported; what is dropped is the
+          # harness around it, which is where the findings on this board have
+          # been dismissed by hand rather than fixed. #297 is where that was
+          # read as a set and #333 carries the count.
+          #
+          # Whether this block reaches an analysis that BUILDS the code is the
+          # thing #333 measures rather than assumes, and the plugin's own
+          # alerts surviving is the half that decides it: an exclusion that
+          # silences Jellyfin.Plugin.ShareLinks/ as well is the wrong change
+          # however good the count looks.
           config: |
             paths-ignore:
               - "**/obj/**"
               - "**/bin/**"
+              - "Jellyfin.Plugin.ShareLinks.Tests/**"
+              - "Jellyfin.Plugin.ShareLinks.Fuzz/**"
 
       - name: Build
         # Not autobuild. The project has one solution and one command that builds
