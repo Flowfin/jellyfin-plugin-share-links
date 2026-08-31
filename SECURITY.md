@@ -3,9 +3,8 @@
 ## Reporting a vulnerability
 
 Use GitHub's private reporting on this repository. Open the Security tab and
-choose Report a vulnerability. That opens a report only the maintainers of this
-repository can read, and it is the route to use for anything that could be
-exploited.
+choose Report a vulnerability. That opens a report only I can read, and it is
+the route to use for anything that could be exploited.
 
 The form is here, without navigating:
 
@@ -29,9 +28,9 @@ Within thirty days you get either an assessment, which says whether it is
 accepted, what its scope is and what the fix looks like, or an explanation of why
 it is taking longer.
 
-This is one maintainer working on a small plugin. There is no on-call rotation
-and no shorter number that would be true. If a report is urgent and quiet, say so
-in it, and it is read sooner rather than differently.
+I work on this plugin alone. There is no on-call rotation and no shorter number
+that would be true. If a report is urgent and quiet, say so in it, and it is
+read sooner rather than differently.
 
 If you would like credit for the finding, say so and you will be named in the
 change that fixes it. If you would rather not be named, that is the default.
