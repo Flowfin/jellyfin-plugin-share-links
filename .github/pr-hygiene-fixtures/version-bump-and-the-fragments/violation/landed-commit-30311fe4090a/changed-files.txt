@@ -1,0 +1,8 @@
+Directory.Build.props
+Jellyfin.Plugin.ShareLinks.Tests/PackagingMetadataTests.cs
+Jellyfin.Plugin.ShareLinks.Tests/VersionTests.cs
+Jellyfin.Plugin.ShareLinks.Tests/packages.lock.json
+build.yaml
+docs/RELEASING.md
+docs/limits.md
+docs/versioning.md

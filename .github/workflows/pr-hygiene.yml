@@ -21,6 +21,8 @@
 #   WARN, annotation only:
 #     * the diff is large, 400 changed lines or more, generated files excluded
 #     * plugin code changed with no matching change under the test project
+#     * `version` is raised in build.yaml and no fragment under changelog.d
+#       moves with it (#326)
 #
 # THE ISSUE-REFERENCE CHECK is skipped for bots and for authors from outside this
 # repository, and the two skips have different reasons. A bot cannot know the
@@ -36,8 +38,9 @@
 # already written. What it prevents is a tracker action taken against what the
 # text says, and the tracker takes that action whoever wrote the text.
 #
-# Two checks in the original are deliberately NOT here, and neither is an
-# oversight.
+# ONE check in the original is deliberately NOT here, and it is not an oversight.
+# THIS PARAGRAPH SAID THERE WERE TWO, and the second of them has arrived, at the
+# warning tier, five lines further down this file.
 #
 # The original also requires every commit subject to carry a bracketed issue
 # reference, `[#N]`. This repository has never used that convention: no commit on
@@ -46,25 +49,22 @@
 # merged. Importing a commit-message convention is a decision about how this
 # board writes commits, not a hygiene check, and it is not made here.
 #
-# The original also requires a `version:` bump in build.yaml to touch
-# CHANGELOG.md. THIS PARAGRAPH SAID THERE WAS NO RELEASE PROCESS HERE AND NO
-# CHANGELOG, AND BOTH HALVES HAVE MOVED. `docs/versioning.md` was already in the
-# tree when this was written and `docs/RELEASING.md` landed two days after it, so
-# what #89 still owes is a rehearsal and a first release rather than a written
-# process. And the changelog came back in a shape the sentence could not
-# recognise: `changelog.d`, whose fragments are assembled into the GitHub release
-# for the tag. There is no CHANGELOG.md and #89 decided there will not be one, so
-# the condition written here - that the check returns when the changelog does -
-# has been met by a file this sentence would have waited past forever.
+# THE VERSION-AND-CHANGELOG CHECK IS BACK, IN THIS BOARD'S OWN SHAPE. The
+# original requires a `version:` bump in build.yaml to touch CHANGELOG.md. There
+# is no CHANGELOG.md here and #89 decided there will not be one: the notes an
+# operator reads are assembled from `changelog.d` into the release for the tag,
+# so the check could never come back in the shape it was left in, and the
+# condition written beside it - that it returns when the changelog does - had
+# been met by a file that sentence would have waited past forever.
 #
-# WHAT IS STILL ABSENT IS THE CHECK, AND WHETHER IT RETURNS IS #326. The reason
-# it was left out stands as a reason for the day it was written - a check whose
-# subject does not exist passes every run and reads exactly like one that is
-# working - and it is no longer the reason it is absent today. Its subject now
-# exists: `docs/RELEASING.md` asks that the version be raised and the fragments
-# that went into it be deleted in the same change. Importing that as a gate is a
-# decision about how this board judges pull requests rather than a hygiene fix,
-# which is why it is an issue and not a line added here.
+# What it judges here is what `docs/RELEASING.md` already asks for: the change
+# that raises `version` in build.yaml deletes the fragments that went into that
+# version. #326 decided the tier, and it is WARN because the population is empty
+# - no version has been raised on this board since the first, so its first firing
+# would otherwise be on the first release, which is the worst moment to find out
+# that a new gate has an edge nobody anticipated. What promotes it to FAIL is
+# written in the check's own header rather than here, so that the promise is read
+# by whoever next opens the check.
 name: PR Hygiene
 
 on:
@@ -144,6 +144,48 @@ jobs:
                 "The refusal below names one of those files, so a hit in " +
                 "pull-request-body.md is in the body and a hit in commit-<sha>.msg " +
                 "is in that commit's message.",
+            );
+
+      - name: Write out the change this pull request proposes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const dir = path.join(process.env.RUNNER_TEMP, "pull-request-change");
+            fs.mkdirSync(dir, { recursive: true });
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            fs.writeFileSync(
+              path.join(dir, "changed-files.txt"),
+              files.map((f) => f.filename).join("\n") + "\n",
+            );
+
+            // The diff of one file, and only because the check has to tell a
+            // raised `version` from a build.yaml touched for something else.
+            // The forge omits `patch` for a file it considers too large or not
+            // text, and a missing diff is NOT the convention being satisfied -
+            // so that case is written out as its own marker and the check says
+            // it could not judge rather than reading clean.
+            const buildYaml = files.find((f) => f.filename === "build.yaml");
+            if (buildYaml) {
+              if (typeof buildYaml.patch === "string") {
+                fs.writeFileSync(path.join(dir, "build.yaml.patch"), buildYaml.patch);
+              } else {
+                fs.writeFileSync(path.join(dir, "build.yaml.patch-missing"), "");
+              }
+            }
+
+            core.info(
+              `Wrote ${files.length} changed path(s) to ${dir}` +
+                (buildYaml ? ", with the diff of build.yaml beside them." : "."),
             );
 
       - name: Run PR-hygiene checks
@@ -258,6 +300,25 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/refuse-a-negated-closing-keyword.sh             "$RUNNER_TEMP"/pull-request-text/*
+
+      - name: Warn about a version bump that moves no release-note fragment
+        # WARN tier (#326), so this annotates and never reds for the convention.
+        # It does red when it could not judge - handed no change to read, it
+        # fails closed rather than reporting a clean run over nothing.
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/warn-on-a-version-bump-that-moves-no-fragment.sh "$RUNNER_TEMP/pull-request-change"
+
+      - name: Prove that the version-bump warning fires, and stays at its tier
+        # The step above is at WARN, so it exits 0 whatever it finds. A version
+        # of it that had stopped matching would go green in exactly the same way,
+        # and would keep doing so until the first release - the one run where
+        # finding out costs something. So the warning is watched firing on the
+        # change that landed here, the near misses are watched staying quiet, and
+        # the tier itself is asserted rather than described.
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/prove-the-version-bump-warning-bites.sh
 
       - name: Prove that refusal bites, on the text that got past every check before it
         # The step above going green means this body and these messages are
