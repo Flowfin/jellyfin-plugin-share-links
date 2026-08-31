@@ -119,7 +119,8 @@
                             <tbody id="ShareLinksCredentialRows"></tbody>
                         </table>
 
-                        <p>Each guest signs in on the server's own sign-in page with the name and credential beside it, and then opens the link. A guest who opens the link before signing in is sent to the sign-in page and opens the link again afterwards; nothing here carries the destination across.</p>
+                        <p>Each guest signs in on the server's own sign-in page with the name and credential beside it, and then opens the link.</p>
+                        <p><strong>Opening the link in a browser does not work yet, and this page used to say that it did.</strong> It said a guest who opens the link before signing in is sent to the sign-in page and opens it again afterwards. Driven against a real Jellyfin with the packaged plugin installed, neither half happens: the link answers <code>401</code> and a blank page before the guest signs in, and answers <code>401</code> again after they have. A browser attaches no identity to a top level navigation, because the web client keeps its access token in its own storage rather than in a cookie. Issue #269 carries that run and the answer chosen for it, and nothing in this plugin does it yet.</p>
                     </div>
 
                     <h2>Shares</h2>
