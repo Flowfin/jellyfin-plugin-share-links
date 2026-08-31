@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using SharpFuzz;
 
 namespace Jellyfin.Plugin.ShareLinks.Fuzz;
@@ -56,15 +57,16 @@ public static class Program
         Directory.CreateDirectory(directory);
         var seeds = ShareTokenCorpus.Seeds();
 
-        foreach (var stale in Directory.GetFiles(directory))
+        var stale = Directory
+            .GetFiles(directory)
+            .Where(file => !seeds.ContainsKey(Path.GetFileName(file)));
+
+        foreach (var file in stale)
         {
-            if (!seeds.ContainsKey(Path.GetFileName(stale)))
-            {
-                File.Delete(stale);
-                Console.WriteLine(
-                    FormattableString.Invariant(
-                        $"removed {Path.GetFileName(stale)}, which the derivation no longer produces"));
-            }
+            File.Delete(file);
+            Console.WriteLine(
+                FormattableString.Invariant(
+                    $"removed {Path.GetFileName(file)}, which the derivation no longer produces"));
         }
 
         foreach (var (name, bytes) in seeds)
