@@ -1,0 +1,24 @@
+diff --git a/build.yaml b/build.yaml
+index 04763d3..b0c5723 100644
+--- a/build.yaml
++++ b/build.yaml
+@@ -2,11 +2,14 @@
+ name: "Share Links"
+ guid: "a3703f07-f83d-49a0-a09f-50b890a2baac"
+ imageUrl: "https://raw.githubusercontent.com/Flowfin/jellyfin-plugin-share-links/master/img/logo.png"
+-# 0.0.0.0 is reserved and no release carries it, so a package built from the tree
+-# without a version on the command line is recognisable as one that did not come
+-# from the release process. docs/versioning.md is where that is argued, and
+-# Directory.Build.props holds the same number for the assembly.
+-version: "0.0.0.0"
++# The version a release carries, and the only place it is written. The tag gate in
++# .github/workflows/publish.yaml refuses a tag whose numeric part is not this
++# value, and Directory.Build.props reads this field for AssemblyVersion,
++# FileVersion and Version, so the number in the catalogue entry and the number
++# inside the DLL cannot be different numbers. docs/versioning.md carries what that
++# gave up: 0.0.0.0 used to be reserved for a build the release process did not
++# make, and no number does that job any more.
++version: "0.1.0.0"
+ # The oldest server line this plugin claims to load on. Directory.Build.props
+ # compiles against a newer 10.11.x, and the abi-floor job builds against this
+ # number as well, so every API the plugin calls is proven to exist here too.

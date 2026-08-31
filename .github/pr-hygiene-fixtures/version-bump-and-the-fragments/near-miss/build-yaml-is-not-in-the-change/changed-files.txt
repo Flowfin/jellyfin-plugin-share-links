@@ -1,0 +1,2 @@
+Jellyfin.Plugin.ShareLinks/ShareTokens.cs
+Jellyfin.Plugin.ShareLinks.Tests/ShareTokensTests.cs

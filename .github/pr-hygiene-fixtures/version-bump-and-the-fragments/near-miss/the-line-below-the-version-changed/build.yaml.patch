@@ -1,0 +1,8 @@
+@@ -10,7 +10,7 @@ category: "General"
+ owner: "Flowfin"
+ imageUrl: "https://raw.githubusercontent.com/Flowfin/jellyfin-plugin-share-links/master/img/logo.png"
+ version: "0.1.0.0"
+ changelog: ""
+-targetAbi: "10.11.9.0"
++targetAbi: "10.11.11.0"
+ framework: "net8.0"

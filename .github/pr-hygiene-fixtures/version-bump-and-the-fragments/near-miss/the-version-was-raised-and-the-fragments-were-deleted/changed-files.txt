@@ -1,0 +1,3 @@
+build.yaml
+changelog.d/136.added.md
+Jellyfin.Plugin.ShareLinks.Tests/packages.lock.json
