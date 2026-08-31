@@ -74,30 +74,33 @@ jobs:
           # are not in the tree, nobody can change them, and the source
           # generator that writes them does not follow these rules.
           #
-          # The test and fuzz projects are dropped from the analysis too (#333).
-          # Every rule stays ON, and stays on for the plugin, which is where an
-          # unguarded construction has to be reported; what is dropped is the
-          # harness around it, which is where the findings on this board have
-          # been dismissed by hand rather than fixed. #297 is where that was
-          # read as a set and #333 carries the count.
-          #
-          # Whether this block reaches an analysis that BUILDS the code is the
-          # thing #333 measures rather than assumes, and the plugin's own
-          # alerts surviving is the half that decides it: an exclusion that
-          # silences Jellyfin.Plugin.ShareLinks/ as well is the wrong change
-          # however good the count looks.
+          # THIS BLOCK REACHES NEITHER THE TEST NOR THE FUZZ PROJECT, AND #333
+          # MEASURED THAT RATHER THAN READING IT OUT OF THE DOCUMENTATION. Both
+          # were added here and the analysis went on reporting every one of
+          # their findings, so what the two lines above buy is unmeasured too:
+          # no alert under obj/ or bin/ has ever appeared here, which is
+          # consistent with them working and equally consistent with those
+          # directories producing nothing of these kinds. The reading is on
+          # #333 with the counts.
           config: |
             paths-ignore:
               - "**/obj/**"
               - "**/bin/**"
-              - "Jellyfin.Plugin.ShareLinks.Tests/**"
-              - "Jellyfin.Plugin.ShareLinks.Fuzz/**"
 
       - name: Build
         # Not autobuild. The project has one solution and one command that builds
         # it, and autobuild guessing right today is not a promise about the day a
         # second project lands.
-        run: dotnet build --configuration Release
+        #
+        # ONE PROJECT RATHER THAN THE SOLUTION (#333). CodeQL for a compiled
+        # language extracts what the build compiled, so what is not built is not
+        # analysed - which is the only lever that narrows this analysis to the
+        # plugin, the config block above having been measured not to. Every rule
+        # stays on and stays on for the plugin, which is where an unguarded
+        # construction has to be reported. WHAT IT COSTS IS THE TEST AND FUZZ
+        # PROJECTS BEING READ BY NOTHING, which is a reduction in what this
+        # control covers rather than a filter over what it says.
+        run: dotnet build Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj --configuration Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
