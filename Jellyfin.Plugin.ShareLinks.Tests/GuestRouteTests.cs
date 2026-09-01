@@ -374,7 +374,7 @@ public sealed class GuestRouteTests : IDisposable
     [Fact]
     public void TheGuideRecordsTheRefusalAGuestMeetsInABrowser()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "docs", "operator-guide.md");
+        var path = Path.Join(AppContext.BaseDirectory, "docs", "operator-guide.md");
         Assert.True(File.Exists(path), "docs/operator-guide.md was not copied next to the test assembly: " + path);
 
         var recorded = Regex.Split(File.ReadAllText(path), @"(?<=[.!?])\s+")

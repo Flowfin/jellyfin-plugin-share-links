@@ -51,7 +51,7 @@ public sealed class InteroperabilityMatrixTests
     {
         Assert.Contains(MatrixWorkflow, Releasing(), StringComparison.Ordinal);
 
-        var path = Path.Combine(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
+        var path = Path.Join(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
         Assert.True(File.Exists(path), $"docs/RELEASING.md names {MatrixWorkflow} and it is not in the tree: {path}");
     }
 
@@ -79,7 +79,7 @@ public sealed class InteroperabilityMatrixTests
     {
         Assert.Contains(LimitsPage, Releasing(), StringComparison.Ordinal);
 
-        var path = Path.Combine(AppContext.BaseDirectory, "docs", Path.GetFileName(LimitsPage));
+        var path = Path.Join(AppContext.BaseDirectory, "docs", Path.GetFileName(LimitsPage));
         Assert.True(File.Exists(path), $"docs/RELEASING.md names {LimitsPage} and it is not in the tree: {path}");
     }
 
@@ -120,7 +120,7 @@ public sealed class InteroperabilityMatrixTests
     [InlineData("--user root")]
     public void TheHarnessTakesNoElevatedRights(string elevation)
     {
-        var path = Path.Combine(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
+        var path = Path.Join(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
         Assert.True(File.Exists(path), $"the matrix workflow was not copied next to the test assembly: {path}");
 
         var steps = File.ReadLines(path)
@@ -134,21 +134,21 @@ public sealed class InteroperabilityMatrixTests
 
     private static string Releasing()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "docs", "RELEASING.md");
+        var path = Path.Join(AppContext.BaseDirectory, "docs", "RELEASING.md");
         Assert.True(File.Exists(path), $"RELEASING.md was not copied next to the test assembly: {path}");
         return File.ReadAllText(path);
     }
 
     private static string MatrixWorkflowText()
     {
-        var path = Path.Combine(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
+        var path = Path.Join(WorkflowDirectory(), Path.GetFileName(MatrixWorkflow));
         Assert.True(File.Exists(path), $"the matrix workflow was not copied next to the test assembly: {path}");
         return File.ReadAllText(path);
     }
 
     private static string WorkflowDirectory()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "workflows");
+        var path = Path.Join(AppContext.BaseDirectory, "workflows");
         Assert.True(Directory.Exists(path), $"the workflow files were not copied next to the test assembly: {path}");
         return path;
     }

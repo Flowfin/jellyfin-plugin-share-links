@@ -376,7 +376,7 @@ public sealed class NegativeCapabilityTests
 
     private static string Document(string name)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "docs", name);
+        var path = Path.Join(AppContext.BaseDirectory, "docs", name);
         Assert.True(File.Exists(path), $"{name} was not copied next to the test assembly: {path}");
         return File.ReadAllText(path);
     }

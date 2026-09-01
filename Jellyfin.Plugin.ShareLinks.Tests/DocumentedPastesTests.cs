@@ -61,7 +61,7 @@ public class DocumentedPastesTests
 
         foreach (var (document, at, path, line, text) in pasted)
         {
-            var target = Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
+            var target = Path.Join(root, path.Replace('/', Path.DirectorySeparatorChar));
 
             Assert.True(
                 File.Exists(target),
@@ -116,13 +116,13 @@ public class DocumentedPastesTests
     // because it pastes the same kind of evidence to the same reader.
     private static IReadOnlyList<string> Documents(string root)
     {
-        var directory = Path.Combine(root, "docs");
+        var directory = Path.Join(root, "docs");
         Assert.True(Directory.Exists(directory), $"the docs directory is not under the repository root: {directory}");
 
         var documents = new List<string>(Directory.GetFiles(directory, "*.md"));
         documents.Sort(StringComparer.Ordinal);
 
-        var readme = Path.Combine(root, "README.md");
+        var readme = Path.Join(root, "README.md");
         Assert.True(File.Exists(readme), $"README.md is not at the repository root: {readme}");
         documents.Add(readme);
 
@@ -137,7 +137,7 @@ public class DocumentedPastesTests
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Jellyfin.Plugin.ShareLinks.sln")))
+            if (File.Exists(Path.Join(directory.FullName, "Jellyfin.Plugin.ShareLinks.sln")))
             {
                 return directory.FullName;
             }

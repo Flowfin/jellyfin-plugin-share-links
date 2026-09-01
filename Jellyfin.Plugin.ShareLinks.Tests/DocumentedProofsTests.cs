@@ -112,10 +112,10 @@ public class DocumentedProofsTests
     // because it makes the same kind of claim to the same reader.
     private static IReadOnlyList<string> Documents()
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "docs");
+        var directory = Path.Join(AppContext.BaseDirectory, "docs");
         Assert.True(Directory.Exists(directory), $"the docs directory was not copied next to the test assembly: {directory}");
 
-        var readme = Path.Combine(AppContext.BaseDirectory, "README.md");
+        var readme = Path.Join(AppContext.BaseDirectory, "README.md");
         Assert.True(File.Exists(readme), $"README.md was not copied next to the test assembly: {readme}");
 
         var documents = Directory.GetFiles(directory, "*.md")
