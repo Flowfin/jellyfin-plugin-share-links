@@ -57,7 +57,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
 
     public ShareKeyRotationRouteTests()
     {
-        _directory = Path.Combine(Path.GetTempPath(), "share-links-rotation-" + Guid.NewGuid().ToString("N"));
+        _directory = Path.Join(Path.GetTempPath(), "share-links-rotation-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_directory);
     }
 
@@ -74,9 +74,9 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         }
     }
 
-    private string StorePath => Path.Combine(_directory, PluginServiceRegistrator.StoreFileName);
+    private string StorePath => Path.Join(_directory, PluginServiceRegistrator.StoreFileName);
 
-    private string KeyPath => Path.Combine(_directory, PluginServiceRegistrator.KeyFileName);
+    private string KeyPath => Path.Join(_directory, PluginServiceRegistrator.KeyFileName);
 
     /// <summary>
     /// The whole of what an operator is promised: a link that opened before the
@@ -212,7 +212,7 @@ public sealed class ShareKeyRotationRouteTests : IDisposable
         // A directory standing where the key file goes. The write fails, and the
         // read that would have failed first is never made, because rotation
         // replaces the key rather than reading it.
-        var occupied = Path.Combine(_directory, "occupied");
+        var occupied = Path.Join(_directory, "occupied");
         Directory.CreateDirectory(occupied);
 
         var answer = await Controller(store, new ShareKeyFile(occupied)).RotateKey(CancellationToken.None);

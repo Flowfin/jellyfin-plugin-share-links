@@ -44,7 +44,7 @@ public sealed class PublishAlertDrillTests
     private static readonly Regex StepHeader = new(@"^      - ", RegexOptions.Compiled);
 
     private static string Workflow() =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "workflows", "publish.yaml"))
+        File.ReadAllText(Path.Join(AppContext.BaseDirectory, "workflows", "publish.yaml"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
     /// <summary>

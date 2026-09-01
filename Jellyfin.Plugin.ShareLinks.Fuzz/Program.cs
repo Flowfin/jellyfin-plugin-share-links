@@ -71,7 +71,7 @@ public static class Program
 
         foreach (var (name, bytes) in seeds)
         {
-            File.WriteAllBytes(Path.Combine(directory, name), bytes);
+            File.WriteAllBytes(Path.Join(directory, name), bytes);
             Console.WriteLine(FormattableString.Invariant($"{name}: {bytes.Length} byte(s)"));
         }
 

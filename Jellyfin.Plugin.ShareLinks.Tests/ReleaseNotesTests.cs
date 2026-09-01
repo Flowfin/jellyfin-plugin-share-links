@@ -116,7 +116,7 @@ public sealed class ReleaseNotesTests
         }
 
         Assert.True(
-            File.ReadAllText(Path.Combine(Directory(), name)).Trim().Length > 0,
+            File.ReadAllText(Path.Join(Directory(), name)).Trim().Length > 0,
             $"changelog.d/{name} is empty. An empty fragment is a bullet in the release notes with "
             + "nothing in it, and the fragment exists because somebody had something to say.");
     }
@@ -133,7 +133,7 @@ public sealed class ReleaseNotesTests
     [Fact]
     public void TheKindsTheConventionDocumentsAreTheKindsTheAssemblerAccepts()
     {
-        var documented = DocumentedKinds.Match(File.ReadAllText(Path.Combine(Directory(), "README.md")));
+        var documented = DocumentedKinds.Match(File.ReadAllText(Path.Join(Directory(), "README.md")));
 
         Assert.True(
             documented.Success,
@@ -159,7 +159,7 @@ public sealed class ReleaseNotesTests
     [Fact]
     public void ThePublishRouteReadsTheAssembledNotesAndGeneratesNoOthers()
     {
-        var workflow = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "workflows", "publish.yaml"))
+        var workflow = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "workflows", "publish.yaml"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         // The setting rather than the word. The workflow says in a comment why it
@@ -181,7 +181,7 @@ public sealed class ReleaseNotesTests
         Assert.Contains("assemble-release-notes.sh", workflow, StringComparison.Ordinal);
     }
 
-    private static string Directory() => Path.Combine(AppContext.BaseDirectory, "changelog.d");
+    private static string Directory() => Path.Join(AppContext.BaseDirectory, "changelog.d");
 
     private static IReadOnlyList<string> FragmentNames() =>
         System.IO.Directory.Exists(Directory())
@@ -196,7 +196,7 @@ public sealed class ReleaseNotesTests
 
     private static IReadOnlyList<string> KindsTheAssemblerAccepts()
     {
-        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "scripts", "assemble-release-notes.sh"))
+        var script = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "scripts", "assemble-release-notes.sh"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         var match = AssemblerKinds.Match(script);
 

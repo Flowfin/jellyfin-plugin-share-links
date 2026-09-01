@@ -59,7 +59,7 @@ public class PackagingMetadataTests
         return File.ReadAllText(ManifestPath);
     }
 
-    private static string ReadmePath => Path.Combine(AppContext.BaseDirectory, "README.md");
+    private static string ReadmePath => Path.Join(AppContext.BaseDirectory, "README.md");
 
     // A folded scalar, read as the block of indented lines under the key. The
     // quoted reader below cannot see a field written this way, which is why the

@@ -32,7 +32,7 @@ public sealed class FuzzCorpusTests
 {
     private static string CorpusDirectory()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "corpus");
+        var path = Path.Join(AppContext.BaseDirectory, "corpus");
         Assert.True(Directory.Exists(path), $"the seed corpus was not copied next to the test assembly: {path}");
         return path;
     }
