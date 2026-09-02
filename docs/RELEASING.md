@@ -156,9 +156,17 @@ checked against it:
 gh attestation verify <archive>.zip --repo <owner>/<repository>
 ```
 
-Nothing here writes a plugin catalog. A GitHub release is the whole output. If this
-repository previously published through the Jellyfin meta plugins workflow, that path
-is gone and no catalog is fed until a manifest generator is added.
+Nothing here writes a plugin catalog. A GitHub release is the whole output. The
+catalog is fed by that release anyway, from outside: the generator in `Flowfin/hub`
+reads the finished releases of the plugins declared there, this plugin is one of
+them and is enabled, and its entry appears on the day the first release exists. So
+the tag is what feeds the catalog, and no change in this tree is.
+
+No manifest generator is going to be added here. That was decided on #90 on
+2026-08-29, and the two rows it reaches in `docs/parity-ledger.md`,
+`manifest-freshness.yml` and `regenerate-manifest.yml`, read `Declined` rather than
+deferred. What this route owes the catalog instead is the descriptor beside the
+archive, which is the second of the four assets above.
 
 ## What fails the run
 
