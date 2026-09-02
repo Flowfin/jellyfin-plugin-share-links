@@ -191,11 +191,52 @@ jobs:
         # nothing about the runner's dotnet installation is changed.
         run: dotnet tool install CycloneDX --version "${CYCLONEDX_VERSION}" --tool-path ./.sbom-tools
 
+      - name: Read the line and the version the package will carry
+        id: manifest
+        # Both values come out of build.yaml, which is the one place either is
+        # written: `version` is what Directory.Build.props stamps into the assembly
+        # and what the publish gate refuses a mismatched tag against, and
+        # `framework` is the server line jprm packages. Reading them here rather
+        # than repeating them keeps the bill from being able to disagree with the
+        # package while both look right on their own.
+        #
+        # This is a second reading of that file. `publish.yaml` carries a general
+        # manifest reader for every scalar it needs, and giving both routes one
+        # copy of it is a change to the release route rather than to this job, so
+        # it is not made here. What is read below is two scalars, and each is
+        # refused if it does not come out in the shape it must have.
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^version:[[:space:]]*"([^"]+)".*/\1/p' build.yaml | head -1)"
+          framework="$(sed -nE 's/^framework:[[:space:]]*"([^"]+)".*/\1/p' build.yaml | head -1)"
+          if ! printf '%s' "${version}" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+            echo "::error::build.yaml declares no version this job can read, or one that is not a dotted number: '${version}'."
+            exit 1
+          fi
+          if ! printf '%s' "${framework}" | grep -qE '^net[0-9]+\.[0-9]+$'; then
+            echo "::error::build.yaml declares no framework this job can read, or one that is not a target framework moniker: '${framework}'."
+            exit 1
+          fi
+          echo "build.yaml names version ${version} on ${framework}."
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "framework=${framework}" >> "${GITHUB_OUTPUT}"
+
       - name: Generate the bill of materials
+        # Both flags exist because the defaults describe the project rather than
+        # the package (#341). Without --framework the scan aggregates every target
+        # framework, and the project has carried two server lines since #276, so
+        # the bill named packages of a line no operator can install. Without
+        # --set-version the subject is CycloneDX's own default of 0.0.0, which
+        # matches no artefact this repository has ever built.
+        env:
+          MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+          MANIFEST_FRAMEWORK: ${{ steps.manifest.outputs.framework }}
         run: |
           set -euo pipefail
           ./.sbom-tools/dotnet-CycloneDX \
             Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj \
+            --framework "${MANIFEST_FRAMEWORK}" \
+            --set-version "${MANIFEST_VERSION}" \
             --output ./sbom --output-format Json --filename bom.json
 
       - name: Check the bill of materials lists what it must
@@ -220,6 +261,45 @@ jobs:
           fi
           echo "Components in the bill of materials:"
           grep -o '"bom-ref" *: *"[^"]*"' "$bom" | wc -l
+
+      - name: Refuse a bill that is not the package
+        env:
+          MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/refuse-a-bill-that-is-not-the-package.sh ./sbom/bom.json "${MANIFEST_VERSION}"
+
+      - name: Prove that check refuses one
+        # The step above passing means today's bill is of today's package. It says
+        # nothing about whether a bill of something else would have been caught,
+        # and the same script run over bills nobody generated is what settles that.
+        # Both arms are exercised, because one refusal is reached before the other
+        # and a green first arm hides a second that never runs.
+        env:
+          MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          check=.github/scripts/refuse-a-bill-that-is-not-the-package.sh
+
+          # The subject CycloneDX writes when nothing sets the version.
+          jq '.metadata.component.version = "0.0.0"' ./sbom/bom.json > /tmp/probe-bom-version.json
+          if bash "$check" /tmp/probe-bom-version.json "${MANIFEST_VERSION}" > /tmp/probe-bom-version.log 2>&1; then
+            echo "::error::The check accepted a bill whose subject version is 0.0.0. It is not reading the version."
+            exit 1
+          fi
+          echo "The check refused the default subject version, as it must:"
+          sed 's/^::error:://' /tmp/probe-bom-version.log
+
+          # One package at two versions, which is what aggregating both server
+          # lines produces. The subject is left correct so this arm is reached.
+          jq '.components += [.components[0] | .version = "0.0.0-probe" | ."bom-ref" = "probe"]' \
+            ./sbom/bom.json > /tmp/probe-bom-duplicate.json
+          if bash "$check" /tmp/probe-bom-duplicate.json "${MANIFEST_VERSION}" > /tmp/probe-bom-duplicate.log 2>&1; then
+            echo "::error::The check accepted a bill naming one package at two versions. It is not reading the component list."
+            exit 1
+          fi
+          echo "The check refused a package named twice, as it must:"
+          sed 's/^::error:://' /tmp/probe-bom-duplicate.log
 
       - name: Upload the bill of materials
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
