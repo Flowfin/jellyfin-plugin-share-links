@@ -221,22 +221,66 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "framework=${framework}" >> "${GITHUB_OUTPUT}"
 
-      - name: Generate the bill of materials
-        # Both flags exist because the defaults describe the project rather than
-        # the package (#341). Without --framework the scan aggregates every target
-        # framework, and the project has carried two server lines since #276, so
-        # the bill named packages of a line no operator can install. Without
-        # --set-version the subject is CycloneDX's own default of 0.0.0, which
-        # matches no artefact this repository has ever built.
+      - name: Read the references the project makes for build time only
+        id: buildtime
+        # The analyzers are package references too, and a bill that walks the
+        # project's references names them beside the host packages (#345). No
+        # artefact carries one: the project marks each of them PrivateAssets="All",
+        # which is its own declaration that the reference contributes nothing to
+        # what it builds. That declaration is read here out of MSBuild's evaluation
+        # of the project, so a fourth analyzer added tomorrow is excluded on the
+        # day it is added, and a list typed into this file could not drift against
+        # the csproj. The tool's own --exclude-dev is not used for this, because it
+        # reads a flag each package's publisher set rather than anything this
+        # project declares, and it leaves in a package that only an excluded one
+        # depends on; --exclude-filter removes the named packages and then
+        # everything no shipped reference still reaches.
         env:
-          MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
           MANIFEST_FRAMEWORK: ${{ steps.manifest.outputs.framework }}
         run: |
           set -euo pipefail
+          items="$(dotnet msbuild Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj \
+            -getItem:PackageReference -p:TargetFramework="${MANIFEST_FRAMEWORK}" -nologo)"
+          if ! printf '%s' "${items}" | jq -e '.Items.PackageReference | length > 0' > /dev/null; then
+            echo "::error::MSBuild returned no PackageReference items for the project, so nothing here can say which references are build-time only. Fail closed rather than generate a bill with nothing excluded."
+            exit 1
+          fi
+          echo "The project's package references, with what each declares:"
+          printf '%s' "${items}" | jq -r '.Items.PackageReference[] | "  \(.Identity)\tPrivateAssets=\(.PrivateAssets // "")"'
+          exclude="$(printf '%s' "${items}" \
+            | jq -r '[.Items.PackageReference[] | select((.PrivateAssets // "" | ascii_downcase) == "all") | .Identity] | join(",")')"
+          if [ -z "${exclude}" ]; then
+            echo "No reference is marked build-time only, so nothing is excluded from the bill."
+          else
+            echo "Build-time only, excluded from the bill: ${exclude}"
+          fi
+          echo "exclude=${exclude}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate the bill of materials
+        # Every flag exists because the defaults describe the project rather than
+        # the package (#341, #345). Without --framework the scan aggregates every
+        # target framework, and the project has carried two server lines since
+        # #276, so the bill named packages of a line no operator can install.
+        # Without --set-version the subject is CycloneDX's own default of 0.0.0,
+        # which matches no artefact this repository has ever built. Without
+        # --exclude-filter the bill names the analyzers, which are build-time tools
+        # and reach no archive. The filter is passed only when the step above
+        # found something to exclude, because the tool refuses an empty name.
+        env:
+          MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+          MANIFEST_FRAMEWORK: ${{ steps.manifest.outputs.framework }}
+          BUILD_TIME_ONLY: ${{ steps.buildtime.outputs.exclude }}
+        run: |
+          set -euo pipefail
+          exclude=()
+          if [ -n "${BUILD_TIME_ONLY}" ]; then
+            exclude=(--exclude-filter "${BUILD_TIME_ONLY}")
+          fi
           ./.sbom-tools/dotnet-CycloneDX \
             Jellyfin.Plugin.ShareLinks/Jellyfin.Plugin.ShareLinks.csproj \
             --framework "${MANIFEST_FRAMEWORK}" \
             --set-version "${MANIFEST_VERSION}" \
+            "${exclude[@]}" \
             --output ./sbom --output-format Json --filename bom.json
 
       - name: Check the bill of materials lists what it must
@@ -265,25 +309,27 @@ jobs:
       - name: Refuse a bill that is not the package
         env:
           MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+          BUILD_TIME_ONLY: ${{ steps.buildtime.outputs.exclude }}
         run: |
           set -euo pipefail
-          bash .github/scripts/refuse-a-bill-that-is-not-the-package.sh ./sbom/bom.json "${MANIFEST_VERSION}"
+          bash .github/scripts/refuse-a-bill-that-is-not-the-package.sh ./sbom/bom.json "${MANIFEST_VERSION}" "${BUILD_TIME_ONLY}"
 
       - name: Prove that check refuses one
         # The step above passing means today's bill is of today's package. It says
         # nothing about whether a bill of something else would have been caught,
         # and the same script run over bills nobody generated is what settles that.
-        # Both arms are exercised, because one refusal is reached before the other
-        # and a green first arm hides a second that never runs.
+        # Every arm is exercised, because one refusal is reached before the next
+        # and a green first arm hides a later one that never runs.
         env:
           MANIFEST_VERSION: ${{ steps.manifest.outputs.version }}
+          BUILD_TIME_ONLY: ${{ steps.buildtime.outputs.exclude }}
         run: |
           set -euo pipefail
           check=.github/scripts/refuse-a-bill-that-is-not-the-package.sh
 
           # The subject CycloneDX writes when nothing sets the version.
           jq '.metadata.component.version = "0.0.0"' ./sbom/bom.json > /tmp/probe-bom-version.json
-          if bash "$check" /tmp/probe-bom-version.json "${MANIFEST_VERSION}" > /tmp/probe-bom-version.log 2>&1; then
+          if bash "$check" /tmp/probe-bom-version.json "${MANIFEST_VERSION}" "${BUILD_TIME_ONLY}" > /tmp/probe-bom-version.log 2>&1; then
             echo "::error::The check accepted a bill whose subject version is 0.0.0. It is not reading the version."
             exit 1
           fi
@@ -294,12 +340,37 @@ jobs:
           # lines produces. The subject is left correct so this arm is reached.
           jq '.components += [.components[0] | .version = "0.0.0-probe" | ."bom-ref" = "probe"]' \
             ./sbom/bom.json > /tmp/probe-bom-duplicate.json
-          if bash "$check" /tmp/probe-bom-duplicate.json "${MANIFEST_VERSION}" > /tmp/probe-bom-duplicate.log 2>&1; then
+          if bash "$check" /tmp/probe-bom-duplicate.json "${MANIFEST_VERSION}" "${BUILD_TIME_ONLY}" > /tmp/probe-bom-duplicate.log 2>&1; then
             echo "::error::The check accepted a bill naming one package at two versions. It is not reading the component list."
             exit 1
           fi
           echo "The check refused a package named twice, as it must:"
           sed 's/^::error:://' /tmp/probe-bom-duplicate.log
+
+          # A package the project references for build time only, which is what
+          # the bill named before the filter (#345). The probe carries its own name
+          # and hands the check that name, so this arm is proven whatever the
+          # project references today. The subject and the versions are left
+          # correct so the first two arms let it through to this one.
+          jq '.components += [{"type": "library", "bom-ref": "probe-build-time-only", "name": "Probe.BuildTimeOnly", "version": "1.0.0"}]' \
+            ./sbom/bom.json > /tmp/probe-bom-build-time-only.json
+          if bash "$check" /tmp/probe-bom-build-time-only.json "${MANIFEST_VERSION}" "Probe.BuildTimeOnly" > /tmp/probe-bom-build-time-only.log 2>&1; then
+            echo "::error::The check accepted a bill naming a package the project references for build time only. It is not reading the exclusion list."
+            exit 1
+          fi
+          echo "The check refused a build-time only reference, as it must:"
+          sed 's/^::error:://' /tmp/probe-bom-build-time-only.log
+
+          # The near miss: the same bill, with nothing declared build-time only,
+          # goes through. A check that refused any component it was not expecting
+          # would pass the arm above for the wrong reason, and this is what tells
+          # the two apart.
+          if ! bash "$check" /tmp/probe-bom-build-time-only.json "${MANIFEST_VERSION}" "" > /tmp/probe-bom-neighbour.log 2>&1; then
+            echo "::error::The check refused a bill with nothing declared build-time only. It is refusing more than the list it was handed."
+            sed 's/^::error:://' /tmp/probe-bom-neighbour.log
+            exit 1
+          fi
+          echo "The same bill with an empty list went through, as it must."
 
       - name: Upload the bill of materials
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
