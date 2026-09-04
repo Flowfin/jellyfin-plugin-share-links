@@ -141,11 +141,35 @@ identifier and a new account with the same name is somebody else.
 ## 6. Read the list
 
 The **Shares** section is every share the server holds, including the ones that
-have stopped working, with columns for the item, who was invited, the state, when
-it expires, its ceiling and when it was revoked.
+have stopped working. Its columns, in the order the screen heads them:
+
+- **Item.** The identifier of the item the share names. Nothing here asks the
+  server for a title.
+- **Invited.** The accounts the share resolves for.
+- **State.** Live, expired or revoked.
+- **Expires.** When it stops answering of its own accord.
+- **Ceiling.** The share's own ceiling, which is the number that was typed onto
+  it. It is not what a guest is held to.
+- **In force.** What a guest of it would actually be held to, one line per
+  invited account, with the ceiling that produced the number named beside it.
+- **Revoked.** When somebody stopped it, where somebody did.
+
+The last column carries no heading. It is where the revoke button of section 7
+sits, on a share that is still live.
 
 The state column is the point. A share that expired and a share that was never
 made look the same to somebody who is only told what is live.
+
+The in-force column is the second one to read rather than a repeat of the
+ceiling beside it. A share whose own ceiling is doing nothing and one whose
+ceiling is the one holding are different situations repaired in different
+places, and one number cannot tell them apart. Each of its lines also says
+whether that ceiling can be met for this item, and one of those answers wants an
+operator: **NOTHING CAN BE SERVED** means every version the server offers is
+above the ceiling and none of them can be brought under it, so a guest opening
+that link is refused rather than served at a lower quality. Raise the ceiling,
+or share something the server can serve under it. `docs/bitrate-cap.md` is the
+reference for that column and for the other answers it gives.
 
 The listing carries neither the token nor the hash of it. There is no way to read
 a link back out of this page, which is the same fact as the link being shown
