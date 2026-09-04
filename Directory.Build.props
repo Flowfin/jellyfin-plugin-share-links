@@ -99,7 +99,7 @@
              and that packaging, the abi floor and the readme's supported line
              sentence wait for 12.0.0 to be released. build.yaml still names one
              targetAbi and one framework for that reason. -->
-        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+        <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.9</JellyfinVersion>
         <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
     </PropertyGroup>
 
