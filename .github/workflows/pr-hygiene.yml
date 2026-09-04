@@ -24,19 +24,37 @@
 #     * `version` is raised in build.yaml and no fragment under changelog.d
 #       moves with it (#326)
 #
-# THE ISSUE-REFERENCE CHECK is skipped for bots and for authors from outside this
-# repository, and the two skips have different reasons. A bot cannot know the
-# convention. A person from outside can, but has no way to know which issue
-# number this board expects before they have filed anything, and often no issue
-# exists yet, so failing their contribution on it is a ritual rather than a
-# caught slip. The linkage is still wanted in that case and the check says so on
-# the pull request, where whoever picks the contribution up will read it.
+# THE FAIL TIER APPLIES TO EVERY AUTHOR, AND THIS PARAGRAPH SAID IT WAS SKIPPED
+# FOR AUTHORS FROM OUTSIDE THIS REPOSITORY. What stood here argued that a person
+# from outside has no way to know which issue number this board expects before
+# they have filed anything, and often no issue exists yet, so failing their
+# contribution on it is a ritual rather than a caught slip.
 #
-# THE CLOSING-KEYWORD CHECK IS SKIPPED FOR NOBODY, and that is not an oversight in
-# the paragraph above. Neither reason carries over: the shape needs no convention
-# to be known, and satisfying it costs one rewording of a sentence the author has
-# already written. What it prevents is a tracker action taken against what the
-# text says, and the tracker takes that action whoever wrote the text.
+# That argument did not survive the population it met. The skip keyed on
+# `author_association` as the event payload reports it, and on this board the
+# payload answers COLLABORATOR - outside the set the skip called inside - for the
+# account that opens every pull request here, while the same field read through
+# the pulls API answers MEMBER. So the tier that can red this check was skipped on
+# all four of the most recent pull requests, in a context the ruleset requires,
+# and a required context that cannot fail on the pull requests a board actually
+# receives refuses nothing. Decided on smart-collections#246 on 2026-09-04, for
+# every copy of this workflow, and taken here as #355.
+#
+# THE GUIDANCE THE SKIP CARRIED IS NOT LOST. It moved into the failure message,
+# where an author reads it at the moment it applies rather than as an annotation
+# on a green run: file the issue where none exists yet, and reference that.
+#
+# THE BOT SKIP STAYS, and it is the one reason that never turned on who is inside:
+# a bot cannot know the convention. It now says so on the pull request instead of
+# skipping in silence, so a run that judged nothing does not read like one that
+# judged and found nothing.
+#
+# THE CLOSING-KEYWORD CHECK IS SKIPPED FOR NOBODY, bots included, and that is not
+# an oversight in the paragraphs above. The bot reason does not carry over: the
+# shape needs no convention to be known, and satisfying it costs one rewording of
+# a sentence the author has already written. What it prevents is a tracker action
+# taken against what the text says, and the tracker takes that action whoever
+# wrote the text.
 #
 # ONE check in the original is deliberately NOT here, and it is not an oversight.
 # THIS PARAGRAPH SAID THERE WERE TWO, and the second of them has arrived, at the
@@ -205,20 +223,25 @@ jobs:
             const changed = files.map((f) => f.filename);
             const isBot = pr.user && pr.user.type === "Bot";
 
-            // author_association reports the author's relationship to THIS
-            // repository, so somebody added as a member later stops being exempt
-            // from that moment. COLLABORATOR is deliberately not in the inside
-            // set: the rule asks for member or owner.
-            const INSIDE = ["OWNER", "MEMBER"];
-            const isOutside = !INSIDE.includes(pr.author_association || "NONE");
-            const failTierApplies = !isBot && !isOutside;
-            if (isOutside && !isBot) {
+            // The author's relationship to this repository decides nothing here.
+            // What stood in its place read `author_association` out of the event
+            // payload and skipped the FAIL tier for anybody outside
+            // ["OWNER", "MEMBER"]; the head of this file carries what that cost
+            // and where it was decided (#355). The association is still REPORTED,
+            // because the run that reports it is how the skip was found, and a
+            // reader who wants to know what the payload said should not have to
+            // re-derive it from a merged pull request.
+            const failTierApplies = !isBot;
+            core.info(
+              "The FAIL tier applies to every author. This one reports " +
+                `author_association: ${pr.author_association || "NONE"}, which ` +
+                `changes nothing. Bot: ${isBot ? "yes" : "no"}.`,
+            );
+            if (isBot) {
               warnings.push(
-                "Author is outside this repository " +
-                  `(author_association: ${pr.author_association || "NONE"}), so the ` +
-                  "FAIL-tier checks are skipped. The issue linkage is still wanted: " +
-                  "whoever picks this up supplies the reference, and files the issue " +
-                  "where none exists yet.",
+                "The author is a bot, so the FAIL-tier checks are skipped: a bot " +
+                  "cannot know this board's issue-reference convention. The linkage " +
+                  "is still wanted, and whoever picks this up supplies it.",
               );
             }
 
@@ -233,7 +256,10 @@ jobs:
             if (failTierApplies && !hasIssueRef) {
               failures.push(
                 "The pull request body has no issue reference. Link the issue it " +
-                  "addresses, for example `Closes #123` or `Refs #123`.",
+                  "addresses, for example `Closes #123` or `Refs #123`. Where no " +
+                  "issue exists for this yet, file one and reference that: the " +
+                  "linkage is what a later reader follows back to why the change " +
+                  "was made.",
               );
             }
 
