@@ -138,4 +138,80 @@ public class OperatorGuideTests
 
         Assert.Equal(screen, guide);
     }
+
+    /// <summary>
+    /// Every settings and create field the page labels is named in the guide, in
+    /// the label's own words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One direction only, and deliberately. A field the page labels and the guide
+    /// does not name is a step an operator cannot follow, which is what the first
+    /// clause of #83 is about. The other direction cannot be asserted over the
+    /// same text: the guide bolds section names, a warning value and the
+    /// behaviours that surprise people as well as field labels, so a set
+    /// comparison would refuse the page for not being a document.
+    /// </para>
+    /// <para>
+    /// The buttons are outside this. The page's own words on three of them are
+    /// <c>Save</c>, <c>Create</c> and <c>Copy link</c>, and the guide refers to
+    /// them by what pressing them does rather than by their words, which reads
+    /// better and is not drift. The fourth, the one whose press cannot be undone,
+    /// is quoted in the guide and is judged by nothing here.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheGuideNamesEveryFieldThePageLabels()
+    {
+        var labels = Regex.Matches(Page(), @"label=""([^""]+)""")
+            .Select(match => match.Groups[1].Value.Trim())
+            .Where(label => label.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        // A page that labelled none would agree with the assertion below by having
+        // nothing to disagree with.
+        Assert.NotEmpty(labels);
+
+        var guide = Guide();
+        var missing = labels
+            .Where(label => !guide.Contains("**" + label, StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "the configuration page labels fields docs/operator-guide.md does not name, so an operator following the guide meets a field it never mentions: " + string.Join(", ", missing));
+    }
+
+    /// <summary>
+    /// Every section the page heads is named in the guide, in the page's own
+    /// words, because the guide fixes the frame once by saying that every screen
+    /// it names is a section of that one page.
+    /// </summary>
+    /// <remarks>
+    /// One direction, for the reason given above: the guide has headings of its
+    /// own, and a section it names that the page does not head would be caught by
+    /// a reader rather than by a set comparison over two documents with different
+    /// jobs.
+    /// </remarks>
+    [Fact]
+    public void TheGuideNamesEverySectionThePageHeads()
+    {
+        var sections = Regex.Matches(Page(), @"<h2>([^<]+)</h2>")
+            .Select(match => match.Groups[1].Value.Trim())
+            .Where(heading => heading.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.NotEmpty(sections);
+
+        var guide = Guide();
+        var missing = sections
+            .Where(heading => !guide.Contains("**" + heading + "**", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "the configuration page heads sections docs/operator-guide.md does not name, so the guide sends an operator to a screen it never identifies: " + string.Join(", ", missing));
+    }
 }
