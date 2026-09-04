@@ -32,10 +32,28 @@ The second drives the whole product of the decision's inputs through the route a
 compares what reaches the caller as bytes, which is the part a browser would have
 been watching.
 
-**Replacement, owed.** #83. One run against a clean server, by hand, recorded with
-what was done at each step. The route tests judge what the plugin answers; whether
-an operator following the guide arrives at a working share is an observation and
-not an assertion, and no run on a machine without a server supplies it.
+**Recorded, and not a test.** #236, on 2026-09-04, written down on #83. One run
+against a clean server by hand, step by step: a fresh `jellyfin/jellyfin:10.11.9`
+with no prior state, the wizard completed over the API, one library holding one
+generated film, and the published `share-links_0.1.0.0.zip` unpacked into
+`/config/plugins/`, walked by somebody who did not write the guide. The route
+tests judge what the plugin answers; whether an operator following the guide
+arrives at a working share is an observation and not an assertion, and no run on a
+machine without a server supplies it. This is that observation.
+
+**Its answer is no, and that is what makes it worth having.** The guide's
+configuration page rendered and did nothing, so sections 1 to 4, 6, 7 and 8 could
+not be followed at all as the page shipped; that is #349. The rest of the walk was
+made with the page's controller pasted into the browser console by hand, which is
+weaker evidence than following the page and is marked as such wherever it is used.
+The walk also found no install step that works, an unlabelled field the guide
+names, `404` where the guide gives no number, account identifiers where the guide
+says names, and two irreversible buttons that ask nothing and answer nothing.
+`docs/operator-guide.md` carries the list at its foot.
+
+Nothing has walked the guide again since #349 was repaired, so what this line
+records is one run against the page as it shipped and not a run against the page
+as it now stands.
 
 **Recorded, and not a test.** #237. The harness drives a real browser at the
 server: the invited guest signs in on the web client's own form, and the link is
