@@ -31,9 +31,16 @@ env:
   DOTNET_VERSION: |
     9.0.316
     10.0.301
+  # One image per server line, because an image carries the runtime of its own
+  # line and no other: the net10.0 leg cannot start in the 9.0 image and its
+  # testhost reports that it must install .NET, which is not a test failing. The
+  # tags match the two SDKs pinned above, so the suite is run under the SDK that
+  # built it.
+  #
   # Pinned by digest, not by tag: what judges one pull request has to be what
   # judges the next, and a tag is a name somebody else can repoint.
-  SDK_IMAGE: "mcr.microsoft.com/dotnet/sdk:9.0.316-noble-amd64@sha256:0ce9e6f0022d9db72e7077f1999fa68f689d7ba75fd548110a816d942295f1d7"
+  SDK_IMAGE_NET9: "mcr.microsoft.com/dotnet/sdk:9.0.316-noble-amd64@sha256:0ce9e6f0022d9db72e7077f1999fa68f689d7ba75fd548110a816d942295f1d7"
+  SDK_IMAGE_NET10: "mcr.microsoft.com/dotnet/sdk:10.0.301-noble-amd64@sha256:493fca072aac81307027cbb7b7c9a82b6e87d222af315504d05dc6530e69b519"
   DOTNET_NOLOGO: "true"
   DOTNET_CLI_TELEMETRY_OPTOUT: "true"
 
@@ -67,6 +74,13 @@ jobs:
         # suite that quietly relied on either pass here and fail everywhere the
         # rule is real. Each leg has to FAIL inside the container, and a leg that
         # succeeds reds this job before a single test runs.
+        #
+        # Proved in EVERY image the suite is then run in, rather than in one of
+        # them. The conditions come from the docker flags rather than from the
+        # image, so proving them in one image and running in another would very
+        # nearly hold, and "very nearly" is what this step exists to refuse: a
+        # second image is a second base, with its own users, its own setuid bits
+        # and its own behaviour under --cap-drop.
         run: |
           set -euo pipefail
           run_probe() {
@@ -74,27 +88,31 @@ jobs:
               --cap-drop ALL --security-opt no-new-privileges \
               -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
               --entrypoint /bin/bash \
-              "$SDK_IMAGE" -c "$1"
+              "$1" -c "$2"
           }
 
-          if run_probe 'timeout 10 bash -c "exec 3<>/dev/tcp/1.1.1.1/443"' 2>/dev/null; then
-            echo "::error::A TCP connection succeeded out of a --network none container. The offline condition is not in force, so the run below would prove nothing."
-            exit 1
-          fi
-          echo "ok  no route out of the container"
+          for image in "$SDK_IMAGE_NET9" "$SDK_IMAGE_NET10"; do
+            echo "--- ${image%%@*}"
 
-          uid=$(run_probe 'id -u')
-          if [ "$uid" = "0" ]; then
-            echo "::error::The container runs as uid 0. The unprivileged condition is not in force."
-            exit 1
-          fi
-          echo "ok  container uid is ${uid}, not 0"
+            if run_probe "$image" 'timeout 10 bash -c "exec 3<>/dev/tcp/1.1.1.1/443"' 2>/dev/null; then
+              echo "::error::A TCP connection succeeded out of a --network none container (${image%%@*}). The offline condition is not in force, so the run below would prove nothing."
+              exit 1
+            fi
+            echo "ok  no route out of the container"
 
-          if run_probe 'touch /proof-of-root' 2>/dev/null; then
-            echo "::error::A write to a root-owned path succeeded. The unprivileged condition is not in force."
-            exit 1
-          fi
-          echo "ok  a root-owned path refuses a write"
+            uid=$(run_probe "$image" 'id -u')
+            if [ "$uid" = "0" ]; then
+              echo "::error::The container runs as uid 0 (${image%%@*}). The unprivileged condition is not in force."
+              exit 1
+            fi
+            echo "ok  container uid is ${uid}, not 0"
+
+            if run_probe "$image" 'touch /proof-of-root' 2>/dev/null; then
+              echo "::error::A write to a root-owned path succeeded (${image%%@*}). The unprivileged condition is not in force."
+              exit 1
+            fi
+            echo "ok  a root-owned path refuses a write"
+          done
 
       - name: Run the suite offline as an unprivileged user
         # The workspace and the package cache are mounted at their own paths so
@@ -102,41 +120,61 @@ jobs:
         # cache is read-only: --no-build must not restore, and if it tries, this
         # is where that is noticed rather than in a release.
         #
-        # -f net9.0, and this is a real bound rather than a detail (#181). The image
-        # above carries one runtime, so the net10.0 leg cannot start in it and its
-        # testhost reports that it must install .NET. What is proved offline and
-        # unprivileged is therefore the line that is packaged. The two legs run the
-        # same test code, so the property this job is about does not differ between
-        # them, but it is measured on one of them and the other is not covered here.
+        # ONE RUN PER SERVER LINE, each in the image that carries that line's
+        # runtime (#181, #73). THIS PARAGRAPH SAID THE NET10.0 LEG COULD NOT BE
+        # COVERED HERE, and that was a fact about the single image this job used
+        # rather than about the leg: the 9.0 image has no .NET 10 runtime, so the
+        # net10.0 testhost reported that it must install one, which is not a test
+        # failing. With an image per line both legs start, and what is proved
+        # offline and unprivileged is the whole of what the tree compiles rather
+        # than the packaged line alone.
+        #
+        # The two legs run the same test code, so this job's property does not
+        # differ between them. That is the reason a reader might think one leg
+        # sufficed, and it is not one: the property is about the RUNTIME the tests
+        # execute under - which files it opens, which sockets it wants, which
+        # capabilities it expects - and that is exactly what differs between an
+        # image carrying .NET 9 and one carrying .NET 10.
         run: |
           set -euo pipefail
-          docker run --rm \
-            --network none \
-            --user "$(id -u):$(id -g)" \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            -e HOME=/tmp \
-            -e DOTNET_CLI_HOME=/tmp \
-            -e DOTNET_NOLOGO=1 \
-            -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-            -v "$PWD":"$PWD" \
-            -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
-            -w "$PWD" \
-            "$SDK_IMAGE" \
-            dotnet test --configuration Release --no-build --verbosity normal -f net9.0 | tee headless-output.txt
+          run_offline() {
+            docker run --rm \
+              --network none \
+              --user "$(id -u):$(id -g)" \
+              --cap-drop ALL \
+              --security-opt no-new-privileges \
+              -e HOME=/tmp \
+              -e DOTNET_CLI_HOME=/tmp \
+              -e DOTNET_NOLOGO=1 \
+              -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+              -v "$PWD":"$PWD" \
+              -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
+              -w "$PWD" \
+              "$1" \
+              dotnet test --configuration Release --no-build --verbosity normal -f "$2"
+          }
+
+          run_offline "$SDK_IMAGE_NET9" net9.0 | tee headless-net9.0.txt
+          run_offline "$SDK_IMAGE_NET10" net10.0 | tee headless-net10.0.txt
 
       - name: Report the number of tests run
         # A suite that runs nothing reports success, which looks exactly like a
         # suite that ran and passed - and under these conditions a suite that
         # failed to start is the likeliest way to get there.
+        #
+        # Counted per line. A leg whose testhost never started prints no summary
+        # and reds here by name, so "both lines ran" cannot be satisfied by one
+        # leg running twice or by the other quietly producing nothing.
         run: |
           set -euo pipefail
-          if ! total=$(grep -oE '^Total tests: [0-9]+' headless-output.txt | tail -1 | grep -oE '[0-9]+'); then
-            echo "::error::dotnet test printed no 'Total tests:' summary, so the number of tests run offline is unknown."
-            exit 1
-          fi
-          echo "Total tests run offline and unprivileged: ${total}"
-          if [ "$total" -eq 0 ]; then
-            echo "::error::The offline run executed 0 tests. A green check over an empty set is not a passing suite."
-            exit 1
-          fi
+          for line in net9.0 net10.0; do
+            if ! total=$(grep -oE '^Total tests: [0-9]+' "headless-${line}.txt" | tail -1 | grep -oE '[0-9]+'); then
+              echo "::error::dotnet test printed no 'Total tests:' summary for ${line}, so the number of tests run offline on that line is unknown."
+              exit 1
+            fi
+            echo "Total tests run offline and unprivileged on ${line}: ${total}"
+            if [ "$total" -eq 0 ]; then
+              echo "::error::The offline run executed 0 tests on ${line}. A green check over an empty set is not a passing suite."
+              exit 1
+            fi
+          done
