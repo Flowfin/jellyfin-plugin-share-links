@@ -373,4 +373,41 @@ fi
 
 OBSERVE_BASE="$base"   OBSERVE_LINK="$link"   OBSERVE_GUEST="$guest"   OBSERVE_CREDENTIAL="$guest_password"   OBSERVE_ITEM="$item"   OBSERVE_OTHER_ITEM="$other"   node "$browser/observe-in-a-browser.mjs"
 
+say "OBSERVATION 6: the configuration page opened in a real browser (#349)"
+# The page an operator does everything on, opened the way an operator opens it.
+# Every test in the suite that reads this page reads its TEXT and compares it
+# with the compiled assembly, and all of them were green on the day the page
+# rendered with eight blank fields and inert buttons, because none of them runs
+# it in a client. #349 is that defect and the shape it came from is refused now;
+# what no shape test can say is whether the page an operator opens carries the
+# server's values, and that is what this asks.
+#
+# The configuration handed to the browser is read from the server here rather
+# than assembled, so what the fields are compared against is the server's own
+# answer and not a second construction of it.
+status=$(call GET "/Plugins/$plugin/Configuration" operator "$token")
+[ "$status" = "200" ] || fail "the configuration could not be read before the page was opened: $status $(body)"
+configuration_now=$(body)
+echo "the server holds: $configuration_now"
+
+# A value the page will be made to change, chosen because it is a number the
+# server keeps as it is typed and because it is not one any observation above
+# rests on. It must differ from what is held, or a Save that wrote nothing would
+# read back as a Save that worked.
+save_setting="MaxLiveSharesPerItem"
+save_value=$(printf '%s' "$configuration_now" | jq -r --arg key "$save_setting" '(.[$key] // 0) + 1')
+echo "the page will be made to save $save_setting=$save_value"
+
+OBSERVE_BASE="$base"   OBSERVE_OPERATOR="$operator"   OBSERVE_OPERATOR_CREDENTIAL="$password"   OBSERVE_PLUGIN="$plugin"   OBSERVE_CONFIGURATION="$configuration_now"   OBSERVE_SAVE_SETTING="$save_setting"   OBSERVE_SAVE_VALUE="$save_value"   node "$browser/observe-the-configuration-page.mjs"
+
+# The other half of the Done-when, and it is asked of the API rather than of the
+# page. A page that reported a save it never made would pass its own leg and fail
+# here, which is the whole reason the read-back is not left to the browser.
+status=$(call GET "/Plugins/$plugin/Configuration" operator "$token")
+[ "$status" = "200" ] || fail "the configuration could not be read after the page saved: $status $(body)"
+echo "the API reads back: $(body)"
+body | jq -e --arg key "$save_setting" --argjson want "$save_value" '.[$key] == $want' >/dev/null ||
+  fail "the page's Save did not reach the record: the API still answers $(body | jq -c --arg key "$save_setting" '.[$key]') for $save_setting rather than $save_value"
+echo "OK: a value typed on the page and saved with the page's own button is the value the API reads back"
+
 say "every observation this script makes was made"
