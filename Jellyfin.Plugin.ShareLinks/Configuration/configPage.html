@@ -172,368 +172,387 @@
                     <p>The in-force column is read at the instant the listing was, in the same way the state column is. The ceiling a guest actually meets is worked out again when they ask to play something, out of the same three values as they stand then, so a value somebody moves in between is a disagreement between this page and the server rather than a fault in either.</p>
                 </div>
             </div>
-        </div>
+            <!--
+            The controller below is inline and is A CHILD OF THIS PAGE ELEMENT, whose
+            closing tag now sits after it rather than before it. That placement is the
+            whole of what makes the controller run. The web client mounts the element
+            carrying data-role="page" and inserts nothing else, so a script sitting
+            after that element's closing tag never enters the document, and the page
+            renders with every field blank and every button inert.
 
-        <script type="text/javascript">
-            (function () {
-                "use strict";
+            That is what #349 measured, on 10.11.9 and on 10.11.11, with the published
+            0.1.0.0 archive: zero scripts in the document and zero of eight fields
+            filled, against nine sibling boards that close their script one line before
+            their page element and whose fields fill.
 
-                // The plugin's own identifier, and the routes it serves to an
-                // administrator. All of them are compared against the compiled assembly by
-                // ConfigurationPageTests, so a renamed route or a changed identifier reds
-                // the suite rather than leaving a page that asks the server for something
-                // that is not there.
-                var pluginId = "a3703f07-f83d-49a0-a09f-50b890a2baac";
-                var createShare = "ShareLinks/Shares";
-                var listShares = "ShareLinks/Shares";
-                var revokeShare = "ShareLinks/Shares/{shareId}/Revoke";
-                var rotateKey = "ShareLinks/Key/Rotate";
+            The other shape the client accepts is a registered .js configuration page
+            named by data-controller on this element, which the SSO plugin's page uses.
+            This page takes the inline one.
+            ConfigurationPageTests.TheControllerRunsWhereTheClientWillRunIt refuses a
+            page carrying neither.
+        -->
 
-                var page = document.querySelector("#ShareLinksConfigPage");
+            <script type="text/javascript">
+                (function () {
+                    "use strict";
 
-                function settingInputs() {
-                    return Array.prototype.slice.call(page.querySelectorAll("[data-setting]"));
-                }
+                    // The plugin's own identifier, and the routes it serves to an
+                    // administrator. All of them are compared against the compiled assembly by
+                    // ConfigurationPageTests, so a renamed route or a changed identifier reds
+                    // the suite rather than leaving a page that asks the server for something
+                    // that is not there.
+                    var pluginId = "a3703f07-f83d-49a0-a09f-50b890a2baac";
+                    var createShare = "ShareLinks/Shares";
+                    var listShares = "ShareLinks/Shares";
+                    var revokeShare = "ShareLinks/Shares/{shareId}/Revoke";
+                    var rotateKey = "ShareLinks/Key/Rotate";
 
-                function readInto(configuration) {
-                    settingInputs().forEach(function (input) {
-                        var value = input.value;
+                    var page = document.querySelector("#ShareLinksConfigPage");
 
-                        if (input.type !== "number") {
-                            configuration[input.getAttribute("data-setting")] = value;
-                            return;
+                    function settingInputs() {
+                        return Array.prototype.slice.call(page.querySelectorAll("[data-setting]"));
+                    }
+
+                    function readInto(configuration) {
+                        settingInputs().forEach(function (input) {
+                            var value = input.value;
+
+                            if (input.type !== "number") {
+                                configuration[input.getAttribute("data-setting")] = value;
+                                return;
+                            }
+
+                            // An empty number is the absence of a value rather than a zero.
+                            // Zero is a real answer for retention and a refused one for a
+                            // ceiling, so the two must not be spelled the same way here.
+                            configuration[input.getAttribute("data-setting")] = value === "" ? null : Number(value);
+                        });
+
+                        return configuration;
+                    }
+
+                    function show(configuration) {
+                        settingInputs().forEach(function (input) {
+                            var value = configuration[input.getAttribute("data-setting")];
+                            input.value = value === null || value === undefined ? "" : value;
+                        });
+                    }
+
+                    function text(value) {
+                        return value === null || value === undefined ? "" : String(value);
+                    }
+
+                    function cell(row, value) {
+                        var td = document.createElement("td");
+                        td.textContent = text(value);
+                        row.appendChild(td);
+                        return td;
+                    }
+
+                    // Whether the ceiling beside it can be met for this item (#286).
+                    //
+                    // Three of the five members say something and two say nothing.
+                    // NothingCanBeServed is the one an operator has to act on, and it
+                    // is spelled out rather than named, because the name is this
+                    // tree's vocabulary and the repair is theirs. OnlyByTranscoding is
+                    // a cost rather than a fault, and NotKnown is the absence of an
+                    // answer and must not read as either neighbour.
+                    //
+                    // AVersionIsWithinIt and NoCeilingIsSet write nothing, so the
+                    // column is empty on the ordinary share. A column that spoke on
+                    // every line is a column an operator stops reading, and those two
+                    // would be the lines it said the most reassuring thing on.
+                    function canBeMet(reach) {
+                        if (reach === "NothingCanBeServed") {
+                            return " - NOTHING CAN BE SERVED under this ceiling for this item";
                         }
 
-                        // An empty number is the absence of a value rather than a zero.
-                        // Zero is a real answer for retention and a refused one for a
-                        // ceiling, so the two must not be spelled the same way here.
-                        configuration[input.getAttribute("data-setting")] = value === "" ? null : Number(value);
-                    });
-
-                    return configuration;
-                }
-
-                function show(configuration) {
-                    settingInputs().forEach(function (input) {
-                        var value = configuration[input.getAttribute("data-setting")];
-                        input.value = value === null || value === undefined ? "" : value;
-                    });
-                }
-
-                function text(value) {
-                    return value === null || value === undefined ? "" : String(value);
-                }
-
-                function cell(row, value) {
-                    var td = document.createElement("td");
-                    td.textContent = text(value);
-                    row.appendChild(td);
-                    return td;
-                }
-
-                // Whether the ceiling beside it can be met for this item (#286).
-                //
-                // Three of the five members say something and two say nothing.
-                // NothingCanBeServed is the one an operator has to act on, and it
-                // is spelled out rather than named, because the name is this
-                // tree's vocabulary and the repair is theirs. OnlyByTranscoding is
-                // a cost rather than a fault, and NotKnown is the absence of an
-                // answer and must not read as either neighbour.
-                //
-                // AVersionIsWithinIt and NoCeilingIsSet write nothing, so the
-                // column is empty on the ordinary share. A column that spoke on
-                // every line is a column an operator stops reading, and those two
-                // would be the lines it said the most reassuring thing on.
-                function canBeMet(reach) {
-                    if (reach === "NothingCanBeServed") {
-                        return " - NOTHING CAN BE SERVED under this ceiling for this item";
-                    }
-
-                    if (reach === "NotKnown") {
-                        return " - whether it can be met is not known";
-                    }
-
-                    if (reach === "OnlyByTranscoding") {
-                        return " - met only by transcoding";
-                    }
-
-                    return "";
-                }
-
-                // What each invited account of one share would actually be held
-                // to, as one line each. The number alone is not the answer: the
-                // whole of #64 is that an operator lowered a ceiling and nothing
-                // changed, so the name of whichever ceiling is holding is what
-                // this column is for and it is never dropped.
-                //
-                // An account with no ceiling anywhere and an account this plugin
-                // does not cap at all are different sentences rather than the same
-                // blank, because they are repaired in opposite directions.
-                function ceilingInForce(inForce) {
-                    if (inForce.Reach === "NotAGuestOfThisPlugin") {
-                        return inForce.UserId + ": not an account this plugin made, so it caps nothing";
-                    }
-
-                    if (inForce.Reach !== "Reaches") {
-                        return inForce.UserId + ": no live share of this item, so nothing is in force";
-                    }
-
-                    var cap = inForce.Cap || {};
-                    if (cap.BitsPerSecond === null || cap.BitsPerSecond === undefined) {
-                        return inForce.UserId + ": no ceiling is set anywhere";
-                    }
-
-                    return inForce.UserId + ": " + cap.BitsPerSecond + " (" + cap.Applied + ")" + canBeMet(inForce.CanBeMet);
-                }
-
-                function ceilingsInForce(share) {
-                    return (share.AppliedCeilings || []).map(ceilingInForce).join("; ");
-                }
-
-                function draw(shares) {
-                    var rows = page.querySelector("#ShareLinksShareRows");
-                    rows.textContent = "";
-
-                    shares.forEach(function (share) {
-                        var row = document.createElement("tr");
-
-                        cell(row, share.ItemId);
-                        cell(row, (share.InvitedUserIds || []).join(", "));
-                        cell(row, share.State);
-                        cell(row, share.ExpiresAt);
-                        cell(row, share.MaxBitrateBitsPerSecond);
-                        cell(row, ceilingsInForce(share));
-                        cell(row, share.RevokedAt);
-
-                        var action = cell(row, "");
-                        if (share.State === "Live") {
-                            var button = document.createElement("button");
-                            button.setAttribute("is", "emby-button");
-                            button.setAttribute("type", "button");
-                            button.className = "raised";
-                            button.textContent = "Revoke";
-                            button.addEventListener("click", function () {
-                                revoke(share.Id);
-                            });
-                            action.appendChild(button);
+                        if (reach === "NotKnown") {
+                            return " - whether it can be met is not known";
                         }
 
-                        rows.appendChild(row);
-                    });
+                        if (reach === "OnlyByTranscoding") {
+                            return " - met only by transcoding";
+                        }
 
-                    page.querySelector("#ShareLinksSharesMessage").textContent = shares.length === 0 ? "The server holds no shares." : "";
+                        return "";
+                    }
 
-                    // What the rotation control says before it is pressed is counted off
-                    // the same listing the table was drawn from, rather than being a
-                    // second question asked of the server. An operator is told what
-                    // pressing it would cost against the rows in front of them.
-                    var live = shares.filter(function (share) {
-                        return share.State === "Live";
-                    }).length;
+                    // What each invited account of one share would actually be held
+                    // to, as one line each. The number alone is not the answer: the
+                    // whole of #64 is that an operator lowered a ceiling and nothing
+                    // changed, so the name of whichever ceiling is holding is what
+                    // this column is for and it is never dropped.
+                    //
+                    // An account with no ceiling anywhere and an account this plugin
+                    // does not cap at all are different sentences rather than the same
+                    // blank, because they are repaired in opposite directions.
+                    function ceilingInForce(inForce) {
+                        if (inForce.Reach === "NotAGuestOfThisPlugin") {
+                            return inForce.UserId + ": not an account this plugin made, so it caps nothing";
+                        }
 
-                    page.querySelector("#ShareLinksRotateWarning").textContent = live === 1 ? "One share is live and would stop." : live + " shares are live and would stop.";
-                }
+                        if (inForce.Reach !== "Reaches") {
+                            return inForce.UserId + ": no live share of this item, so nothing is in force";
+                        }
 
-                // What a create answered is held nowhere: it is written into the panel
-                // and forgotten. Clearing it is the whole of "shown once" that this page
-                // can carry, because the other half is the server having nothing to
-                // answer with a second time.
-                function forgetTheCreated() {
-                    page.querySelector("#ShareLinksCreated").hidden = true;
-                    page.querySelector("#ShareLinksCreatedLink").value = "";
-                    page.querySelector("#ShareLinksCredentialRows").textContent = "";
-                }
+                        var cap = inForce.Cap || {};
+                        if (cap.BitsPerSecond === null || cap.BitsPerSecond === undefined) {
+                            return inForce.UserId + ": no ceiling is set anywhere";
+                        }
 
-                function showTheCreated(created) {
-                    page.querySelector("#ShareLinksCreatedLink").value = text(created.Link);
+                        return inForce.UserId + ": " + cap.BitsPerSecond + " (" + cap.Applied + ")" + canBeMet(inForce.CanBeMet);
+                    }
 
-                    var rows = page.querySelector("#ShareLinksCredentialRows");
-                    rows.textContent = "";
+                    function ceilingsInForce(share) {
+                        return (share.AppliedCeilings || []).map(ceilingInForce).join("; ");
+                    }
 
-                    (created.Guests || []).forEach(function (guest) {
-                        var row = document.createElement("tr");
-                        cell(row, guest.Name);
-                        cell(row, guest.Credential);
-                        rows.appendChild(row);
-                    });
+                    function draw(shares) {
+                        var rows = page.querySelector("#ShareLinksShareRows");
+                        rows.textContent = "";
 
-                    page.querySelector("#ShareLinksCreated").hidden = false;
-                }
+                        shares.forEach(function (share) {
+                            var row = document.createElement("tr");
 
-                function theCreateAsked() {
-                    var expiresAt = page.querySelector("#ShareLinksCreateExpiresAt").value;
-                    var ceiling = page.querySelector("#ShareLinksCreateMaxBitrateMbps").value;
+                            cell(row, share.ItemId);
+                            cell(row, (share.InvitedUserIds || []).join(", "));
+                            cell(row, share.State);
+                            cell(row, share.ExpiresAt);
+                            cell(row, share.MaxBitrateBitsPerSecond);
+                            cell(row, ceilingsInForce(share));
+                            cell(row, share.RevokedAt);
 
-                    return {
-                        ItemId: page.querySelector("#ShareLinksCreateItemId").value.trim(),
+                            var action = cell(row, "");
+                            if (share.State === "Live") {
+                                var button = document.createElement("button");
+                                button.setAttribute("is", "emby-button");
+                                button.setAttribute("type", "button");
+                                button.className = "raised";
+                                button.textContent = "Revoke";
+                                button.addEventListener("click", function () {
+                                    revoke(share.Id);
+                                });
+                                action.appendChild(button);
+                            }
 
-                        // One name per line, and a blank line is not a guest. An empty
-                        // name reaches the server as a refusal rather than as an account
-                        // with no name, and dropping it here means the operator is told
-                        // about the names they meant instead.
-                        GuestNames: page
-                            .querySelector("#ShareLinksCreateGuestNames")
-                            .value.split("\n")
-                            .map(function (name) {
-                                return name.trim();
+                            rows.appendChild(row);
+                        });
+
+                        page.querySelector("#ShareLinksSharesMessage").textContent = shares.length === 0 ? "The server holds no shares." : "";
+
+                        // What the rotation control says before it is pressed is counted off
+                        // the same listing the table was drawn from, rather than being a
+                        // second question asked of the server. An operator is told what
+                        // pressing it would cost against the rows in front of them.
+                        var live = shares.filter(function (share) {
+                            return share.State === "Live";
+                        }).length;
+
+                        page.querySelector("#ShareLinksRotateWarning").textContent = live === 1 ? "One share is live and would stop." : live + " shares are live and would stop.";
+                    }
+
+                    // What a create answered is held nowhere: it is written into the panel
+                    // and forgotten. Clearing it is the whole of "shown once" that this page
+                    // can carry, because the other half is the server having nothing to
+                    // answer with a second time.
+                    function forgetTheCreated() {
+                        page.querySelector("#ShareLinksCreated").hidden = true;
+                        page.querySelector("#ShareLinksCreatedLink").value = "";
+                        page.querySelector("#ShareLinksCredentialRows").textContent = "";
+                    }
+
+                    function showTheCreated(created) {
+                        page.querySelector("#ShareLinksCreatedLink").value = text(created.Link);
+
+                        var rows = page.querySelector("#ShareLinksCredentialRows");
+                        rows.textContent = "";
+
+                        (created.Guests || []).forEach(function (guest) {
+                            var row = document.createElement("tr");
+                            cell(row, guest.Name);
+                            cell(row, guest.Credential);
+                            rows.appendChild(row);
+                        });
+
+                        page.querySelector("#ShareLinksCreated").hidden = false;
+                    }
+
+                    function theCreateAsked() {
+                        var expiresAt = page.querySelector("#ShareLinksCreateExpiresAt").value;
+                        var ceiling = page.querySelector("#ShareLinksCreateMaxBitrateMbps").value;
+
+                        return {
+                            ItemId: page.querySelector("#ShareLinksCreateItemId").value.trim(),
+
+                            // One name per line, and a blank line is not a guest. An empty
+                            // name reaches the server as a refusal rather than as an account
+                            // with no name, and dropping it here means the operator is told
+                            // about the names they meant instead.
+                            GuestNames: page
+                                .querySelector("#ShareLinksCreateGuestNames")
+                                .value.split("\n")
+                                .map(function (name) {
+                                    return name.trim();
+                                })
+                                .filter(function (name) {
+                                    return name !== "";
+                                }),
+
+                            // An instant rather than the local text the control holds, so
+                            // what the server is asked for does not depend on where it
+                            // thinks it is.
+                            ExpiresAt: expiresAt === "" ? null : new Date(expiresAt).toISOString(),
+                            MaxBitrateMbps: ceiling === "" ? null : Number(ceiling),
+                        };
+                    }
+
+                    function create() {
+                        // Before the call rather than after it. A create that is refused
+                        // must not leave the previous answer on the screen, where it reads
+                        // as the link of the share that was just refused.
+                        forgetTheCreated();
+                        page.querySelector("#ShareLinksCreateMessage").textContent = "";
+                        Dashboard.showLoadingMsg();
+
+                        return ApiClient.ajax({
+                            type: "POST",
+                            url: ApiClient.getUrl(createShare),
+                            data: JSON.stringify(theCreateAsked()),
+                            contentType: "application/json",
+                            dataType: "json",
+                        })
+                            .then(function (created) {
+                                showTheCreated(created);
+                                return load();
                             })
-                            .filter(function (name) {
-                                return name !== "";
-                            }),
-
-                        // An instant rather than the local text the control holds, so
-                        // what the server is asked for does not depend on where it
-                        // thinks it is.
-                        ExpiresAt: expiresAt === "" ? null : new Date(expiresAt).toISOString(),
-                        MaxBitrateMbps: ceiling === "" ? null : Number(ceiling),
-                    };
-                }
-
-                function create() {
-                    // Before the call rather than after it. A create that is refused
-                    // must not leave the previous answer on the screen, where it reads
-                    // as the link of the share that was just refused.
-                    forgetTheCreated();
-                    page.querySelector("#ShareLinksCreateMessage").textContent = "";
-                    Dashboard.showLoadingMsg();
-
-                    return ApiClient.ajax({
-                        type: "POST",
-                        url: ApiClient.getUrl(createShare),
-                        data: JSON.stringify(theCreateAsked()),
-                        contentType: "application/json",
-                        dataType: "json",
-                    })
-                        .then(function (created) {
-                            showTheCreated(created);
-                            return load();
-                        })
-                        .catch(function () {
-                            page.querySelector("#ShareLinksCreateMessage").textContent = "The share was not created. The server log says why.";
-                        })
-                        .finally(function () {
-                            Dashboard.hideLoadingMsg();
-                        });
-                }
-
-                function load() {
-                    Dashboard.showLoadingMsg();
-
-                    return ApiClient.getJSON(ApiClient.getUrl(listShares))
-                        .then(draw)
-                        .catch(function () {
-                            // An empty table would read as a server with no shares on it,
-                            // which is the one answer that must not stand in for a fault.
-                            page.querySelector("#ShareLinksShareRows").textContent = "";
-                            page.querySelector("#ShareLinksSharesMessage").textContent = "The shares could not be read. The server log says why.";
-                        })
-                        .finally(function () {
-                            Dashboard.hideLoadingMsg();
-                        });
-                }
-
-                function revoke(shareId) {
-                    Dashboard.showLoadingMsg();
-
-                    return ApiClient.ajax({
-                        type: "POST",
-                        url: ApiClient.getUrl(revokeShare.replace("{shareId}", shareId)),
-                    })
-                        .then(load)
-                        .catch(function () {
-                            page.querySelector("#ShareLinksSharesMessage").textContent = "The share was not revoked. The server log says why.";
-                        })
-                        .finally(function () {
-                            Dashboard.hideLoadingMsg();
-                        });
-                }
-
-                function rotate() {
-                    Dashboard.showLoadingMsg();
-                    page.querySelector("#ShareLinksRotateMessage").textContent = "";
-
-                    return ApiClient.ajax({
-                        type: "POST",
-                        url: ApiClient.getUrl(rotateKey),
-                        dataType: "json",
-                    })
-                        .then(function (rotated) {
-                            page.querySelector("#ShareLinksRotateMessage").textContent = "The secret was replaced. Shares stopped: " + text(rotated.SharesStopped) + ".";
-                        })
-                        .catch(function () {
-                            // The half-landed state is a refusal to this call, so what
-                            // reaches here is either it or a store that could not be
-                            // written. The two are told apart by the table rather than by
-                            // a number this page invents: a rotation that got as far as
-                            // the records leaves every row revoked, and one that did not
-                            // leaves them live.
-                            page.querySelector("#ShareLinksRotateMessage").textContent = "The rotation did not finish. The table below is what actually happened to the shares, and the server log says which step failed.";
-                        })
-                        .finally(function () {
-                            // Either way the table is redrawn, because either way it may
-                            // have changed and an operator deciding what to do next reads
-                            // it rather than the sentence above.
-                            load();
-                            Dashboard.hideLoadingMsg();
-                        });
-                }
-
-                page.addEventListener("pageshow", function () {
-                    // Opening the page again is not a second showing of what a create
-                    // answered. The panel starts empty every time.
-                    forgetTheCreated();
-                    Dashboard.showLoadingMsg();
-
-                    ApiClient.getPluginConfiguration(pluginId)
-                        .then(show)
-                        .finally(function () {
-                            Dashboard.hideLoadingMsg();
-                        });
-
-                    load();
-                });
-
-                page.querySelector("#ShareLinksCreateForm").addEventListener("submit", function (event) {
-                    event.preventDefault();
-                    create();
-                    return false;
-                });
-
-                page.querySelector("#ShareLinksRotateKey").addEventListener("click", function () {
-                    rotate();
-                });
-
-                page.querySelector("#ShareLinksCopyLink").addEventListener("click", function () {
-                    var link = page.querySelector("#ShareLinksCreatedLink");
-
-                    // The control selects the text as well as copying it, so an
-                    // operator on a browser that refuses the clipboard is left with the
-                    // link selected rather than with a button that did nothing.
-                    link.select();
-                    link.setSelectionRange(0, link.value.length);
-
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(link.value);
+                            .catch(function () {
+                                page.querySelector("#ShareLinksCreateMessage").textContent = "The share was not created. The server log says why.";
+                            })
+                            .finally(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
                     }
-                });
 
-                page.querySelector("#ShareLinksSettingsForm").addEventListener("submit", function (event) {
-                    event.preventDefault();
+                    function load() {
+                        Dashboard.showLoadingMsg();
 
-                    Dashboard.showLoadingMsg();
+                        return ApiClient.getJSON(ApiClient.getUrl(listShares))
+                            .then(draw)
+                            .catch(function () {
+                                // An empty table would read as a server with no shares on it,
+                                // which is the one answer that must not stand in for a fault.
+                                page.querySelector("#ShareLinksShareRows").textContent = "";
+                                page.querySelector("#ShareLinksSharesMessage").textContent = "The shares could not be read. The server log says why.";
+                            })
+                            .finally(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
+                    }
 
-                    ApiClient.getPluginConfiguration(pluginId)
-                        .then(function (configuration) {
-                            return ApiClient.updatePluginConfiguration(pluginId, readInto(configuration));
+                    function revoke(shareId) {
+                        Dashboard.showLoadingMsg();
+
+                        return ApiClient.ajax({
+                            type: "POST",
+                            url: ApiClient.getUrl(revokeShare.replace("{shareId}", shareId)),
                         })
-                        .then(Dashboard.processPluginConfigurationUpdateResult)
-                        .finally(function () {
-                            Dashboard.hideLoadingMsg();
-                        });
+                            .then(load)
+                            .catch(function () {
+                                page.querySelector("#ShareLinksSharesMessage").textContent = "The share was not revoked. The server log says why.";
+                            })
+                            .finally(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
+                    }
 
-                    return false;
-                });
-            })();
-        </script>
+                    function rotate() {
+                        Dashboard.showLoadingMsg();
+                        page.querySelector("#ShareLinksRotateMessage").textContent = "";
+
+                        return ApiClient.ajax({
+                            type: "POST",
+                            url: ApiClient.getUrl(rotateKey),
+                            dataType: "json",
+                        })
+                            .then(function (rotated) {
+                                page.querySelector("#ShareLinksRotateMessage").textContent = "The secret was replaced. Shares stopped: " + text(rotated.SharesStopped) + ".";
+                            })
+                            .catch(function () {
+                                // The half-landed state is a refusal to this call, so what
+                                // reaches here is either it or a store that could not be
+                                // written. The two are told apart by the table rather than by
+                                // a number this page invents: a rotation that got as far as
+                                // the records leaves every row revoked, and one that did not
+                                // leaves them live.
+                                page.querySelector("#ShareLinksRotateMessage").textContent = "The rotation did not finish. The table below is what actually happened to the shares, and the server log says which step failed.";
+                            })
+                            .finally(function () {
+                                // Either way the table is redrawn, because either way it may
+                                // have changed and an operator deciding what to do next reads
+                                // it rather than the sentence above.
+                                load();
+                                Dashboard.hideLoadingMsg();
+                            });
+                    }
+
+                    page.addEventListener("pageshow", function () {
+                        // Opening the page again is not a second showing of what a create
+                        // answered. The panel starts empty every time.
+                        forgetTheCreated();
+                        Dashboard.showLoadingMsg();
+
+                        ApiClient.getPluginConfiguration(pluginId)
+                            .then(show)
+                            .finally(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
+
+                        load();
+                    });
+
+                    page.querySelector("#ShareLinksCreateForm").addEventListener("submit", function (event) {
+                        event.preventDefault();
+                        create();
+                        return false;
+                    });
+
+                    page.querySelector("#ShareLinksRotateKey").addEventListener("click", function () {
+                        rotate();
+                    });
+
+                    page.querySelector("#ShareLinksCopyLink").addEventListener("click", function () {
+                        var link = page.querySelector("#ShareLinksCreatedLink");
+
+                        // The control selects the text as well as copying it, so an
+                        // operator on a browser that refuses the clipboard is left with the
+                        // link selected rather than with a button that did nothing.
+                        link.select();
+                        link.setSelectionRange(0, link.value.length);
+
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(link.value);
+                        }
+                    });
+
+                    page.querySelector("#ShareLinksSettingsForm").addEventListener("submit", function (event) {
+                        event.preventDefault();
+
+                        Dashboard.showLoadingMsg();
+
+                        ApiClient.getPluginConfiguration(pluginId)
+                            .then(function (configuration) {
+                                return ApiClient.updatePluginConfiguration(pluginId, readInto(configuration));
+                            })
+                            .then(Dashboard.processPluginConfigurationUpdateResult)
+                            .finally(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
+
+                        return false;
+                    });
+                })();
+            </script>
+        </div>
     </body>
 </html>

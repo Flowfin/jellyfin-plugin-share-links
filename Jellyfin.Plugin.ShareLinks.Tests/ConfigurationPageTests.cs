@@ -631,7 +631,11 @@ public class ConfigurationPageTests
         // shown cannot differ.
         var handler = Regex.Match(
             page,
-            @"#ShareLinksCopyLink""\)\.addEventListener\(""click"",\s*function\s*\(\)\s*\{(?<body>.*?)\n                \}\);",
+            // The handler's closing line is matched at whatever depth it sits at. It
+            // was pinned to sixteen spaces, and #349 moved the whole controller one
+            // level deeper by making it a child of the page element, which reddened
+            // this test for a change of indentation rather than of behaviour.
+            @"#ShareLinksCopyLink""\)\.addEventListener\(""click"",\s*function\s*\(\)\s*\{(?<body>.*?)\n[ ]*\}\);",
             RegexOptions.Singleline);
 
         Assert.True(handler.Success, "the copy control has no click handler to read");
@@ -753,6 +757,144 @@ public class ConfigurationPageTests
             .ToList();
 
         Assert.Equal(new[] { "Create" }, carrying);
+    }
+
+    /// <summary>
+    /// The controller reaches the document the client builds, in one of the two
+    /// shapes the client will run: an inline script that is a descendant of the page
+    /// element, or a registered <c>.js</c> configuration page named by
+    /// <c>data-controller</c> on that element.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the one thing about this page the rest of the file cannot see. Every
+    /// other test here reads the controller's TEXT and compares it with the assembly,
+    /// so a page whose script is never inserted into the document passes all of them
+    /// while every field stays blank and every button stays inert. That is what #349
+    /// measured, on <c>jellyfin/jellyfin:10.11.9</c> and on <c>10.11.11</c>, with the
+    /// published 0.1.0.0 archive: zero scripts in the document and zero of eight
+    /// fields filled, against nine sibling boards whose scripts close one line before
+    /// their page element does and whose fields fill.
+    /// </para>
+    /// <para>
+    /// The client mounts the element carrying <c>data-role="page"</c> and inserts
+    /// nothing else, so what decides it is whether the script is INSIDE that element.
+    /// Nothing here runs a client, and no claim is made about one: this is a claim
+    /// about where the tag sits in the shipped bytes, which is the half that went
+    /// wrong.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheControllerRunsWhereTheClientWillRunIt()
+    {
+        var page = Page();
+        var element = ThePageElement(page);
+
+        var controller = Regex.Match(page, @"data-controller=""(?<name>[^""]+)""");
+        if (controller.Success && controller.Index < element.End)
+        {
+            // The other shape the client accepts. The name has to be one the server
+            // will actually serve, or the element points at nothing.
+            var named = controller.Groups["name"].Value.Split('/')[^1];
+            var paths = new Mock<IApplicationPaths>();
+            paths.SetReturnsDefault(Path.GetTempPath());
+
+            Assert.Contains(
+                new Plugin(paths.Object, Mock.Of<IXmlSerializer>()).GetPages().Select(served => served.Name + ".js"),
+                offered => string.Equals(offered, named, StringComparison.Ordinal));
+            return;
+        }
+
+        var scripts = ScriptElements(page);
+
+        // A page carrying no controller at all would satisfy "every script is inside
+        // the element" by having none, which is how this passes on the day somebody
+        // deletes the script instead of moving it.
+        Assert.NotEmpty(scripts);
+
+        foreach (var script in scripts)
+        {
+            Assert.True(
+                script.Start > element.Start && script.End <= element.End,
+                FormattableString.Invariant(
+                    $"the script at {script.Start} sits outside the page element ({element.Start}..{element.End}), where the client never runs it"));
+        }
+    }
+
+    // Where the element the client mounts begins and where its own closing tag ends,
+    // found by walking the tags rather than by counting lines, so a page that is
+    // reindented or has a paragraph added moves neither number in a way that matters.
+    private static (int Start, int End) ThePageElement(string page)
+    {
+        var start = page.IndexOf(@"<div id=""ShareLinksConfigPage""", StringComparison.Ordinal);
+        Assert.True(start >= 0, "the page carries no element with data-role=\"page\", so the client mounts nothing");
+
+        var depth = 0;
+        var at = start;
+
+        while (at < page.Length)
+        {
+            if (page.AsSpan(at).StartsWith("<!--", StringComparison.Ordinal))
+            {
+                at = Skip(page, at, "-->");
+            }
+            else if (page.AsSpan(at).StartsWith("<script", StringComparison.Ordinal))
+            {
+                at = Skip(page, at, "</script>");
+            }
+            else if (page.AsSpan(at).StartsWith("</div>", StringComparison.Ordinal))
+            {
+                depth--;
+                at += "</div>".Length;
+                if (depth == 0)
+                {
+                    return (start, at);
+                }
+            }
+            else if (page.AsSpan(at).StartsWith("<div", StringComparison.Ordinal))
+            {
+                depth++;
+                at += "<div".Length;
+            }
+            else
+            {
+                at++;
+            }
+        }
+
+        Assert.Fail("the page element is never closed");
+        return default;
+    }
+
+    // Every script element in the page, as the span its own tags occupy.
+    private static IReadOnlyList<(int Start, int End)> ScriptElements(string page)
+    {
+        var found = new List<(int Start, int End)>();
+
+        for (var at = 0; at < page.Length;)
+        {
+            var opened = page.IndexOf("<script", at, StringComparison.Ordinal);
+            if (opened < 0)
+            {
+                break;
+            }
+
+            var closed = Skip(page, opened, "</script>");
+            found.Add((opened, closed));
+            at = closed;
+        }
+
+        return found;
+    }
+
+    // Just past the next occurrence of a closing sequence. An unterminated one is a
+    // malformed page rather than a pass, so it fails here rather than running off the
+    // end quietly.
+    private static int Skip(string page, int from, string until)
+    {
+        var at = page.IndexOf(until, from, StringComparison.Ordinal);
+        Assert.True(at >= 0, FormattableString.Invariant($"the page never closes what it opened at {from} with {until}"));
+        return at + until.Length;
     }
 
     // What an action answers with, unwrapped through the task and the action result
