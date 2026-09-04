@@ -44,6 +44,20 @@ had a network would let a suite that quietly used one pass:
 If any of those three succeeds, the job reds without running the suite at all,
 because a proving run under conditions that were not in force proves nothing.
 
+**Once per server line, in the image that carries that line's runtime.** The tree
+compiles `net9.0` against 10.11 and `net10.0` against 12.0, so "the suite" is two
+legs, and an image carries the runtime of one line and not the other. The job runs
+each leg in its own pinned image, proves the three conditions in both of them
+rather than in one, and counts the tests each leg reported separately, so a leg
+whose testhost never started reds by name instead of leaving a green check over a
+run that did not happen.
+
+Until #73 that was one leg. What ran was the packaged line, and the other was
+compiled and tested on an ordinary runner but not proved to run offline or
+unprivileged. The two legs run the same test code, which is the reason a reader
+might think one sufficed; it is not one, because what this job is about is the
+runtime the tests execute under rather than the code they execute.
+
 ## The two clauses no run can prove
 
 The display clause and the certificate-store clause are held by the writing and
@@ -55,25 +69,33 @@ this paragraph is the whole of the disclosure.
 
 ## Running it the way the gate does
 
-The gate's command, which needs Docker and a built tree:
+The gate's command, which needs Docker and a built tree. It is two runs, one per
+server line, and each names the image that carries its runtime:
 
     dotnet restore
     dotnet build --configuration Release --no-restore -warnaserror
-    docker run --rm --network none --user "$(id -u):$(id -g)" \
-      --cap-drop ALL --security-opt no-new-privileges \
-      -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
-      -v "$PWD":"$PWD" -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
-      -w "$PWD" \
-      mcr.microsoft.com/dotnet/sdk:9.0.316-noble-amd64 \
-      dotnet test --configuration Release --no-build
+    for line in net9.0:9.0.316 net10.0:10.0.301; do
+      docker run --rm --network none --user "$(id -u):$(id -g)" \
+        --cap-drop ALL --security-opt no-new-privileges \
+        -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
+        -v "$PWD":"$PWD" -v "$HOME/.nuget/packages":"$HOME/.nuget/packages":ro \
+        -w "$PWD" \
+        "mcr.microsoft.com/dotnet/sdk:${line#*:}-noble-amd64" \
+        dotnet test --configuration Release --no-build -f "${line%%:*}"
+    done
 
 The restore and the build are outside the container because a restore is a
 network operation by definition. What has to hold with the network off is the
 test run, and that is what runs inside.
 
-The image is pinned by digest in the workflow rather than by the tag written
-here, for the same reason the SDK version is pinned: what judges one pull request
-has to be what judges the next.
+`-f` is not optional here and dropping it is the mistake to avoid: without it the
+run tries both legs in one image, and the leg whose runtime the image does not
+carry ends with the testhost saying it must install .NET rather than with a test
+failing.
+
+The images are pinned by digest in the workflow rather than by the tags written
+here, for the same reason the SDK versions are pinned: what judges one pull
+request has to be what judges the next.
 
 ## On a machine without Docker
 
