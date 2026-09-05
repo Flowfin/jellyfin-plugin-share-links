@@ -54,7 +54,7 @@ public sealed class LabelVocabularyTests
 
     private static IReadOnlyList<string> WorkflowFiles()
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "workflows");
+        var directory = Path.Join(AppContext.BaseDirectory, "workflows");
         Assert.True(Directory.Exists(directory), $"the workflow files were not copied next to the test assembly: {directory}");
 
         var files = Directory.GetFiles(directory, "*.yml")

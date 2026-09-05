@@ -60,7 +60,7 @@ public sealed class ServerLinePinTests
 
     private static string ReadBesideTheAssembly(string name)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, name);
+        var path = Path.Join(AppContext.BaseDirectory, name);
         Assert.True(File.Exists(path), $"{name} was not copied next to the test assembly: {path}");
         return File.ReadAllText(path);
     }
@@ -83,7 +83,7 @@ public sealed class ServerLinePinTests
     [Fact]
     public void TheDocumentNamesThePinsThePropertyFileHolds()
     {
-        var document = ReadBesideTheAssembly(Path.Combine("docs", "versioning.md"));
+        var document = ReadBesideTheAssembly(Path.Join("docs", "versioning.md"));
         var declared = Declared.Match(document);
         Assert.True(declared.Success, "docs/versioning.md names no server-line pins for this to compare against");
 
