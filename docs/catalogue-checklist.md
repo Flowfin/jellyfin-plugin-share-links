@@ -213,9 +213,25 @@ two being EQUAL rather than on either of them: a version carrying a checksum tha
 is not thirty two hexadecimal characters would separate them. They read 277 each
 when this page landed.
 
-Nothing is published from here yet, so there is no artefact for a checksum to be
-of. #90 is where the checksum and the artefact are made to agree, and #136 is
-where the first artefact exists at all.
+**THIS PARAGRAPH SAID NOTHING WAS PUBLISHED FROM HERE AND THAT THERE WAS NO
+ARTEFACT FOR A CHECKSUM TO BE OF.** There is one. #136 published it and #90 made
+the checksum and the artefact agree, both closed, and the row above is met rather
+than owed. The three readings are one command each, and the second and third are
+what the row rests on:
+
+    curl -sS https://flowfin.dev/manifest.json | python -c 'import json,sys; print(*[v["checksum"] for e in json.load(sys.stdin) if e["name"] == "Share Links" for v in e["versions"]])'
+    6a3261b3e4b6ab6bd4de787d994aa0bb
+
+    curl -sSL https://github.com/Flowfin/jellyfin-plugin-share-links/releases/download/0.1.0.0-stable/share-links_0.1.0.0.md5
+    6a3261b3e4b6ab6bd4de787d994aa0bb  share-links_0.1.0.0.zip
+
+    curl -sSL https://github.com/Flowfin/jellyfin-plugin-share-links/releases/download/0.1.0.0-stable/share-links_0.1.0.0.zip | md5sum | cut -d' ' -f1
+    6a3261b3e4b6ab6bd4de787d994aa0bb
+
+The published archive is hashed rather than the manifest being trusted about it,
+because a manifest agreeing with a file nobody downloaded is the failure this row
+is for. All three were read on 2026-09-05 and they move when a version is
+published, so re-run them rather than citing what is pasted here.
 
 ## Membership of the official catalogue
 
