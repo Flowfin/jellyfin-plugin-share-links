@@ -16,38 +16,47 @@ refuses one.
 
 ## The state of the plugin
 
-### No version has been published
+### The published version's configuration page does nothing
 
-Nothing is released and no manifest is served, so there is nothing to install from
-a repository URL. `build.yaml` declares `0.1.0.0`, which is the version the first
-release will carry rather than a version anybody can install today, and a package
-built from the tree carries that same number: nothing in the version tells a local
-build from a released one, which `docs/versioning.md` says at length. The release
-process is #89, the manifest is #90, the first tag is #136.
+`0.1.0.0-stable` was published on 2026-09-04 from `0852955`, and its archive is
+what a catalogue serves and an operator installs. The page in that archive
+renders and does nothing: its controller sat outside the element the web client
+mounts, so nothing on it fills, saves, creates or revokes. That is #349, found on
+the walk of 2026-09-04 and repaired on the mainline the same day, and no
+published version carries the repair. The routes behind the page are sound,
+which is why the release was not withdrawn. `docs/release-readiness.md` is the
+pass that read the release as it shipped, and what else it found.
 
-**What an operator does.** Waits. A build from the tree loads and names itself, and
-it is not a copy anybody should hand a guest a link from.
+**What an operator does.** Installs 0.1.0.0 and drives the routes directly, which
+`docs/api.md` describes, or waits for the next version. A share created through
+the routes is a share; only the page is missing.
 
-### The feature is not finished, and what is missing is not obvious from the outside
+### A build from the tree carries the released number until the version is raised
 
-The tree holds the share record, the store, the token model, the resolution
-decision, the guest route, the administrator routes that create, list and revoke a
-share, and a page that reaches all of them. The page arrived under #70 and this
-entry said there was none until it did.
+`build.yaml` still declares `0.1.0.0`, so a package built from any commit on the
+mainline since the release, the ones that repair #349 included, is stamped with
+the number of a release it is not. Nothing in the version tells the two apart,
+which `docs/versioning.md` says at length; the commit in the informational
+version and the provenance statement on the published archive do. #136 is the
+release, and raising the number is the first step of the next one in
+`docs/RELEASING.md`.
 
-What is left is the release. Nothing is published, which is the entry above, so an
-operator meets any of this only on a server somebody built the plugin onto.
+**What an operator does.** Installs from the release or from the catalogue rather
+than from a build somebody handed them, and where a build is what is on the
+server, reads the commit out of the informational version before trusting the
+number.
 
-**What an operator does.** Reads this page as the design and the open issues as the
-state. `docs/operator-guide.md` is the order the steps go in.
-
-### The operator guide has not been walked on a server
+### The operator guide has been walked once, and the walk stopped short
 
 `docs/operator-guide.md` is written from the tree at the commit it landed on. That
 catches a screen name or a route that is wrong and cannot catch a step that is
 missing, because whoever writes a guide supplies the missing step without noticing
-they have. #83's last clause is one person following it on a clean server, and
-#236 is where that run happens. It has not happened.
+they have. #83's last clause is one person following it on a clean server. The
+first walk, on 2026-09-04 against the published `0.1.0.0` archive on a fresh
+`10.11.9` server, is recorded on #83 and stopped at the configuration page:
+sections 1 to 4, 6, 7 and 8 could not be followed as the page shipped, and
+everything past that point was read with the controller pasted into the console
+by hand. The walk of the repaired page is #357 and has not been made.
 
 **What an operator does.** Follows it, and says on #83 where it left them
 stranded. That report is the thing the page cannot produce for itself.
@@ -492,12 +501,12 @@ upstream defect elsewhere does not go looking for it here.
 ### The route shape promises nothing yet
 
 `docs/api.md` describes every route the plugin serves and #72 is explicit that it
-promises no stability: no version has been published, so nothing here has ever been
-depended on by an installed copy, and a change to a path, an input or an answer
-appears in the release it lands in.
+promises no stability: one version has been published and no route in it was
+promised to anybody, so a change to a path, an input or an answer appears in the
+release it lands in, and the notes of that release are where it is announced.
 
-**What an operator does.** Scripts against these routes at their own risk until
-there is a release to record a change against.
+**What an operator does.** Scripts against these routes at their own risk, and
+reads the notes of every release before installing it.
 
 ## The server line, and the bound on every claim above
 
@@ -545,6 +554,9 @@ gap.
   section is the boundary of the design rather than behaviour an operator can act
   on.
 - `docs/RELEASING.md`, how a release is cut.
+- `docs/release-readiness.md`, #93's pass over a release commit and the record
+  of each one made. What it finds that an operator meets is an entry above, under
+  the state of the plugin.
 - `docs/limits.md`, this page.
 
 ## What is checked, and what is not
