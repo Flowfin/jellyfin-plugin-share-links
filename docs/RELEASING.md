@@ -104,6 +104,18 @@ present in both boots and the comparison says nothing about it. What catches it 
 the second run of the observations, where a server that cannot decide which
 handler owns a path fails the calls.
 
+**THAT WORKFLOW BOOTS A SERVER THREE TIMES AND ONLY TWO OF THEM ARE THIS MATRIX.**
+The paragraph above says twice and means twice: both boots of the matrix are
+handed the package built out of the tree, which is what makes them observations of
+the commit being released. The third has an empty plugin directory, adds the
+Flowfin catalogue as a repository the way an operator does, and installs this
+plugin from it - the last unmet clause of #90, and a different question from the
+one this section is about. It is a release condition in its own right and for a
+different reason: it reads the catalogue that is already published, so what it
+refuses is the state of the LAST release rather than the fitness of the next one.
+A red third boot means the entry an operator installs today is wrong, and that is
+worth knowing before another version is added beside it.
+
 ## Where the release notes come from
 
 From the fragments in `changelog.d`, assembled by

@@ -8,12 +8,15 @@
 # list in this file would be the enumeration this fleet counts as a defect, and
 # it would go stale the same week.
 #
-# The subject is NOT taken from the catalogue. This board has published nothing,
-# so it is absent from what the catalogue serves; on the day it publishes, its
-# own entry appears there and a run that took the set literally would install a
-# released package beside, or instead of, the one the workflow just built out of
-# the tree. So this plugin's identifier is skipped by guid, and the subject keeps
-# coming from the tree.
+# The subject is NOT taken from the catalogue. This board published on 2026-09-04
+# and its own entry is served there now, so a run that took the set literally
+# would install a released package beside, or instead of, the one the workflow
+# just built out of the tree. This plugin's identifier is skipped by guid, and the
+# subject keeps coming from the tree.
+#
+# THAT SKIP USED TO BE INSURANCE AND IS NOW LOAD-BEARING. The lines above said
+# this board had published nothing and was absent from the catalogue, which was
+# the reason the skip had never fired; it fires on every run from that date on.
 #
 # Usage:
 #   install-the-supported-set.sh <catalogue-url> <plugins-dir> <server-version>
