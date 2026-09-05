@@ -38,10 +38,16 @@ refuse() {
 plugin=$(jq -r '.plugin' "$seen")
 catalogue=$(jq -r '.catalogue' "$seen")
 
+# Every guid comparison below takes the dashes out of both sides. The catalogue
+# serves this identifier with them and the server reports the same plugin without
+# them, and a check that compared the two forms literally reported a plugin the
+# server was plainly offering as missing, on run 33939876921.
+plugin_key=$(printf '%s' "$plugin" | tr -d '-' | tr 'A-Z' 'a-z')
+
 say "the server was clean before the repository was added"
 # Without this the reading below is about a server that was already offering the
 # plugin, and a catalogue that carries nothing at all would pass.
-if jq -e --arg g "$plugin" 'any(.offeredBefore[]; (.guid | ascii_downcase) == ($g | ascii_downcase))' "$seen" >/dev/null; then
+if jq -e --arg g "$plugin_key" 'any(.offeredBefore[]; (.guid | ascii_downcase | gsub("-"; "")) == $g)' "$seen" >/dev/null; then
   refuse "this plugin was already offered before $catalogue was added, so this reading says nothing about that repository. The server was not clean."
 else
   echo "  offered before: $(jq '.offeredBefore | length' "$seen") packages, none of them this plugin"

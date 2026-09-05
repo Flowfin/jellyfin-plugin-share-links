@@ -26,6 +26,12 @@ say() { printf '\n===== %s =====\n' "$*"; }
 # read-the-catalogue-a-clean-server-sees.sh writes it. Fixture vocabularies are
 # fixture vocabularies: the checksum and the sibling names below stand for a
 # catalogue and prove nothing about what is served today.
+#
+# THE GUID IS WRITTEN WITHOUT ITS DASHES ON PURPOSE, because that is how a server
+# reports a package and it is not how the catalogue serves it. A fixture carrying
+# the dashed form on both sides made the first version of this proof green while
+# the run against a real server refused a plugin it was plainly being offered, on
+# run 33939876921.
 cat >"$work/seen.json" <<'JSON'
 {
   "plugin": "a3703f07-f83d-49a0-a09f-50b890a2baac",
@@ -34,10 +40,10 @@ cat >"$work/seen.json" <<'JSON'
   "offeredBefore": [{ "guid": "d8dc4dc7-c2b0-4c9e-bb35-9d0dcd8e9d38", "name": "An Official Plugin" }],
   "offeredAfter": [
     { "guid": "d8dc4dc7-c2b0-4c9e-bb35-9d0dcd8e9d38", "name": "An Official Plugin" },
-    { "guid": "a3703f07-f83d-49a0-a09f-50b890a2baac", "name": "Share Links" }
+    { "guid": "a3703f07f83d49a0a09f50b890a2baac", "name": "Share Links" }
   ],
   "entry": {
-    "guid": "a3703f07-f83d-49a0-a09f-50b890a2baac",
+    "guid": "a3703f07f83d49a0a09f50b890a2baac",
     "name": "Share Links",
     "versions": [
       {
@@ -56,7 +62,7 @@ cat >"$work/seen.json" <<'JSON'
   },
   "computedChecksum": "00112233445566778899aabbccddeeff",
   "installed": {
-    "Id": "a3703f07-f83d-49a0-a09f-50b890a2baac",
+    "Id": "a3703f07f83d49a0a09f50b890a2baac",
     "Name": "Share Links",
     "Version": "0.1.0.0",
     "Status": "Active"
@@ -115,6 +121,9 @@ bites "a repository that does not carry this plugin" \
   '.entry = null | .chosen = null | .installed = null | .offeredAfter = [.offeredAfter[0]]' \
   "was not offered"
 bites "a server that was already offering it before the repository was added" \
+  '.offeredBefore += [{ "guid": "a3703f07f83d49a0a09f50b890a2baac", "name": "Share Links" }]' \
+  "The server was not clean"
+bites "the same, with the dashes the catalogue serves it with" \
   '.offeredBefore += [{ "guid": "a3703f07-f83d-49a0-a09f-50b890a2baac", "name": "Share Links" }]' \
   "The server was not clean"
 bites "a server that offered nothing at all" \
@@ -154,6 +163,11 @@ accepts "a plugin the server will run after a restart" \
 # correct catalogue for a formatting choice nobody controls.
 accepts "an entry whose guid is served in upper case" \
   '.offeredAfter[1].guid = (.offeredAfter[1].guid | ascii_upcase)'
+# And the same guid with its dashes put back, which is the form the catalogue
+# serves and the form a server does not. Both spellings have to be one identifier
+# here, or the check reads a published catalogue as carrying nothing.
+accepts "an entry whose guid carries the dashes the catalogue serves" \
+  '.offeredAfter[1].guid = "a3703f07-f83d-49a0-a09f-50b890a2baac"'
 
 say "verdict"
 if [ "$failures" -gt 0 ]; then

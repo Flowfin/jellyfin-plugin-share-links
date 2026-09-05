@@ -31,6 +31,13 @@ out="${3:?where to write what was seen}"
 # generator produced, and the guid is the name the two sides agree on.
 plugin="a3703f07-f83d-49a0-a09f-50b890a2baac"
 
+# The dashes come out of both sides of every comparison, the way
+# read-the-server-surface.sh already does it. The catalogue serves this guid with
+# dashes and the server reports the same plugin without them, measured on run
+# 33939876921: the first version of this script compared the two forms literally
+# and reported a plugin the server was plainly offering as missing.
+plugin_key="${plugin//-/}"
+
 # The account the wizard makes. Nothing here depends on the name; a clean server
 # has no account at all and every call below needs one.
 operator="catalogue-reader"
@@ -136,7 +143,7 @@ for attempt in $(seq 1 60); do
   status=$(call GET /Packages operator "$token")
   [ "$status" = "200" ] || fail "the package list could not be read after adding the repository: $status $(body)"
   after=$(body)
-  if printf '%s' "$after" | jq -e --arg g "$plugin" 'any(.[]; (.guid | ascii_downcase) == ($g | ascii_downcase))' >/dev/null; then
+  if printf '%s' "$after" | jq -e --arg g "$plugin_key" 'any(.[]; (.guid | ascii_downcase | gsub("-"; "")) == ($g | ascii_downcase))' >/dev/null; then
     echo "the plugin was offered after ${attempt}s"
     break
   fi
@@ -145,7 +152,7 @@ done
 printf '%s' "$after" | jq -r '.[] | "  \(.guid)  \(.name)"' | head -40
 echo "  ... $(printf '%s' "$after" | jq 'length') offered in total"
 
-entry=$(printf '%s' "$after" | jq -c --arg g "$plugin" 'map(select((.guid | ascii_downcase) == ($g | ascii_downcase))) | first // null')
+entry=$(printf '%s' "$after" | jq -c --arg g "$plugin_key" 'map(select((.guid | ascii_downcase | gsub("-"; "")) == ($g | ascii_downcase))) | first // null')
 
 # Everything below needs the entry, and its absence is the refusal's business
 # rather than this script's. Recorded and handed on.
@@ -201,7 +208,7 @@ if [ "$entry" != "null" ]; then
     for attempt in $(seq 1 120); do
       status=$(call GET /Plugins operator "$token")
       [ "$status" = "200" ] || fail "the plugin list could not be read: $status"
-      found=$(body | jq -c --arg g "$plugin" 'map(select((.Id | ascii_downcase) == ($g | ascii_downcase))) | first // null')
+      found=$(body | jq -c --arg g "$plugin_key" 'map(select((.Id | ascii_downcase | gsub("-"; "")) == ($g | ascii_downcase))) | first // null')
       if [ "$found" != "null" ]; then
         echo "the server lists it after ${attempt}s"
         installed="$found"
