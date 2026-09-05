@@ -66,9 +66,16 @@ notices that.
 
 It is not a list of the workflows this repository runs. Several files here have no
 row above because they came from the plugin template rather than from the gate:
-`command-dispatch.yaml`, `command-rebase.yaml`, `sync-labels.yaml`, `build.yaml`
-and `test.yaml`. Whether those stay is not a parity question and is not decided
-here.
+`command-dispatch.yaml`, `command-rebase.yaml`, `build.yaml` and `test.yaml`.
+Whether those stay is not a parity question and is not decided here.
+
+`sync-labels.yaml` WAS ON THAT LIST AND THE FILE IS GONE. It arrived with the
+template, called a reusable workflow in another organisation once a month, and
+replaced this repository's whole label set with a list held over there; on
+2026-09-01 it took six names off twelve open issues. It was removed on #338, which
+is that sentence above holding: the question was not a parity one and it was
+decided somewhere else. `LabelVocabularyTests` refuses its return, and refuses the
+property underneath it rather than only the name.
 
 `publish.yaml` WAS ON THAT LIST AND HAS COME OFF IT. A file cannot be outside the
 comparison because it arrived with the template and also be the place where two
