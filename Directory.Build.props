@@ -98,7 +98,23 @@
              The decision of 2026-08-21 on #181 is that the multi-targeting lands now
              and that packaging, the abi floor and the readme's supported line
              sentence wait for 12.0.0 to be released. build.yaml still names one
-             targetAbi and one framework for that reason. -->
+             targetAbi and one framework for that reason.
+
+             THE 12.0 PIN STAYS WHERE IT LANDED. It moves only by a change that says
+             why, until a 12.0.0 exists; on the day one appears it moves to 12.0.0
+             and the abi floor leg reads it. Decided on #340 on 2026-09-04, against
+             tracking the newest candidate: every candidate on this line stamps the
+             same assembly version, so following them changes the surface the build
+             compiles against without changing anything a manifest or a floor check
+             can see. Seven candidates had been published when that was taken and
+             this pin is the fifth, which is the state the rule is for rather than
+             an oversight.
+
+             The 10.11 pin is not the newest release of that line either. It is the
+             floor build.yaml declares in targetAbi, because an assembly compiled
+             against anything newer binds types the declared floor does not have
+             (#136). docs/versioning.md carries both rules and ServerLinePinTests
+             compares the two values below against it. -->
         <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.9</JellyfinVersion>
         <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.0.0-rc5</JellyfinVersion>
     </PropertyGroup>
