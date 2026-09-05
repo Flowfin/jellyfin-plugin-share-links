@@ -25,10 +25,26 @@ out of the tree rather than off a screen.
 
 ## Before anything, install it
 
-There is nothing published to install from yet. `README.md` says what arrives
-when there is, and #90 and #92 are the issues. A package built from the tree
-loads today, which is how this plugin is on a server at all before its first
-release.
+Add the repository to the server's plugin catalogue and install from it. Under
+Dashboard, Plugins, Repositories, add
+
+    https://flowfin.dev/manifest.json
+
+then under Dashboard, Plugins, Catalogue, find **Share Links**, install it, and
+restart the server when the dashboard asks. The version that catalogue serves
+today is `0.1.0.0`, which is the archive the walk above used; `README.md` carries
+the reading that ties the catalogue's checksum to the published archive.
+
+**NOBODY HAS FOLLOWED THOSE STEPS ON THESE SCREENS.** A clean server does take
+that route on every run of `.github/workflows/observations.yml`, whose third boot
+starts with an empty plugin directory, adds the URL and installs this plugin from
+the catalogue - so the route works and is judged. It drives the server's own API,
+and the walk above put the plugin on its server by unpacking the archive by hand,
+so the dashboard names in this section are the only ones on this page that
+nobody has seen. #357 is the walk that would settle them.
+
+Building a package from the tree still works and still loads, which is how this
+plugin was on a server at all before there was anything to install from.
 
 Once it is on the server, open the dashboard, go to the plugin list and open
 **Share Links**. Every screen named below is a section of that one page.
@@ -291,13 +307,15 @@ record, in the page's and the server's own words, is on #83. What follows is wha
 it means for this page, and every line of it is still true of the guide unless
 this change repaired it.
 
-**The install section has no step that works.** It says nothing is published;
-`0.1.0.0-stable` exists. The guide names neither the repository URL an operator
+**The install section had no step that worked.** It said nothing was published;
+`0.1.0.0-stable` exists. The guide named neither the repository URL an operator
 adds under Plugins, Repositories nor the catalogue entry that follows, and the
 plugin reached the walked server by unpacking the archive by hand, which no
 operator will do. The missing step is: add the repository, install from the
-catalogue, restart. Unrepaired here, because what the section should say is what
-the first release publishes, which is #90 and #92.
+catalogue, restart. Repaired here, in the change that closes #362: #90 and #92
+are closed, the catalogue serves this plugin, and the section now names the URL
+and the three steps. WHAT IS NOT REPAIRED IS THAT NOBODY HAS TAKEN THEM, and the
+section says so where an operator meets it rather than only here.
 
 **Opening the page matched.** Dashboard, Plugins, the installed tab, **Share
 Links 0.1.0.0 Active**, opening that one page. Every screen name in this guide

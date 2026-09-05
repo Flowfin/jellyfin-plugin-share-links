@@ -13,15 +13,26 @@ the run, and a row here naming a route that does not exist reds it too.
 
 ## What stability this promises
 
-None yet, and that is a statement rather than a hedge. No version has been
-published, so nothing here has ever been depended on by an installed copy.
+None, and that is a statement rather than a hedge. `0.1.0.0` is published and is
+the first version anything could be depending on, so the routes below are now
+installed somewhere rather than only compiled here:
+
+    gh release view 0.1.0.0-stable --repo Flowfin/jellyfin-plugin-share-links --json tagName,publishedAt --jq '"\(.tagName) \(.publishedAt)"'
+    0.1.0.0-stable 2026-09-04T15:53:06Z
+
+**THIS SECTION SAID NO VERSION HAD BEEN PUBLISHED, AND ONE HAD.** It also said
+there was nothing to record a change against, which was the reason it gave for
+promising nothing. That reason has gone and the promise has not changed: what
+follows is why, so that a reader does not take a repaired sentence for a
+commitment nobody made.
 
 **The shape may change, and the version it changed in will be recorded.**
 `docs/versioning.md` is where a version number gets its meaning, and a change to
 a route's path, its inputs or the answers below is a change that appears in the
-release it lands in. Until the first release there is nothing to record against,
-which is what makes this the moment to script against these routes at your own
-risk and not the moment to build on them.
+release it lands in. There is something to record against now, and one published
+version is not a track record: nothing here has yet survived a version boundary,
+so scripting against these routes is still done at your own risk, against a
+pinned version, with the release notes read before an upgrade.
 
 ## The routes
 

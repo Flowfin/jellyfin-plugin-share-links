@@ -48,6 +48,15 @@ public class ReadmeTests
         return match.Groups[1].Value;
     }
 
+    private static string ManifestVersion()
+    {
+        // build.yaml's own version field, which docs/versioning.md says is the
+        // one place a release number is written.
+        var match = Regex.Match(ReadFile("build.yaml"), "^version:\\s*\"([^\"]*)\"\\s*$", RegexOptions.Multiline);
+        Assert.True(match.Success, "build.yaml declares no quoted 'version' field");
+        return match.Groups[1].Value;
+    }
+
     [Fact]
     public void NothingIsLeftOfTheTemplateReadme()
     {
@@ -112,7 +121,21 @@ public class ReadmeTests
         // What that costs is stated rather than hidden: a server line written as
         // two parts, "10.10" say, walks past this check, and only a three-part or
         // four-part version is refused.
-        var abi = TargetAbi();
+        //
+        // TWO NUMBERS ARE ADMITTED AND THIS TEST ADMITTED ONE UNTIL #362. It held
+        // the readme's numbers against the targetAbi alone, so a readme naming the
+        // version that is published was refused for naming it, and the only readme
+        // this test passed was one that could not say which version to install. That
+        // is how the installing section came to say nothing was published for a day
+        // after the first release.
+        //
+        // Both numbers are read out of build.yaml, which is the file that declares
+        // each of them, so the admitted set is derived rather than listed here and
+        // widening it adds no second place for either number to be written. What is
+        // refused is unchanged in both directions: a number in the readme that
+        // build.yaml declares nowhere is refused, and so is a number the readme kept
+        // after build.yaml's moved.
+        var declared = new[] { TargetAbi(), ManifestVersion() };
         var readme = ReadFile("README.md");
 
         var named = Regex.Matches(readme, "\\d+(?:\\.\\d+){2,}")
@@ -120,7 +143,11 @@ public class ReadmeTests
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(new[] { abi }, named);
+        var strays = named.Where(version => !declared.Contains(version, StringComparer.Ordinal)).ToList();
+
+        Assert.True(
+            strays.Count == 0,
+            "README.md names versions build.yaml declares in neither 'targetAbi' nor 'version', so a reader is sent to a number this package does not carry: " + string.Join(", ", strays));
     }
 
     [Fact]
