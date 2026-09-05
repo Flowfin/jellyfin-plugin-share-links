@@ -46,13 +46,16 @@ rather than reading the output beside them. `ThreatModelTests` refuses a name in
 that column that no test in the assembly answers to, so a rename reds the suite
 instead of leaving a backtick that reads like something that runs.
 
-WHAT THIS IS NOT IS THE PASS #93 ASKS FOR, and the gap is the whole of what is
-left. That pass confirms each proof PASSING at a release commit, reads what the
-built package contains, checks the negative capability list on the assembled
-plugin rather than on its parts, and reads the artefact's dependency list, its
-SBOM and its scorecard. None of that is done here and there is no release commit
-to do it at. What is done here is the comparison that pass would otherwise have
-inherited, which is which test proves which row.
+WHAT THIS IS NOT IS THE PASS #93 ASKS FOR, AND THAT PASS HAS BEEN MADE ONCE. It
+confirms each proof PASSING at a release commit, reads what the built package
+contains, checks the negative capability list on the assembled plugin rather
+than on its parts, and reads the artefact's dependency list, its SBOM and its
+scorecard. `docs/release-readiness.md` is where it is recorded, and its first
+record is the reading of `0.1.0.0` at `0852955` on 2026-09-05: every name then
+in this column was found passing on both lines, and two rows were found
+crediting a test with more than it asserts, which that page names row by row.
+What is done here is the comparison the pass inherited, which is which test
+proves which row.
 
 Two rows say less than the sentence beside them, and each says so in its own cell
 rather than only here. T6's constant-time half is held by the greppable invariant
@@ -289,7 +292,9 @@ so a rename cannot leave a backtick standing where the thing it named is gone.
 What no route reads is whether a test a row names still proves the control beside
 it: a control that moves while its test goes on compiling leaves every route green
 and the file quietly wrong. That is a judgement about meaning, and the
-release-readiness pass issue #93 is where this file is read again with it in mind.
+release-readiness pass is where this file is read again with it in mind:
+`docs/release-readiness.md` carries each reading, and the first, at `0852955`,
+found two rows crediting a test with more than it asserts and no control unheld.
 The security page issue #84 was the other such place and has closed:
 
     gh issue view 84 --json state --jq .state
