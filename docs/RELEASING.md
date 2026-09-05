@@ -44,6 +44,16 @@ In the same change that raises the version, delete the fragments that went into
 it. `changelog.d` holds what is unreleased; the notes for a version that shipped
 live in that release.
 
+A first release raises nothing, because `build.yaml` already declares the version
+the tag will carry, so there is no change for the deletion to ride on. Delete the
+fragments in a change of their own as soon as the release exists, naming the
+release they went into. The first release of this plugin did not, and its
+fragment stood in the tree for a day after it was published; #363 is where that
+was found. Nothing refuses a fragment a published release already carries: the
+assembler refuses an empty directory and a badly named fragment, and the
+pull-request check warns when a version bump moves no fragment, and neither
+reads what has already been published.
+
 ## The interoperability matrix is a release condition
 
 The rule this plugin is held to is that it works alone and works with every other
