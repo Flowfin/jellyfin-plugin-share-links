@@ -29,6 +29,12 @@
 # scheduled task names, and configuration. What the set is, is read from the
 # catalogue at the moment it is used rather than listed here, so the run widens on
 # the day a sibling board publishes its first release.
+#
+# THREE SINCE #90. Both boots above are handed the package this workflow built out
+# of the tree, which is what makes them observations of this plugin and is also
+# why neither can answer the question #90 asks: what an operator who has installed
+# nothing sees after adding the repository URL. The third boot has an empty plugin
+# directory, adds that URL, and installs this plugin the way the dashboard would.
 name: observations
 
 on:
@@ -44,6 +50,9 @@ on:
       - ".github/scripts/prove-the-collision-scan-bites.sh"
       - ".github/scripts/refuse-a-startup-error.sh"
       - ".github/scripts/prove-the-startup-refusal-bites.sh"
+      - ".github/scripts/read-the-catalogue-a-clean-server-sees.sh"
+      - ".github/scripts/refuse-a-catalogue-that-does-not-carry-this-plugin.sh"
+      - ".github/scripts/prove-the-catalogue-refusal-bites.sh"
       - ".github/browser/**"
   workflow_dispatch:
 
@@ -78,10 +87,13 @@ env:
   JELLYFIN_IMAGE: "jellyfin/jellyfin:10.11.11@sha256:aefb67e6a7ff1debdd154a78a7bbb780fd0c873d8639210a7f6a2016ad2b35db"
   # Where the supported set is read from. This is the catalogue an operator adds
   # to their server, so what the second boot installs is what an operator would
-  # have installed, and not a list somebody kept up to date by hand. This board
-  # publishes nothing yet and is therefore absent from it; the installer skips its
-  # own entry by guid anyway, so the day that changes the subject still comes from
-  # the package this job builds out of the tree.
+  # have installed, and not a list somebody kept up to date by hand.
+  #
+  # THIS COMMENT SAID THIS BOARD PUBLISHES NOTHING AND IS ABSENT FROM IT. It
+  # published on 2026-09-04 and the catalogue carries it, which is what the third
+  # boot below is about. Nothing changes for the second boot: the installer skips
+  # this plugin's own entry by guid, so its subject still comes from the package
+  # this job builds out of the tree rather than from a released archive.
   CATALOGUE: "https://flowfin.dev/manifest.json"
 
 jobs:
@@ -112,6 +124,13 @@ jobs:
         # one line too wide reds this board's nightly for a line another
         # project wrote.
         run: bash .github/scripts/prove-the-startup-refusal-bites.sh
+
+      - name: Prove the catalogue check refuses a catalogue this plugin cannot be installed from
+        # Same reason again, and here the near misses carry most of the weight:
+        # the subject is a document another repository's generator produces, so a
+        # comparison drawn one character too tight reds this board's nightly for a
+        # checksum served in upper case.
+        run: bash .github/scripts/prove-the-catalogue-refusal-bites.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -326,8 +345,53 @@ jobs:
           echo "===== what the plugin wrote ====="
           docker logs jellyfin-with-the-set 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
 
+      - name: Stop the second server
+        # Removed before the third starts, for the reason the first was: the
+        # servers share one address so that every reading is made against the same
+        # one, and two behind it would make it unreadable which answered.
+        run: docker rm -f jellyfin-with-the-set
+
+      - name: Start a third server with nothing installed at all
+        # A THIRD BOOT, and the only one with an empty plugin directory. The two
+        # above are handed the package the workflow built, which is what makes
+        # them observations of this plugin; #90 asks the opposite question - what
+        # an operator who has installed nothing sees after adding the repository
+        # URL - and a server carrying the plugin already cannot answer it.
+        #
+        # No media mount either. Nothing below opens a library.
+        run: |
+          set -euo pipefail
+          mkdir -p test/e2e/clean/config test/e2e/clean/cache
+          chmod -R 0777 test/e2e/clean
+          docker run -d --name jellyfin-clean \
+            -p 127.0.0.1:8096:8096 \
+            -v "$PWD/test/e2e/clean/config:/config" \
+            -v "$PWD/test/e2e/clean/cache:/cache" \
+            -e JELLYFIN_LOG_DIR=/config/log \
+            "$JELLYFIN_IMAGE"
+          docker ps
+
+      - name: Add the repository URL and see whether this plugin is offered
+        run: |
+          set -euo pipefail
+          bash .github/scripts/read-the-catalogue-a-clean-server-sees.sh \
+            http://127.0.0.1:8096 "$CATALOGUE" /tmp/catalogue-seen.json
+          cat /tmp/catalogue-seen.json | jq .
+
+      - name: Refuse a catalogue a clean server cannot install this plugin from
+        run: bash .github/scripts/refuse-a-catalogue-that-does-not-carry-this-plugin.sh /tmp/catalogue-seen.json
+
+      - name: What the clean server said
+        if: always()
+        run: |
+          set -euo pipefail
+          docker logs jellyfin-clean 2>&1 | tail -200 || true
+          echo "===== what the plugin wrote ====="
+          docker logs jellyfin-clean 2>&1 | grep -i "sharelinks\|share links" | tail -100 || true
+
       - name: Stop the servers
         if: always()
         run: |
           docker rm -f jellyfin || true
           docker rm -f jellyfin-with-the-set || true
+          docker rm -f jellyfin-clean || true
